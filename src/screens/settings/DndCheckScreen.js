@@ -17,22 +17,18 @@ export default function DndCheckScreen() {
   const navigation = useNavigation();
   const { theme } = useTheme();
 
-  const [step, setStep] = useState("detect"); // 'detect' | 'resolve'
-
-  // --- ANIMATIONS ---
+  const [step, setStep] = useState("detect");
   const z1Anim = useRef(new Animated.Value(0)).current;
   const z2Anim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(100)).current;
 
   useEffect(() => {
-    // Slide Up
     Animated.spring(slideAnim, {
       toValue: 0,
       useNativeDriver: true,
       friction: 8,
     }).start();
 
-    // Loop Zzz Animation
     const floatZ = (anim, delay) => {
       Animated.loop(
         Animated.sequence([
@@ -105,7 +101,6 @@ export default function DndCheckScreen() {
       >
         {step === "detect" ? (
           <>
-            {/* --- DETECTION STATE --- */}
             <View style={styles.iconWrapper}>
               <MaterialIcons name="nights-stay" size={32} color="#a855f7" />
               <Animated.Text style={[styles.zzz, getZStyle(z1Anim, 10, -10)]}>
@@ -149,7 +144,6 @@ export default function DndCheckScreen() {
           </>
         ) : (
           <>
-            {/* --- SUCCESS STATE --- */}
             <View style={[styles.iconWrapper, styles.successWrapper]}>
               <MaterialIcons
                 name="notifications-active"

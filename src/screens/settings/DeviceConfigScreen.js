@@ -18,10 +18,9 @@ export default function DeviceConfigScreen() {
   const navigation = useNavigation();
   const { theme, isDarkMode } = useTheme();
 
-  // Modal States
   const [modalState, setModalState] = useState({
     visible: false,
-    type: null, // 'update', 'wifi', 'restart', 'unpair'
+    type: null,
     title: "",
     msg: "",
     icon: "",
@@ -29,7 +28,6 @@ export default function DeviceConfigScreen() {
     loading: false,
   });
 
-  // Helper to open modal
   const openModal = (type) => {
     let config = { visible: true, type, loading: false };
 
@@ -69,10 +67,8 @@ export default function DeviceConfigScreen() {
     setModalState(config);
   };
 
-  // Helper to close modal
   const closeModal = () => setModalState({ ...modalState, visible: false });
 
-  // Simulate Actions
   const handleConfirm = () => {
     if (modalState.type === "restart") {
       setModalState((prev) => ({
@@ -90,7 +86,6 @@ export default function DeviceConfigScreen() {
     }
   };
 
-  // Colors for Light/Dark mode
   const dangerColor = isDarkMode ? "#ff4444" : "#c62828";
   const dangerBg = isDarkMode
     ? "rgba(255, 68, 68, 0.1)"
@@ -109,7 +104,6 @@ export default function DeviceConfigScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
       <View
         style={[
           styles.header,
@@ -139,7 +133,6 @@ export default function DeviceConfigScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* HUB HERO */}
         <View style={[styles.hubHero, { borderBottomColor: theme.cardBorder }]}>
           <View
             style={[
@@ -167,7 +160,6 @@ export default function DeviceConfigScreen() {
           </View>
         </View>
 
-        {/* SYSTEM INFO */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
           System Information
         </Text>
@@ -197,7 +189,6 @@ export default function DeviceConfigScreen() {
           </View>
         </View>
 
-        {/* NETWORK */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
           Network Connection
         </Text>
@@ -236,7 +227,6 @@ export default function DeviceConfigScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ADVANCED ACTIONS */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
           Advanced Actions
         </Text>
@@ -268,7 +258,6 @@ export default function DeviceConfigScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* SHARED MODAL */}
       <Modal
         transparent
         visible={modalState.visible}

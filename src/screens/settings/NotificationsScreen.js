@@ -26,7 +26,6 @@ export default function NotificationsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
       <View
         style={[
           styles.header,

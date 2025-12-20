@@ -27,14 +27,12 @@ export default function MenuScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER: Close Button */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons name="close" size={28} color={theme.text} />
         </TouchableOpacity>
       </View>
 
-      {/* PROFILE SECTION */}
       <View
         style={[styles.profileSection, { borderBottomColor: theme.cardBorder }]}
       >
@@ -58,7 +56,6 @@ export default function MenuScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.menuContent}>
-        {/* GROUP 1: DEVICE MANAGEMENT */}
         <Text style={[styles.groupTitle, { color: theme.textSecondary }]}>
           Device Management
         </Text>
@@ -79,7 +76,6 @@ export default function MenuScreen() {
           onPress={() => navigation.navigate("SetupHub")}
         />
 
-        {/* GROUP 2: SYSTEM TOOLS */}
         <Text style={[styles.groupTitle, { color: theme.textSecondary }]}>
           System Tools
         </Text>
@@ -101,7 +97,6 @@ export default function MenuScreen() {
           onPress={() => console.log("Nav to Logs")}
         />
 
-        {/* GROUP 3: APP SETTINGS */}
         <Text style={[styles.groupTitle, { color: theme.textSecondary }]}>
           App Settings
         </Text>
@@ -120,7 +115,6 @@ export default function MenuScreen() {
         />
       </ScrollView>
 
-      {/* FOOTER (No Logout) */}
       <View style={[styles.footer, { borderTopColor: theme.cardBorder }]}>
         <Text style={[styles.versionText, { color: theme.textSecondary }]}>
           GridWatch v1.0.4
@@ -130,7 +124,6 @@ export default function MenuScreen() {
   );
 }
 
-// --- REUSABLE MENU ITEM ---
 function MenuItem({
   icon,
   text,

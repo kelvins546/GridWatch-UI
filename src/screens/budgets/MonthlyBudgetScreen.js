@@ -14,10 +14,9 @@ import { useTheme } from "../../context/ThemeContext";
 export default function MonthlyBudgetScreen() {
   const navigation = useNavigation();
   const { theme, isDarkMode } = useTheme();
-  const [budget, setBudget] = useState(2800); // Default budget
+  const [budget, setBudget] = useState(2800);
 
   const handleSave = () => {
-    // Save logic here
     navigation.goBack();
   };
 
@@ -31,7 +30,6 @@ export default function MonthlyBudgetScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
       <View style={[styles.header, { borderBottomColor: theme.cardBorder }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.text} />

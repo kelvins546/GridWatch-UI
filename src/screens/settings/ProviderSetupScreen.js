@@ -17,7 +17,6 @@ export default function ProviderSetupScreen() {
   const navigation = useNavigation();
   const { theme, isDarkMode } = useTheme();
 
-  // State to track selection (Default: 'meralco')
   const [selectedId, setSelectedId] = useState("meralco");
 
   const providers = [
@@ -57,7 +56,6 @@ export default function ProviderSetupScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
       <View style={[styles.header, { borderBottomColor: theme.cardBorder }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons name="close" size={24} color={theme.textSecondary} />
@@ -74,7 +72,6 @@ export default function ProviderSetupScreen() {
           automatically.
         </Text>
 
-        {/* RECOMMENDED SECTION */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
           Recommended (Caloocan)
         </Text>
@@ -86,7 +83,6 @@ export default function ProviderSetupScreen() {
           isDarkMode={isDarkMode}
         />
 
-        {/* OTHER PROVIDERS */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
           Other Providers
         </Text>
@@ -101,7 +97,6 @@ export default function ProviderSetupScreen() {
           />
         ))}
 
-        {/* MANUAL CONFIG */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
           Manual Configuration
         </Text>
@@ -142,7 +137,6 @@ export default function ProviderSetupScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* CONFIRM BUTTON */}
         <TouchableOpacity
           style={styles.confirmBtn}
           onPress={() => navigation.goBack()}
@@ -161,7 +155,6 @@ export default function ProviderSetupScreen() {
   );
 }
 
-// --- REUSABLE CARD COMPONENT ---
 function ProviderCard({ item, isSelected, onPress, theme, isDarkMode }) {
   return (
     <TouchableOpacity
@@ -180,21 +173,18 @@ function ProviderCard({ item, isSelected, onPress, theme, isDarkMode }) {
       onPress={onPress}
       activeOpacity={0.7}
     >
-      {/* Absolute Check Icon */}
       {isSelected && (
         <View style={[styles.checkIcon, { borderColor: theme.card }]}>
           <MaterialIcons name="check" size={12} color="#fff" />
         </View>
       )}
 
-      {/* Logo Box */}
       <View style={[styles.logoBox, { backgroundColor: "#fff" }]}>
         <Text style={[styles.logoText, { color: item.color }]}>
           {item.logo}
         </Text>
       </View>
 
-      {/* Text Info */}
       <View>
         <Text style={[styles.providerName, { color: theme.text }]}>
           {item.name}

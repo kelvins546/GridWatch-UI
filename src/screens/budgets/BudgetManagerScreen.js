@@ -17,7 +17,6 @@ export default function BudgetManagerScreen() {
   const navigation = useNavigation();
   const { theme, isDarkMode } = useTheme();
 
-  // Mock Data
   const hubs = [
     {
       id: "living",
@@ -59,7 +58,6 @@ export default function BudgetManagerScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
       <View
         style={[
           styles.header,
@@ -94,7 +92,6 @@ export default function BudgetManagerScreen() {
           appliances.
         </Text>
 
-        {/* HUB LIST */}
         <View style={styles.hubList}>
           {hubs.map((hub) => (
             <HubCard
@@ -102,7 +99,6 @@ export default function BudgetManagerScreen() {
               data={hub}
               theme={theme}
               isDarkMode={isDarkMode}
-              // --- FIX IS HERE: Navigate to the Device List Screen ---
               onPress={() =>
                 navigation.navigate("BudgetDeviceList", { hubName: hub.name })
               }
@@ -114,7 +110,6 @@ export default function BudgetManagerScreen() {
   );
 }
 
-// --- REUSABLE HUB CARD ---
 function HubCard({ data, theme, isDarkMode, onPress }) {
   const scaleValue = useRef(new Animated.Value(1)).current;
 
@@ -134,7 +129,6 @@ function HubCard({ data, theme, isDarkMode, onPress }) {
     }).start();
   };
 
-  // Determine Colors
   let statusColor, iconBg, iconColor;
   const isOffline = data.type === "offline";
 
@@ -155,7 +149,6 @@ function HubCard({ data, theme, isDarkMode, onPress }) {
   return (
     <TouchableOpacity
       activeOpacity={0.9}
-      // Disable click if offline
       onPress={!isOffline ? onPress : null}
       onPressIn={!isOffline ? handlePressIn : null}
       onPressOut={!isOffline ? handlePressOut : null}

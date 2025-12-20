@@ -9,12 +9,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { useTheme } from "../../context/ThemeContext"; // Import Hook
+import { useTheme } from "../../context/ThemeContext";
 
 export default function AnalyticsScreen() {
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState("Week");
-  const { theme, isDarkMode } = useTheme(); // Get Theme
+  const { theme, isDarkMode } = useTheme();
 
   return (
     <SafeAreaView
@@ -59,7 +59,7 @@ export default function AnalyticsScreen() {
               style={[
                 styles.tabItem,
                 activeTab === tab && { backgroundColor: theme.card },
-              ]} // Active tab color
+              ]}
               onPress={() => setActiveTab(tab)}
             >
               <Text
@@ -76,7 +76,6 @@ export default function AnalyticsScreen() {
           ))}
         </View>
 
-        {/* SUMMARY CARD */}
         <View
           style={[styles.summaryCard, { borderBottomColor: theme.cardBorder }]}
         >
@@ -90,7 +89,6 @@ export default function AnalyticsScreen() {
           </View>
         </View>
 
-        {/* BAR CHART */}
         <View
           style={[
             styles.chartContainer,
@@ -105,12 +103,11 @@ export default function AnalyticsScreen() {
           <Bar label="Sat" height="20%" theme={theme} />
         </View>
 
-        {/* DISTRIBUTION */}
         <View style={styles.sectionHeaderRow}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>
             Cost Distribution
           </Text>
-          {/* UPDATED: Uses theme.primary */}
+
           <TouchableOpacity>
             <Text style={[styles.seeAll, { color: theme.primary }]}>
               See All
@@ -118,7 +115,6 @@ export default function AnalyticsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* UPDATED: Item 1 uses theme.primary (Green) */}
         <DistributionItem
           name="1. Air Conditioner"
           cost="₱ 552.00"
@@ -127,7 +123,6 @@ export default function AnalyticsScreen() {
           theme={theme}
         />
 
-        {/* Other items keep their specific colors (Blue, Orange) unless you want them darker too */}
         <DistributionItem
           name="2. Refrigerator"
           cost="₱ 212.00"

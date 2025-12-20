@@ -18,10 +18,8 @@ export default function BudgetDeviceListScreen() {
   const route = useRoute();
   const { theme, isDarkMode } = useTheme();
 
-  // Get the Hub Name passed from the previous screen (default to "Unknown Hub")
   const { hubName } = route.params || { hubName: "Smart Hub" };
 
-  // Mock Data matching your HTML
   const devices = [
     {
       id: "ac",
@@ -101,7 +99,6 @@ export default function BudgetDeviceListScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* INTRO TEXT */}
         <Text style={[styles.introText, { color: theme.textSecondary }]}>
           Select a device from{" "}
           <Text style={{ fontWeight: "700", color: theme.primary }}>
@@ -110,8 +107,6 @@ export default function BudgetDeviceListScreen() {
           to configure spending limits, automation rules, and alerts.
         </Text>
 
-        {/* DEVICE LIST */}
-
         <View style={styles.listContainer}>
           {devices.map((device) => (
             <DeviceRow
@@ -119,7 +114,6 @@ export default function BudgetDeviceListScreen() {
               data={device}
               theme={theme}
               isDarkMode={isDarkMode}
-              // FIX: Update navigation to point to 'BudgetDetail'
               onPress={() =>
                 navigation.navigate("BudgetDetail", { deviceName: device.name })
               }
@@ -131,11 +125,9 @@ export default function BudgetDeviceListScreen() {
   );
 }
 
-// --- REUSABLE DEVICE ROW COMPONENT ---
 function DeviceRow({ data, theme, isDarkMode, onPress }) {
   const scaleValue = useRef(new Animated.Value(1)).current;
 
-  // Animation Handlers
   const handlePressIn = () => {
     Animated.spring(scaleValue, {
       toValue: 0.96,
@@ -151,7 +143,6 @@ function DeviceRow({ data, theme, isDarkMode, onPress }) {
     }).start();
   };
 
-  // Determine Styles based on Type
   let iconColor, iconBg, statusTextColor;
 
   if (data.type === "good") {
@@ -167,9 +158,8 @@ function DeviceRow({ data, theme, isDarkMode, onPress }) {
     iconBg = "rgba(255, 68, 68, 0.1)";
     statusTextColor = iconColor;
   } else {
-    // Neutral
     iconColor = theme.textSecondary;
-    iconBg = theme.cardBorder; // Slightly darker gray background
+    iconBg = theme.cardBorder;
     statusTextColor = theme.textSecondary;
   }
 
@@ -193,12 +183,10 @@ function DeviceRow({ data, theme, isDarkMode, onPress }) {
         ]}
       >
         <View style={styles.deviceLeft}>
-          {/* ICON */}
           <View style={[styles.iconBox, { backgroundColor: iconBg }]}>
             <MaterialIcons name={data.icon} size={22} color={iconColor} />
           </View>
 
-          {/* TEXT INFO */}
           <View style={styles.deviceInfo}>
             <Text style={[styles.deviceName, { color: theme.text }]}>
               {data.name}
@@ -209,7 +197,6 @@ function DeviceRow({ data, theme, isDarkMode, onPress }) {
           </View>
         </View>
 
-        {/* ARROW OR LOCK */}
         <MaterialIcons
           name={data.isLocked ? "lock" : "chevron-right"}
           size={20}

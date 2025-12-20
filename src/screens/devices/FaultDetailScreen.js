@@ -33,7 +33,7 @@ export default function FaultDetailScreen() {
   const handleReset = () => {
     if (!allChecked) return;
     setIsResetting(true);
-    // Simulate network delay
+
     setTimeout(() => {
       setIsResetting(false);
       setShowModal(true);
@@ -47,7 +47,6 @@ export default function FaultDetailScreen() {
     >
       <StatusBar barStyle="light-content" backgroundColor="#ff4444" />
 
-      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -58,7 +57,6 @@ export default function FaultDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* HERO SECTION - RED GRADIENT */}
       <LinearGradient
         colors={["#ff4444", theme.background]}
         style={styles.hero}
@@ -71,7 +69,6 @@ export default function FaultDetailScreen() {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* INFO CARD */}
         <View
           style={[
             styles.infoCard,
@@ -97,7 +94,6 @@ export default function FaultDetailScreen() {
           />
         </View>
 
-        {/* CHECKLIST */}
         <Text style={styles.checklistTitle}>REQUIRED SAFETY CHECKS</Text>
 
         <CheckItem
@@ -119,7 +115,6 @@ export default function FaultDetailScreen() {
           theme={theme}
         />
 
-        {/* RESET BUTTON */}
         <View style={styles.actionArea}>
           <TouchableOpacity
             style={[
@@ -142,7 +137,6 @@ export default function FaultDetailScreen() {
         <Text style={styles.safetyNote}>GridWatch System ID: GW-SAFE-9921</Text>
       </ScrollView>
 
-      {/* SUCCESS MODAL */}
       <Modal visible={showModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View

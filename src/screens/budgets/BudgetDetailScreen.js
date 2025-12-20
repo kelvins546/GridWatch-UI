@@ -18,21 +18,16 @@ export default function BudgetDetailScreen() {
   const route = useRoute();
   const { theme, isDarkMode } = useTheme();
 
-  // Get Device Name passed from list (Default to Air Conditioner)
   const { deviceName } = route.params || { deviceName: "Air Conditioner" };
 
-  // State
   const [period, setPeriod] = useState("Monthly");
   const [limit, setLimit] = useState(2000);
   const [autoCutoff, setAutoCutoff] = useState(true);
-  // Note: pushNotif state removed because it is now mandatory
 
-  // Mock Usage Data
   const usedAmount = 1450.75;
   const percentage = Math.min((usedAmount / limit) * 100, 100).toFixed(0);
   const remaining = Math.max(limit - usedAmount, 0).toFixed(2);
 
-  // Handlers
   const adjustLimit = (amount) =>
     setLimit((prev) => Math.max(0, prev + amount));
 
@@ -46,7 +41,6 @@ export default function BudgetDetailScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
       <View
         style={[
           styles.header,
@@ -78,7 +72,6 @@ export default function BudgetDetailScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* SEGMENT CONTROL */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
           Budget Period
         </Text>
@@ -107,7 +100,6 @@ export default function BudgetDetailScreen() {
           ))}
         </View>
 
-        {/* LIMIT SETTER */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
           Set Limit (Pesos)
         </Text>
@@ -142,7 +134,6 @@ export default function BudgetDetailScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* USAGE STATUS */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
           Current Usage Status
         </Text>
@@ -180,7 +171,6 @@ export default function BudgetDetailScreen() {
           </View>
         </View>
 
-        {/* AUTOMATION RULES */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
           Automation Rules
         </Text>
@@ -194,13 +184,12 @@ export default function BudgetDetailScreen() {
           isDarkMode={isDarkMode}
         />
 
-        {/* LOCKED RULE: PUSH NOTIFICATIONS */}
         <RuleItem
           title="Push Notifications"
           desc="Receive alerts when usage hits 80%, 90%, and 100% of limit."
-          value={true} // FORCE TRUE
-          onToggle={() => {}} // DO NOTHING
-          disabled={true} // DISABLE INTERACTION
+          value={true}
+          onToggle={() => {}}
+          disabled={true}
           theme={theme}
           isDarkMode={isDarkMode}
         />
@@ -209,8 +198,6 @@ export default function BudgetDetailScreen() {
   );
 }
 
-// --- UPDATED REUSABLE RULE ITEM ---
-// Added 'disabled' prop support
 function RuleItem({
   title,
   desc,
@@ -243,7 +230,7 @@ function RuleItem({
         </Text>
       </View>
       <Switch
-        disabled={disabled} // NATIVE DISABLE PROP
+        disabled={disabled}
         trackColor={{
           false: "#767577",
           true: isDarkMode ? "rgba(0, 255, 153, 0.2)" : "rgba(0, 153, 94, 0.2)",
@@ -280,7 +267,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  // Segment Control
   segmentControl: {
     flexDirection: "row",
     padding: 4,
@@ -296,7 +282,6 @@ const styles = StyleSheet.create({
   },
   segmentText: { fontSize: 12, fontWeight: "600" },
 
-  // Limit Control
   limitContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -315,7 +300,6 @@ const styles = StyleSheet.create({
   },
   limitValue: { fontSize: 28, fontWeight: "700" },
 
-  // Progress
   statusCard: { marginBottom: 30 },
   progressHeader: {
     flexDirection: "row",
@@ -333,7 +317,6 @@ const styles = StyleSheet.create({
   progressFill: { height: "100%" },
   statsRow: { flexDirection: "row", justifyContent: "space-between" },
 
-  // Rules
   ruleItem: {
     flexDirection: "row",
     alignItems: "center",

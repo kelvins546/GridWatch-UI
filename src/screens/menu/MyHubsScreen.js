@@ -26,7 +26,6 @@ export default function MyHubsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
       <View
         style={[
           styles.header,
@@ -56,7 +55,6 @@ export default function MyHubsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* ACTIVE HUB CARD */}
         <TouchableOpacity
           style={[
             styles.hubCard,
@@ -121,7 +119,6 @@ export default function MyHubsScreen() {
           />
         </TouchableOpacity>
 
-        {/* OFFLINE HUB CARD */}
         <TouchableOpacity
           style={[
             styles.hubCard,

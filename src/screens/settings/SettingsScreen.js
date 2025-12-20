@@ -36,7 +36,6 @@ export default function SettingsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
       <View
         style={[
           styles.header,
@@ -69,7 +68,6 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* PROFILE CARD */}
         <TouchableOpacity
           style={styles.profileCard}
           onPress={() => navigation.navigate("ProfileSettings")}
@@ -96,13 +94,10 @@ export default function SettingsScreen() {
           <MaterialIcons name="edit" size={20} color={theme.textSecondary} />
         </TouchableOpacity>
 
-        {/* --- ANIMATED SECTIONS --- */}
-
         <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
           Utility & Rates
         </Text>
 
-        {/* PROVIDER ROW (Navigates to ProviderSetup) */}
         <SettingsRow
           icon="business"
           title="Meralco"
@@ -116,7 +111,6 @@ export default function SettingsScreen() {
           }
         />
 
-        {/* RATE ROW (Static Info) */}
         <View
           style={[
             styles.settingItem,
@@ -174,7 +168,6 @@ export default function SettingsScreen() {
           theme={theme}
         />
 
-        {/* DARK MODE SWITCH */}
         <View
           style={[
             styles.settingItem,
@@ -193,7 +186,6 @@ export default function SettingsScreen() {
             </Text>
           </View>
           <Switch
-            // FIX: Gray track when off
             trackColor={{
               false: "#d1d1d1",
               true: isDarkMode
@@ -206,7 +198,6 @@ export default function SettingsScreen() {
           />
         </View>
 
-        {/* LOGOUT */}
         <TouchableOpacity
           style={[
             styles.logoutBtn,
@@ -218,7 +209,6 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* LOGOUT MODAL */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -278,12 +268,10 @@ export default function SettingsScreen() {
   );
 }
 
-// --- REUSABLE COMPONENT: SettingsRow with Icon Animation ---
 function SettingsRow({ icon, title, subtitle, onPress, theme, customIcon }) {
   const scaleValue = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
-    // Shrink icon
     Animated.spring(scaleValue, {
       toValue: 0.8,
       useNativeDriver: true,
@@ -291,7 +279,6 @@ function SettingsRow({ icon, title, subtitle, onPress, theme, customIcon }) {
   };
 
   const handlePressOut = () => {
-    // Bounce back
     Animated.spring(scaleValue, {
       toValue: 1,
       friction: 3,
@@ -312,7 +299,6 @@ function SettingsRow({ icon, title, subtitle, onPress, theme, customIcon }) {
       activeOpacity={0.7}
     >
       <View style={styles.settingLeft}>
-        {/* Animated Icon Wrapper */}
         <Animated.View style={{ transform: [{ scale: scaleValue }] }}>
           {customIcon ? (
             customIcon

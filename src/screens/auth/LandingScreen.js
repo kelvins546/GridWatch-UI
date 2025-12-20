@@ -16,7 +16,6 @@ export default function LandingScreen() {
   const navigation = useNavigation();
   const { theme } = useTheme();
 
-  // Floating Logo Animation
   const floatAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -40,7 +39,6 @@ export default function LandingScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* Hero Section */}
       <LinearGradient colors={["#1a1a1a", "#1a1a1a"]} style={styles.hero}>
         <Animated.View
           style={[
@@ -48,7 +46,6 @@ export default function LandingScreen() {
             { transform: [{ translateY: floatAnim }] },
           ]}
         >
-          {/* Ensure you have this image in assets or use a placeholder */}
           <Image
             source={require("../../../assets/GridWatch-logo.png")}
             style={styles.logoImg}
@@ -72,7 +69,6 @@ export default function LandingScreen() {
         </View>
       </LinearGradient>
 
-      {/* Bottom Sheet */}
       <View style={styles.bottomSheet}>
         <TouchableOpacity onPress={() => navigation.navigate("Signup")}>
           <LinearGradient

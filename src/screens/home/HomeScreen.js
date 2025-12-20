@@ -19,10 +19,7 @@ export default function HomeScreen() {
   const { theme, isDarkMode } = useTheme();
   const navigation = useNavigation();
 
-  // --- AUTOMATIC DETECTION TRIGGER ---
   useEffect(() => {
-    // This simulates the "Detection" process exactly like your HTML file.
-    // It waits 1.5 seconds after the Home Screen loads, then shows the modal.
     const timer = setTimeout(() => {
       navigation.navigate("DndCheck");
     }, 1500);
@@ -30,7 +27,6 @@ export default function HomeScreen() {
     return () => clearTimeout(timer);
   }, []);
 
-  // --- ANIMATION FOR MAIN CARD ---
   const mainCardScale = useRef(new Animated.Value(1)).current;
 
   const handleMainIn = () => {
@@ -48,7 +44,6 @@ export default function HomeScreen() {
     }).start();
   };
 
-  // MOCK DATA
   const hubsData = [
     {
       id: "hub1",
@@ -132,7 +127,6 @@ export default function HomeScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
       <View style={[styles.header, { backgroundColor: theme.background }]}>
         <TouchableOpacity onPress={() => navigation.navigate("Menu")}>
           <MaterialIcons name="menu" size={28} color={theme.textSecondary} />
@@ -177,7 +171,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* MAIN CARD */}
         <TouchableOpacity
           activeOpacity={1}
           onPress={() => navigation.navigate("MonthlyBudget")}
@@ -240,7 +233,6 @@ export default function HomeScreen() {
           </Animated.View>
         </TouchableOpacity>
 
-        {/* DEVICE LIST */}
         {hubsData.map((hub) => (
           <View key={hub.id} style={{ marginBottom: 20 }}>
             <Text
@@ -280,7 +272,6 @@ export default function HomeScreen() {
   );
 }
 
-// --- DEVICE CARD COMPONENT ---
 function DeviceCard({
   name,
   cost,

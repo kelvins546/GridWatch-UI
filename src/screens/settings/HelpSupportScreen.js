@@ -27,7 +27,6 @@ export default function HelpSupportScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
       <View
         style={[
           styles.header,
@@ -57,7 +56,6 @@ export default function HelpSupportScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* SEARCH */}
         <View
           style={[
             styles.searchBox,
@@ -72,7 +70,6 @@ export default function HelpSupportScreen() {
           />
         </View>
 
-        {/* CONTACT */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
           Contact Us
         </Text>
@@ -85,7 +82,6 @@ export default function HelpSupportScreen() {
           <ContactCard icon="email" label="Email Us" theme={theme} />
         </View>
 
-        {/* FAQ */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
           Common Issues
         </Text>

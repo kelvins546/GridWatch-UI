@@ -28,7 +28,6 @@ export default function SetupHubScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
       <View
         style={[
           styles.header,
@@ -127,7 +126,6 @@ export default function SetupHubScreen() {
 
         <View style={[styles.divider, { borderTopColor: theme.cardBorder }]} />
 
-        {/* STEP 2 */}
         <View style={styles.formGroup}>
           <Text style={[styles.stepLabel, { color: theme.primary }]}>
             Step 2: Outlet Configuration
@@ -152,7 +150,6 @@ export default function SetupHubScreen() {
         </View>
       </ScrollView>
 
-      {/* FOOTER BTN */}
       <View
         style={[
           styles.btnContainer,
@@ -163,8 +160,6 @@ export default function SetupHubScreen() {
         ]}
       >
         <TouchableOpacity
-          // --- FIX APPLIED HERE ---
-          // Navigate to 'MainApp' stack first, then find 'Home' inside it.
           onPress={() => navigation.navigate("MainApp", { screen: "Home" })}
         >
           <LinearGradient

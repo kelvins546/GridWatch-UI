@@ -5,7 +5,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 
-// --- AUTH SCREENS (NEW) ---
+// --- AUTH SCREENS  ---
 import LandingScreen from "../screens/auth/LandingScreen";
 import LoginScreen from "../screens/auth/LoginScreen";
 import SignupScreen from "../screens/auth/SignupScreen";
@@ -42,7 +42,6 @@ import DeviceControlScreen from "../screens/devices/DeviceControlScreen";
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-// --- ANIMATION: BOUNCE TAB BUTTON ---
 const BounceTabButton = ({ children, onPress }) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
   const handlePressIn = () =>
@@ -79,7 +78,6 @@ const BounceTabButton = ({ children, onPress }) => {
   );
 };
 
-// --- BOTTOM TAB NAVIGATOR ---
 function BottomTabNavigator() {
   const { theme, isDarkMode } = useTheme();
   return (
@@ -150,13 +148,12 @@ function BottomTabNavigator() {
   );
 }
 
-// --- ROOT STACK NAVIGATOR ---
 export default function AppNavigator() {
   const { isDarkMode } = useTheme();
 
   return (
     <Stack.Navigator
-      initialRouteName="Landing" // <--- APP STARTS HERE NOW
+      initialRouteName="Landing"
       screenOptions={{
         headerShown: false,
         animation: "slide_from_right",
@@ -164,23 +161,19 @@ export default function AppNavigator() {
         contentStyle: { backgroundColor: isDarkMode ? "#0f0f0f" : "#ffffff" },
       }}
     >
-      {/* --- AUTHENTICATION FLOW --- */}
       <Stack.Screen name="Landing" component={LandingScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
 
-      {/* --- MAIN APP FLOW --- */}
       <Stack.Screen name="MainApp" component={BottomTabNavigator} />
 
-      {/* Settings Sub-screens */}
       <Stack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
       <Stack.Screen name="DeviceConfig" component={DeviceConfigScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
       <Stack.Screen name="ProviderSetup" component={ProviderSetupScreen} />
 
-      {/* DND Check (Transparent Modal) */}
       <Stack.Screen
         name="DndCheck"
         component={DndCheckScreen}
@@ -191,7 +184,6 @@ export default function AppNavigator() {
         }}
       />
 
-      {/* Budget Sub-screens */}
       <Stack.Screen
         name="BudgetDeviceList"
         component={BudgetDeviceListScreen}
@@ -199,7 +191,6 @@ export default function AppNavigator() {
       <Stack.Screen name="BudgetDetail" component={BudgetDetailScreen} />
       <Stack.Screen name="MonthlyBudget" component={MonthlyBudgetScreen} />
 
-      {/* Menu & Hub Screens */}
       <Stack.Screen
         name="Menu"
         component={MenuScreen}
@@ -208,7 +199,6 @@ export default function AppNavigator() {
       <Stack.Screen name="MyHubs" component={MyHubsScreen} />
       <Stack.Screen name="SetupHub" component={SetupHubScreen} />
 
-      {/* Device Control Screens */}
       <Stack.Screen name="FaultDetail" component={FaultDetailScreen} />
       <Stack.Screen name="DeviceControl" component={DeviceControlScreen} />
     </Stack.Navigator>

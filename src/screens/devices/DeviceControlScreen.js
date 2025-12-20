@@ -21,7 +21,6 @@ export default function DeviceControlScreen() {
   const route = useRoute();
   const { theme } = useTheme();
 
-  // --- PARAMS & POWER STATE ---
   const { deviceName, status } = route.params || {
     deviceName: "Device",
     status: "ON",
@@ -29,11 +28,9 @@ export default function DeviceControlScreen() {
   const initialPower = !status?.includes("Standby") && !status?.includes("OFF");
   const [isPowered, setIsPowered] = useState(initialPower);
 
-  // --- MODAL STATES ---
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
 
-  // --- SCHEDULE STATE ---
   const [scheduleTime, setScheduleTime] = useState("22:00");
   const [selectedDays, setSelectedDays] = useState([
     true,
@@ -43,15 +40,13 @@ export default function DeviceControlScreen() {
     true,
     true,
     true,
-  ]); // M T W T F S S
+  ]);
   const [isActionOn, setIsActionOn] = useState(false); // false = Turn OFF, true = Turn ON
 
-  // --- COLORS ---
   const heroColors = isPowered
     ? ["#0055ff", theme.background]
     : ["#2c3e50", theme.background];
 
-  // --- HANDLERS ---
   const confirmToggle = () => {
     setIsPowered(!isPowered);
     setShowConfirm(false);
@@ -64,7 +59,6 @@ export default function DeviceControlScreen() {
   };
 
   const saveSchedule = () => {
-    // Logic to save schedule would go here
     setShowSchedule(false);
   };
 
@@ -75,7 +69,6 @@ export default function DeviceControlScreen() {
     >
       <StatusBar barStyle="light-content" />
 
-      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -91,7 +84,6 @@ export default function DeviceControlScreen() {
         />
       </View>
 
-      {/* HERO SECTION */}
       <LinearGradient colors={heroColors} style={styles.hero}>
         <View style={styles.iconBox}>
           <MaterialIcons
@@ -109,7 +101,6 @@ export default function DeviceControlScreen() {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* STATS CARD */}
         <View
           style={[
             styles.card,
@@ -129,7 +120,6 @@ export default function DeviceControlScreen() {
           />
         </View>
 
-        {/* POWER BUTTON */}
         <View style={styles.powerContainer}>
           <TouchableOpacity
             style={[styles.powerBtn, isPowered ? styles.btnOn : styles.btnOff]}
@@ -147,7 +137,6 @@ export default function DeviceControlScreen() {
           </Text>
         </View>
 
-        {/* SCHEDULE ROW */}
         <View style={styles.schedHeader}>
           <Text style={styles.schedTitle}>UPCOMING SCHEDULE</Text>
           <TouchableOpacity onPress={() => setShowSchedule(true)}>
@@ -177,7 +166,6 @@ export default function DeviceControlScreen() {
         </View>
       </ScrollView>
 
-      {/* --- CONFIRM MODAL --- */}
       <Modal visible={showConfirm} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View
@@ -231,7 +219,6 @@ export default function DeviceControlScreen() {
         </View>
       </Modal>
 
-      {/* --- EDIT SCHEDULE MODAL (FULL UI) --- */}
       <Modal visible={showSchedule} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View
@@ -253,7 +240,6 @@ export default function DeviceControlScreen() {
               Edit Schedule
             </Text>
 
-            {/* 1. Time Input */}
             <View style={styles.timeInputContainer}>
               <TextInput
                 style={[
@@ -271,7 +257,6 @@ export default function DeviceControlScreen() {
               />
             </View>
 
-            {/* 2. Days Selector */}
             <View style={styles.daysSelector}>
               {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => (
                 <TouchableOpacity
@@ -305,7 +290,6 @@ export default function DeviceControlScreen() {
               ))}
             </View>
 
-            {/* 3. Action Toggle */}
             <TouchableOpacity
               style={[
                 styles.actionRow,
@@ -337,7 +321,6 @@ export default function DeviceControlScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* 4. Actions */}
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalBtn, { borderColor: theme.cardBorder }]}
@@ -424,7 +407,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // FIXED CIRCLE SHADOWS
   btnOn: {
     backgroundColor: "#00ff99",
     shadowColor: "#00ff99",
@@ -432,7 +414,7 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 0 },
     elevation: 15,
-    borderRadius: 45, // Critical for Android shadow
+    borderRadius: 45,
     borderWidth: 0,
   },
   btnOff: {
@@ -477,7 +459,6 @@ const styles = StyleSheet.create({
   time: { fontSize: 16, fontWeight: "700" },
   days: { fontSize: 11, marginTop: 2 },
 
-  // MODAL STYLES
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.8)",
@@ -507,7 +488,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // SCHEDULE MODAL SPECIFIC
   timeInputContainer: { marginBottom: 25, alignItems: "center" },
   timeInput: {
     fontSize: 32,

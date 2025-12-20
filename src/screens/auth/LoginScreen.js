@@ -22,7 +22,6 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Brand Section */}
         <View style={styles.brandSection}>
           <Image
             source={require("../../../assets/GridWatch-logo.png")}
@@ -32,7 +31,6 @@ export default function LoginScreen() {
           <Text style={styles.tagline}>Smart Energy Monitoring</Text>
         </View>
 
-        {/* Inputs */}
         <InputGroup
           label="Email Address"
           icon="email"
@@ -68,7 +66,6 @@ export default function LoginScreen() {
           <Text style={styles.forgotPass}>Forgot Password?</Text>
         </TouchableOpacity>
 
-        {/* Login Button -> Goes to MainApp */}
         <TouchableOpacity onPress={() => navigation.replace("MainApp")}>
           <LinearGradient
             colors={["#0055ff", "#00ff99"]}

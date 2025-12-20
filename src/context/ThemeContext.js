@@ -8,7 +8,7 @@ const themes = {
     text: "#ffffff",
     textSecondary: "#888",
     icon: "#888",
-    primary: "#00ff99", // Neon Green (Good for Dark Mode)
+    primary: "#00ff99",
     statusBarStyle: "light-content",
   },
   light: {
@@ -18,7 +18,7 @@ const themes = {
     text: "#000000",
     textSecondary: "#666",
     icon: "#666",
-    primary: "#00995e", // <--- DARKER GREEN (Good for Light Mode)
+    primary: "#00995e",
     statusBarStyle: "dark-content",
   },
 };

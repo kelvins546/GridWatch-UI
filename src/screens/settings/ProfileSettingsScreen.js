@@ -19,11 +19,9 @@ export default function ProfileSettingsScreen() {
   const navigation = useNavigation();
   const { theme, isDarkMode } = useTheme();
 
-  // Modal States
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
 
-  // Danger Colors Logic
   const dangerColor = isDarkMode ? "#ff4444" : "#c62828";
   const dangerBg = isDarkMode
     ? "rgba(255, 68, 68, 0.05)"
@@ -38,7 +36,7 @@ export default function ProfileSettingsScreen() {
 
   const handleSaveConfirm = () => {
     setShowSaveModal(false);
-    // Slight delay to allow modal to close smoothly before navigating back
+
     setTimeout(() => {
       navigation.goBack();
     }, 200);
@@ -47,7 +45,6 @@ export default function ProfileSettingsScreen() {
   const performDeactivate = () => {
     setShowDeactivateModal(false);
     console.log("Account Deactivated");
-    // In real app: Navigate to Login
   };
 
   return (
@@ -60,7 +57,6 @@ export default function ProfileSettingsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- HEADER --- */}
       <View
         style={[
           styles.header,
@@ -95,7 +91,6 @@ export default function ProfileSettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* --- AVATAR HERO --- */}
         <View style={styles.avatarSection}>
           <View style={styles.avatarWrapper}>
             <LinearGradient
@@ -133,7 +128,6 @@ export default function ProfileSettingsScreen() {
           </View>
         </View>
 
-        {/* --- FORMS --- */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
           Personal Information
         </Text>
@@ -171,7 +165,6 @@ export default function ProfileSettingsScreen() {
           theme={theme}
         />
 
-        {/* --- DANGER ZONE --- */}
         <View
           style={[
             styles.dangerCard,
@@ -199,9 +192,6 @@ export default function ProfileSettingsScreen() {
         </View>
       </ScrollView>
 
-      {/* --- MODALS (Simplified for reliability) --- */}
-
-      {/* 1. SAVE SUCCESS MODAL */}
       <CustomModal
         visible={showSaveModal}
         icon="check-circle"
@@ -210,7 +200,6 @@ export default function ProfileSettingsScreen() {
         msg="Your changes have been saved successfully."
         onClose={() => setShowSaveModal(false)}
         theme={theme}
-        // Action: Just one main button
         primaryAction={{
           text: "Okay",
           onPress: handleSaveConfirm,
@@ -218,7 +207,6 @@ export default function ProfileSettingsScreen() {
         }}
       />
 
-      {/* 2. DEACTIVATE CONFIRM MODAL */}
       <CustomModal
         visible={showDeactivateModal}
         icon="report-problem"
@@ -227,7 +215,6 @@ export default function ProfileSettingsScreen() {
         msg="You are about to permanently deactivate your account. All data will be lost."
         onClose={() => setShowDeactivateModal(false)}
         theme={theme}
-        // Action: Two buttons (Cancel + Deactivate)
         secondaryAction={{
           text: "Cancel",
           onPress: () => setShowDeactivateModal(false),
@@ -236,14 +223,12 @@ export default function ProfileSettingsScreen() {
         primaryAction={{
           text: "Yes, Deactivate",
           onPress: performDeactivate,
-          solidColor: dangerColor, // Solid red, no gradient
+          solidColor: dangerColor,
         }}
       />
     </SafeAreaView>
   );
 }
-
-// --- REUSABLE COMPONENTS ---
 
 function InputGroup({
   label,
@@ -278,8 +263,6 @@ function InputGroup({
   );
 }
 
-// --- NEW ROBUST CUSTOM MODAL ---
-// This version builds the buttons internally so layout is 100% safe
 function CustomModal({
   visible,
   icon,
@@ -296,7 +279,7 @@ function CustomModal({
       transparent={true}
       visible={visible}
       animationType="fade"
-      onRequestClose={onClose} // REQUIRED for Android Back Button
+      onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
         <View
@@ -305,7 +288,6 @@ function CustomModal({
             { backgroundColor: theme.card, borderColor: theme.cardBorder },
           ]}
         >
-          {/* Icon & Text */}
           <MaterialIcons
             name={icon}
             size={48}
@@ -319,9 +301,7 @@ function CustomModal({
             {msg}
           </Text>
 
-          {/* Action Buttons Area */}
           <View style={styles.modalActions}>
-            {/* Secondary Button (Cancel) - Optional */}
             {secondaryAction && (
               <TouchableOpacity
                 style={[
@@ -345,7 +325,6 @@ function CustomModal({
               </TouchableOpacity>
             )}
 
-            {/* Primary Button (Confirm/OK) */}
             {primaryAction && (
               <TouchableOpacity
                 style={[
@@ -356,7 +335,6 @@ function CustomModal({
                 ]}
                 onPress={primaryAction.onPress}
               >
-                {/* If gradient colors provided, use Gradient. Else use simple View */}
                 {primaryAction.color ? (
                   <LinearGradient
                     colors={primaryAction.color}
@@ -467,13 +445,12 @@ const styles = StyleSheet.create({
   },
   deactivateBtnText: { fontWeight: "600", fontSize: 13 },
 
-  // MODAL STYLES
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.8)",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 1000, // Ensures it is on top
+    zIndex: 1000,
   },
   modalContent: {
     borderWidth: 1,
