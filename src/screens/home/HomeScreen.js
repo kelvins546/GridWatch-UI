@@ -15,107 +15,97 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
+const HUBS_DATA = [
+  {
+    id: "hub1",
+    name: "Living Room Hub",
+    active: 4,
+    total: 4,
+    devices: [
+      {
+        id: 1,
+        name: "Air Conditioner",
+        cost: "₱ 18.20 / hr",
+        watts: "1456 W",
+        icon: "ac-unit",
+        type: "normal",
+        tag: "DAILY",
+      },
+      {
+        id: 2,
+        name: "Smart TV",
+        cost: "₱ 1.50 / hr",
+        watts: "120 W",
+        icon: "tv",
+        type: "warning",
+        tag: "LIMIT",
+      },
+      {
+        id: 3,
+        name: "Outlet 3",
+        cost: "Check Circuit",
+        watts: "0 W",
+        icon: "power-off",
+        type: "critical",
+        tag: "ERROR",
+      },
+      {
+        id: 4,
+        name: "Electric Fan",
+        cost: "Standby",
+        watts: "0 W",
+        icon: "mode-fan-off",
+        type: "off",
+        tag: "WEEKLY",
+      },
+    ],
+  },
+  {
+    id: "hub2",
+    name: "Kitchen Hub",
+    active: 2,
+    total: 2,
+    devices: [
+      {
+        id: 5,
+        name: "Refrigerator",
+        cost: "₱ 2.10 / hr",
+        watts: "150 W",
+        icon: "kitchen",
+        type: "normal",
+        tag: "24/7",
+      },
+      {
+        id: 6,
+        name: "Microwave",
+        cost: "Standby",
+        watts: "0 W",
+        icon: "microwave",
+        type: "off",
+        tag: "MANUAL",
+      },
+    ],
+  },
+];
+
 export default function HomeScreen() {
   const { theme, isDarkMode } = useTheme();
   const navigation = useNavigation();
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      navigation.navigate("DndCheck");
-    }, 1500);
-
+    const timer = setTimeout(() => navigation.navigate("DndCheck"), 1500);
     return () => clearTimeout(timer);
   }, []);
 
-  const mainCardScale = useRef(new Animated.Value(1)).current;
-
-  const handleMainIn = () => {
-    Animated.spring(mainCardScale, {
-      toValue: 0.96,
-      useNativeDriver: true,
-    }).start();
-  };
-  const handleMainOut = () => {
-    Animated.spring(mainCardScale, {
-      toValue: 1,
+  const animateButton = (toValue) => {
+    Animated.spring(scaleAnim, {
+      toValue,
       friction: 3,
       tension: 40,
       useNativeDriver: true,
     }).start();
   };
-
-  const hubsData = [
-    {
-      id: "hub1",
-      name: "LIVING ROOM HUB",
-      active: 4,
-      total: 4,
-      devices: [
-        {
-          id: 1,
-          name: "Air Conditioner",
-          cost: "₱ 18.20 / hr",
-          watts: "1456 Watts • ON",
-          icon: "ac-unit",
-          type: "normal",
-          tag: "DAILY",
-        },
-        {
-          id: 2,
-          name: "Smart TV",
-          cost: "₱ 1.50 / hr",
-          watts: "120 Watts • ON",
-          icon: "tv",
-          type: "warning",
-          tag: "LIMIT",
-        },
-        {
-          id: 3,
-          name: "Outlet 3",
-          cost: "SHORT CIRCUIT",
-          watts: "0 Watts • RESET REQ.",
-          icon: "power-off",
-          type: "critical",
-          tag: "LOCKED",
-        },
-        {
-          id: 4,
-          name: "Electric Fan",
-          cost: "Standby Mode",
-          watts: "₱ 0.00 / hr",
-          icon: "mode-fan-off",
-          type: "off",
-          tag: "WEEKLY",
-        },
-      ],
-    },
-    {
-      id: "hub2",
-      name: "KITCHEN HUB",
-      active: 2,
-      total: 2,
-      devices: [
-        {
-          id: 5,
-          name: "Refrigerator",
-          cost: "₱ 2.10 / hr",
-          watts: "150 Watts • ON",
-          icon: "kitchen",
-          type: "normal",
-          tag: "24/7",
-        },
-        {
-          id: 6,
-          name: "Microwave",
-          cost: "Standby Mode",
-          watts: "0 Watts",
-          icon: "microwave",
-          type: "off",
-          tag: "MANUAL",
-        },
-      ],
-    },
-  ];
 
   return (
     <SafeAreaView
@@ -138,10 +128,7 @@ export default function HomeScreen() {
           resizeMode="contain"
         />
 
-        <TouchableOpacity
-          style={styles.bellContainer}
-          onPress={() => navigation.navigate("Notifications")}
-        >
+        <TouchableOpacity onPress={() => navigation.navigate("Notifications")}>
           <MaterialIcons
             name="notifications-none"
             size={28}
@@ -157,14 +144,12 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.greetingSection}>
+        <View style={styles.greeting}>
           <Text style={[styles.greetingText, { color: theme.textSecondary }]}>
             Good Evening, Natasha
           </Text>
           <View style={styles.statusRow}>
-            <View
-              style={[styles.statusDot, { backgroundColor: theme.primary }]}
-            />
+            <View style={[styles.dot, { backgroundColor: theme.primary }]} />
             <Text style={[styles.statusText, { color: theme.text }]}>
               All Systems Normal
             </Text>
@@ -174,10 +159,10 @@ export default function HomeScreen() {
         <TouchableOpacity
           activeOpacity={1}
           onPress={() => navigation.navigate("MonthlyBudget")}
-          onPressIn={handleMainIn}
-          onPressOut={handleMainOut}
+          onPressIn={() => animateButton(0.96)}
+          onPressOut={() => animateButton(1)}
         >
-          <Animated.View style={{ transform: [{ scale: mainCardScale }] }}>
+          <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
             <LinearGradient
               colors={
                 isDarkMode ? ["#252525", "#1e1e1e"] : ["#ffffff", "#f2f2f7"]
@@ -186,34 +171,28 @@ export default function HomeScreen() {
               end={{ x: 1, y: 1 }}
               style={[styles.mainCard, { borderColor: theme.cardBorder }]}
             >
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <Text style={styles.cardLabel}>
-                  CURRENT SPENDING (MONTH-TO-DATE)
-                </Text>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardLabel}>Current Spending (MTD)</Text>
                 <MaterialIcons
                   name="edit"
                   size={16}
                   color={theme.textSecondary}
                 />
               </View>
-              <Text style={[styles.currency, { color: theme.text }]}>
+
+              <Text style={[styles.amount, { color: theme.text }]}>
                 ₱ 1,450.75
               </Text>
-              <Text style={[styles.kwhText, { color: theme.textSecondary }]}>
+              <Text style={[styles.loadInfo, { color: theme.textSecondary }]}>
                 Total Load:{" "}
                 <Text style={{ color: theme.text, fontWeight: "700" }}>
                   1.46 kWh
                 </Text>
               </Text>
+
               <View
                 style={[
-                  styles.progressTrack,
+                  styles.barTrack,
                   { backgroundColor: isDarkMode ? "#333" : "#e5e5ea" },
                 ]}
               >
@@ -223,44 +202,37 @@ export default function HomeScreen() {
                   }
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={[styles.progressFill, { width: "52%" }]}
+                  style={[styles.barFill, { width: "52%" }]}
                 />
               </View>
-              <Text style={[styles.progressText, { color: theme.primary }]}>
+              <Text style={[styles.percentage, { color: theme.primary }]}>
                 52% of Budget
               </Text>
             </LinearGradient>
           </Animated.View>
         </TouchableOpacity>
 
-        {hubsData.map((hub) => (
-          <View key={hub.id} style={{ marginBottom: 20 }}>
-            <Text
-              style={[styles.sectionHeader, { color: theme.textSecondary }]}
-            >
+        {HUBS_DATA.map((hub) => (
+          <View key={hub.id} style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
               {hub.name} ({hub.active}/{hub.total})
             </Text>
             <View style={styles.grid}>
               {hub.devices.map((device) => (
-                <DeviceCard
+                <DeviceItem
                   key={device.id}
-                  name={device.name}
-                  cost={device.cost}
-                  watts={device.watts}
-                  icon={device.icon}
-                  tag={device.tag}
-                  type={device.type}
+                  data={device}
                   theme={theme}
                   isDarkMode={isDarkMode}
                   onPress={() => {
-                    if (device.type === "critical") {
-                      navigation.navigate("FaultDetail");
-                    } else {
-                      navigation.navigate("DeviceControl", {
-                        deviceName: device.name,
-                        status: device.cost,
-                      });
-                    }
+                    const target =
+                      device.type === "critical"
+                        ? "FaultDetail"
+                        : "DeviceControl";
+                    navigation.navigate(target, {
+                      deviceName: device.name,
+                      status: device.cost,
+                    });
                   }}
                 />
               ))}
@@ -272,108 +244,104 @@ export default function HomeScreen() {
   );
 }
 
-function DeviceCard({
-  name,
-  cost,
-  watts,
-  icon,
-  tag,
-  type,
-  theme,
-  isDarkMode,
-  onPress,
-}) {
-  const scaleValue = useRef(new Animated.Value(1)).current;
-  const handlePressIn = () =>
-    Animated.spring(scaleValue, {
-      toValue: 0.96,
-      useNativeDriver: true,
-    }).start();
-  const handlePressOut = () =>
-    Animated.spring(scaleValue, {
+const DeviceItem = ({ data, theme, isDarkMode, onPress }) => {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const pressIn = () =>
+    Animated.spring(scale, { toValue: 0.96, useNativeDriver: true }).start();
+  const pressOut = () =>
+    Animated.spring(scale, {
       toValue: 1,
       friction: 3,
       tension: 40,
       useNativeDriver: true,
     }).start();
 
-  let bgStyle = { backgroundColor: theme.card, borderColor: theme.cardBorder };
-  let iconColor = theme.primary;
-  let iconBg = isDarkMode ? "rgba(0, 255, 153, 0.1)" : "rgba(0, 153, 94, 0.1)";
-  let costColor = theme.primary;
-  let tagColor = theme.textSecondary;
-  let tagBg = theme.background;
+  let colors = {
+    bg: theme.card,
+    border: theme.cardBorder,
+    icon: theme.primary,
+    iconBg: isDarkMode ? "rgba(0, 255, 153, 0.1)" : "rgba(0, 153, 94, 0.1)",
+    cost: theme.primary,
+    tag: theme.textSecondary,
+    tagBg: theme.background,
+  };
 
-  if (type === "warning") {
-    const yellowColor = isDarkMode ? "#ffaa00" : "#b37400";
-    bgStyle = {
-      backgroundColor: isDarkMode
-        ? "rgba(255, 170, 0, 0.05)"
-        : "rgba(179, 116, 0, 0.05)",
-      borderColor: isDarkMode
-        ? "rgba(255, 170, 0, 0.3)"
-        : "rgba(179, 116, 0, 0.2)",
+  if (data.type === "warning") {
+    const yellow = isDarkMode ? "#ffaa00" : "#b37400";
+    colors = {
+      ...colors,
+      bg: isDarkMode ? "rgba(255, 170, 0, 0.05)" : "rgba(179, 116, 0, 0.05)",
+      icon: yellow,
+      iconBg: "rgba(255, 170, 0, 0.15)",
+      cost: yellow,
+      tag: yellow,
     };
-    iconColor = yellowColor;
-    iconBg = isDarkMode ? "rgba(255, 170, 0, 0.15)" : "rgba(179, 116, 0, 0.1)";
-    costColor = yellowColor;
-    tagColor = yellowColor;
-  } else if (type === "critical") {
-    const redColor = isDarkMode ? "#ff4444" : "#c62828";
-    bgStyle = {
-      backgroundColor: isDarkMode
-        ? "rgba(255, 68, 68, 0.05)"
-        : "rgba(198, 40, 40, 0.05)",
-      borderColor: isDarkMode
-        ? "rgba(255, 68, 68, 0.3)"
-        : "rgba(198, 40, 40, 0.2)",
+  } else if (data.type === "critical") {
+    const red = isDarkMode ? "#ff4444" : "#c62828";
+    colors = {
+      ...colors,
+      bg: isDarkMode ? "rgba(255, 68, 68, 0.05)" : "rgba(198, 40, 40, 0.05)",
+      icon: red,
+      iconBg: "rgba(255, 68, 68, 0.15)",
+      cost: red,
+      tag: red,
     };
-    iconColor = redColor;
-    iconBg = isDarkMode ? "rgba(255, 68, 68, 0.15)" : "rgba(198, 40, 40, 0.1)";
-    costColor = redColor;
-    tagColor = redColor;
-  } else if (type === "off") {
-    iconColor = theme.textSecondary;
-    costColor = theme.textSecondary;
-    bgStyle = { backgroundColor: theme.card, borderColor: theme.cardBorder };
+  } else if (data.type === "off") {
+    colors = {
+      ...colors,
+      icon: theme.textSecondary,
+      cost: theme.textSecondary,
+    };
   }
 
   return (
     <TouchableOpacity
       onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
+      onPressIn={pressIn}
+      onPressOut={pressOut}
       activeOpacity={1}
-      style={{ width: "48%", marginBottom: 16 }}
+      style={styles.deviceWrapper}
     >
       <Animated.View
         style={[
           styles.deviceCard,
-          bgStyle,
-          { transform: [{ scale: scaleValue }] },
+          {
+            backgroundColor: colors.bg,
+            borderColor: colors.border,
+            transform: [{ scale }],
+          },
         ]}
       >
-        <View style={styles.cardTop}>
-          <View style={[styles.iconBox, { backgroundColor: iconBg }]}>
-            <MaterialIcons name={icon} size={18} color={iconColor} />
+        <View style={styles.cardRow}>
+          <View
+            style={[styles.iconContainer, { backgroundColor: colors.iconBg }]}
+          >
+            <MaterialIcons name={data.icon} size={18} color={colors.icon} />
           </View>
-          <View style={[styles.limitTag, { backgroundColor: tagBg }]}>
-            <Text style={[styles.limitTagText, { color: tagColor }]}>
-              {tag}
+          <View
+            style={[styles.tagContainer, { backgroundColor: colors.tagBg }]}
+          >
+            <Text style={[styles.tagText, { color: colors.tag }]}>
+              {data.tag}
             </Text>
           </View>
         </View>
         <View>
-          <Text style={[styles.deviceName, { color: theme.text }]}>{name}</Text>
-          <Text style={[styles.deviceCost, { color: costColor }]}>{cost}</Text>
-          <Text style={[styles.deviceWatts, { color: theme.textSecondary }]}>
-            {watts}
+          <Text style={[styles.nameText, { color: theme.text }]}>
+            {data.name}
+          </Text>
+          <Text style={[styles.costText, { color: colors.cost }]}>
+            {data.cost}
+          </Text>
+          <Text style={[styles.wattText, { color: theme.textSecondary }]}>
+            {data.watts}
           </Text>
         </View>
       </Animated.View>
     </TouchableOpacity>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -385,7 +353,6 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   logo: { width: 32, height: 32 },
-  bellContainer: { position: "relative" },
   badge: {
     position: "absolute",
     top: -2,
@@ -399,10 +366,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   badgeText: { color: "white", fontSize: 8, fontWeight: "bold" },
-  greetingSection: { paddingHorizontal: 24, marginBottom: 20 },
+  scrollContent: { paddingBottom: 100 },
+  greeting: { paddingHorizontal: 24, marginBottom: 20 },
   greetingText: { fontSize: 14, fontWeight: "500", marginBottom: 4 },
   statusRow: { flexDirection: "row", alignItems: "center" },
-  statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
+  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
   statusText: { fontSize: 12, fontWeight: "600" },
   mainCard: {
     marginHorizontal: 24,
@@ -410,6 +378,11 @@ const styles = StyleSheet.create({
     padding: 24,
     marginBottom: 30,
     borderWidth: 1,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   cardLabel: {
     fontSize: 11,
@@ -419,18 +392,19 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 8,
   },
-  currency: { fontSize: 38, fontWeight: "700", marginBottom: 4 },
-  kwhText: { fontSize: 13, marginBottom: 20 },
-  progressTrack: {
+  amount: { fontSize: 38, fontWeight: "700", marginBottom: 4 },
+  loadInfo: { fontSize: 13, marginBottom: 20 },
+  barTrack: {
     height: 8,
     borderRadius: 4,
     width: "100%",
     marginBottom: 8,
     overflow: "hidden",
   },
-  progressFill: { height: "100%", borderRadius: 4 },
-  progressText: { textAlign: "right", fontSize: 11, fontWeight: "600" },
-  sectionHeader: {
+  barFill: { height: "100%", borderRadius: 4 },
+  percentage: { textAlign: "right", fontSize: 11, fontWeight: "600" },
+  section: { marginBottom: 20 },
+  sectionTitle: {
     fontSize: 13,
     fontWeight: "600",
     textTransform: "uppercase",
@@ -444,6 +418,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 24,
   },
+  deviceWrapper: { width: "48%", marginBottom: 16 },
   deviceCard: {
     width: "100%",
     borderRadius: 20,
@@ -452,21 +427,21 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     borderWidth: 1,
   },
-  cardTop: {
+  cardRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
-  iconBox: {
+  iconContainer: {
     width: 32,
     height: 32,
     borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
   },
-  limitTag: { paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 },
-  limitTagText: { fontSize: 9, fontWeight: "bold" },
-  deviceName: { fontSize: 13, fontWeight: "600", marginBottom: 4 },
-  deviceCost: { fontSize: 13, fontWeight: "600", marginBottom: 2 },
-  deviceWatts: { fontSize: 10 },
+  tagContainer: { paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 },
+  tagText: { fontSize: 9, fontWeight: "bold" },
+  nameText: { fontSize: 13, fontWeight: "600", marginBottom: 4 },
+  costText: { fontSize: 13, fontWeight: "600", marginBottom: 2 },
+  wattText: { fontSize: 10 },
 });
