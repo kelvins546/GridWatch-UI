@@ -10,12 +10,27 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
 export default function DeviceConfigScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { theme, isDarkMode } = useTheme();
+
+  // 1. GET PARAMS (Added 'status')
+  const { hubName, hubId, status = "Online" } = route.params || {};
+
+  // 2. DEFINE STATUS LOGIC
+  const isOffline = status === "Offline";
+  const statusColor = isOffline ? "#ff4444" : theme.primary; // Red if offline
+  const statusBg = isOffline
+    ? "rgba(255, 68, 68, 0.1)" // Red tint
+    : isDarkMode
+    ? "rgba(0, 255, 153, 0.1)"
+    : "rgba(0, 153, 94, 0.1)";
+  const statusIcon = isOffline ? "wifi-off" : "router";
+  const statusText = isOffline ? "Offline • Check Power" : "Online • Stable";
 
   const [modalState, setModalState] = useState({
     visible: false,
@@ -104,6 +119,7 @@ export default function DeviceConfigScreen() {
         backgroundColor={theme.background}
       />
 
+      {/* HEADER */}
       <View
         className="flex-row items-center justify-between px-6 py-5 border-b"
         style={{
@@ -135,41 +151,46 @@ export default function DeviceConfigScreen() {
 
       <ScrollView>
         <View className="p-6">
+          {/* DEVICE STATUS CARD */}
           <View
             className="items-center py-5 border-b mb-5"
             style={{ borderBottomColor: theme.cardBorder }}
           >
+            {/* DYNAMIC ICON & BACKGROUND */}
             <View
               className="w-20 h-20 rounded-full border-2 justify-center items-center mb-4"
               style={{
-                borderColor: theme.primary,
-                backgroundColor: isDarkMode
-                  ? "rgba(0, 255, 153, 0.1)"
-                  : "rgba(0, 153, 94, 0.1)",
+                borderColor: statusColor,
+                backgroundColor: statusBg,
               }}
             >
-              <MaterialIcons name="router" size={40} color={theme.primary} />
+              <MaterialIcons name={statusIcon} size={40} color={statusColor} />
             </View>
+
+            {/* DYNAMIC HUB NAME */}
             <Text
               className="text-lg font-bold mb-1.5"
               style={{ color: theme.text }}
             >
-              GridWatch Hub
+              {hubName || "GridWatch Hub"}
             </Text>
+
+            {/* DYNAMIC STATUS TEXT */}
             <View className="flex-row items-center gap-1.5">
               <View
                 className="w-1.5 h-1.5 rounded-full"
-                style={{ backgroundColor: theme.primary }}
+                style={{ backgroundColor: statusColor }}
               />
               <Text
                 className="text-xs font-semibold"
-                style={{ color: theme.primary }}
+                style={{ color: statusColor }}
               >
-                Online • Stable
+                {statusText}
               </Text>
             </View>
           </View>
 
+          {/* SYSTEM INFO */}
           <Text
             className="text-[11px] font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary }}
@@ -184,9 +205,10 @@ export default function DeviceConfigScreen() {
             }}
           >
             <InfoItem label="Model" value="GW-ESP32-PRO" theme={theme} />
+            {/* DYNAMIC ID */}
             <InfoItem
               label="Serial Number"
-              value="SN: 8821-992A-X1"
+              value={hubId ? `ID: ${hubId}` : "SN: 8821-992A-X1"}
               theme={theme}
             />
             <View
@@ -207,6 +229,7 @@ export default function DeviceConfigScreen() {
             </View>
           </View>
 
+          {/* NETWORK CONNECTION */}
           <Text
             className="text-[11px] font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary }}
@@ -254,22 +277,27 @@ export default function DeviceConfigScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* ADVANCED ACTIONS */}
           <Text
-            className="text-[11px] font-bold uppercase tracking-widest mb-3"
+            className="text-[11px] font-bold uppercase tracking-widest mb-6"
             style={{ color: theme.textSecondary }}
           >
             Advanced Actions
           </Text>
 
           <TouchableOpacity
-            className="flex-row items-center justify-center gap-2 p-3.5 rounded-xl border mb-3"
+            className="flex-row items-center justify-center gap-2 p-3.5 rounded-xl border mb-6"
             style={{ backgroundColor: dangerBg, borderColor: dangerBorder }}
             onPress={() => openModal("restart")}
           >
             <MaterialIcons name="restart-alt" size={18} color={dangerColor} />
             <Text
-              className="font-semibold text-sm"
-              style={{ color: dangerColor }}
+              className="font-semibold text-sm text-center"
+              style={{
+                color: dangerColor,
+                includeFontPadding: false,
+                textAlignVertical: "center",
+              }}
             >
               Restart Device
             </Text>
@@ -282,8 +310,12 @@ export default function DeviceConfigScreen() {
           >
             <MaterialIcons name="link-off" size={18} color={dangerColor} />
             <Text
-              className="font-semibold text-sm"
-              style={{ color: dangerColor }}
+              className="font-semibold text-sm text-center"
+              style={{
+                color: dangerColor,
+                includeFontPadding: false,
+                textAlignVertical: "center",
+              }}
             >
               Unpair from Account
             </Text>
@@ -291,6 +323,7 @@ export default function DeviceConfigScreen() {
         </View>
       </ScrollView>
 
+      {/* MODAL */}
       <Modal
         transparent
         visible={modalState.visible}

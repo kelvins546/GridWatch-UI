@@ -8,22 +8,40 @@ import {
   Modal,
   StatusBar,
   Animated,
+  Image, // <--- ADDED
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation, CommonActions } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../context/ThemeContext";
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const [modalVisible, setModalVisible] = useState(false);
   const { isDarkMode, toggleTheme, theme } = useTheme();
 
+  // 1. GET PARAMS FROM PROVIDER SETUP
+  const { providerName, rate } = route.params || {};
+
+  const displayProvider = providerName || "Meralco";
+  const displayRate = rate || "12.50";
+
+  // 2. DEFINE LOGO MAPPING
+  // This maps the provider name to the required image
+  const providerLogos = {
+    Meralco: require("../../../assets/meralco.png"),
+    "Visayan Electric": require("../../../assets/visayan.png"),
+    "Davao Light": require("../../../assets/davao.png"),
+    BENECO: require("../../../assets/beneco.png"),
+    AKELCO: require("../../../assets/akelco.png"),
+  };
+
+  const logoSource = providerLogos[displayProvider];
+
   const handleLogout = () => {
     setModalVisible(false);
-
-    // Use 'Landing' because that is the 'name' prop in your AppNavigator.js
     navigation.reset({
       index: 0,
       routes: [{ name: "Landing" }],
@@ -111,15 +129,26 @@ export default function SettingsScreen() {
             Utility & Rates
           </Text>
 
+          {/* DYNAMIC PROVIDER ROW WITH LOGO */}
           <SettingsRow
             icon="business"
-            title="Meralco"
+            title={displayProvider}
             subtitle="Current Provider"
             onPress={() => navigation.navigate("ProviderSetup")}
             theme={theme}
             customIcon={
-              <View className="w-7 h-7 bg-white rounded justify-center items-center">
-                <Text className="text-black font-black text-sm">M</Text>
+              <View className="w-9 h-9 bg-white rounded-lg justify-center items-center overflow-hidden border border-gray-200">
+                {logoSource ? (
+                  <Image
+                    source={logoSource}
+                    style={{ width: "80%", height: "80%" }}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <Text className="text-black font-black text-sm">
+                    {displayProvider.charAt(0)}
+                  </Text>
+                )}
               </View>
             }
           />
@@ -150,7 +179,7 @@ export default function SettingsScreen() {
             </View>
             <View className="items-end">
               <Text className="text-sm font-bold" style={{ color: theme.text }}>
-                ₱ 12.50
+                ₱ {displayRate}
               </Text>
               <Text
                 className="text-xs font-semibold"
@@ -172,7 +201,7 @@ export default function SettingsScreen() {
             icon="router"
             title="GridWatch Hub"
             subtitle="Online • 192.168.1.15"
-            onPress={() => navigation.navigate("DeviceConfig")}
+            onPress={() => navigation.navigate("MyHubs")}
             theme={theme}
           />
 
@@ -306,41 +335,19 @@ export default function SettingsScreen() {
 }
 
 function SettingsRow({ icon, title, subtitle, onPress, theme, customIcon }) {
-  const scaleValue = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scaleValue, {
-      toValue: 0.8,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleValue, {
-      toValue: 1,
-      friction: 3,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
-  };
-
   return (
     <TouchableOpacity
       className="p-4 rounded-xl mb-3 flex-row justify-between items-center border"
       style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}
       onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
       activeOpacity={0.7}
     >
       <View className="flex-row items-center">
-        <Animated.View style={{ transform: [{ scale: scaleValue }] }}>
-          {customIcon ? (
-            customIcon
-          ) : (
-            <MaterialIcons name={icon} size={22} color={theme.icon} />
-          )}
-        </Animated.View>
+        {customIcon ? (
+          customIcon
+        ) : (
+          <MaterialIcons name={icon} size={22} color={theme.icon} />
+        )}
 
         <View>
           <Text

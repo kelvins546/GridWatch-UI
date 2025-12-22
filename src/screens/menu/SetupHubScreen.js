@@ -25,16 +25,14 @@ export default function SetupHubScreen() {
   const [wifiPass, setWifiPass] = useState("");
   const [showPass, setShowPass] = useState(false);
 
-  // Loading Modal State
   const [isPairing, setIsPairing] = useState(false);
   const [statusStep, setStatusStep] = useState("");
 
-  // --- CUSTOM ALERT STATE ---
   const [alertConfig, setAlertConfig] = useState({
     visible: false,
     title: "",
     message: "",
-    type: "error", // 'error' or 'success'
+    type: "error",
     onPress: null,
   });
 
@@ -68,8 +66,6 @@ export default function SetupHubScreen() {
     setIsPairing(true);
 
     try {
-      // --- HANDSHAKE PROCESS ---
-
       setStatusStep("Connecting to Hub...");
       await new Promise((r) => setTimeout(r, 1500));
 
@@ -100,7 +96,6 @@ export default function SetupHubScreen() {
     >
       <StatusBar barStyle={theme.statusBarStyle} />
 
-      {/* Header */}
       <View className="flex-row justify-between items-center p-5">
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.text} />
@@ -112,9 +107,7 @@ export default function SetupHubScreen() {
       </View>
 
       <ScrollView className="flex-1">
-        {/* WRAPPER VIEW: This forces the padding to work */}
         <View className="px-6 py-6">
-          {/* STEP 1: CONNECT TO DEVICE */}
           <Text
             className="text-sm font-bold uppercase mb-2.5 tracking-wide"
             style={{ color: theme.text }}
@@ -187,7 +180,6 @@ export default function SetupHubScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* STEP 2: CONFIGURE */}
           <Text
             className="text-sm font-bold uppercase mt-5 mb-2.5 tracking-wide"
             style={{ color: theme.text }}
@@ -259,7 +251,6 @@ export default function SetupHubScreen() {
             </View>
           </View>
 
-          {/* Bottom Padding for scroll */}
           <View className="h-10" />
         </View>
       </ScrollView>
@@ -279,7 +270,6 @@ export default function SetupHubScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* --- LOADING MODAL (Standard) --- */}
       <Modal transparent visible={isPairing}>
         <View className="flex-1 justify-center items-center bg-black/80">
           <View
@@ -297,7 +287,6 @@ export default function SetupHubScreen() {
         </View>
       </Modal>
 
-      {/* --- CUSTOM COMPACT VALIDATION MODAL --- */}
       <Modal transparent visible={alertConfig.visible} animationType="fade">
         <View className="flex-1 justify-center items-center bg-black/60">
           <View

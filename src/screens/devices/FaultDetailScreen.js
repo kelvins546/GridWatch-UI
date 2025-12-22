@@ -225,7 +225,6 @@ function CheckItem({ text, checked, onPress, theme }) {
         {checked && <MaterialIcons name="check" size={14} color="#000" />}
       </View>
       <Text
-        // CHANGED: 'text-sm' (14px) instead of 'text-xs' (12px)
         className="text-sm flex-1 leading-5"
         style={{ color: theme.textSecondary }}
       >

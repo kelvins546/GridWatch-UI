@@ -62,6 +62,7 @@ export default function MyHubsScreen() {
 
       <ScrollView>
         <View className="p-6">
+          {/* ONLINE HUB CARD */}
           <TouchableOpacity
             className="rounded-2xl p-4 mb-4 border relative"
             style={{
@@ -69,6 +70,14 @@ export default function MyHubsScreen() {
               borderColor: theme.cardBorder,
             }}
             activeOpacity={0.8}
+            // UPDATED: Now passes status: "Online"
+            onPress={() =>
+              navigation.navigate("DeviceConfig", {
+                hubName: "Living Room Hub",
+                hubId: "GW-A101",
+                status: "Online",
+              })
+            }
           >
             <View className="flex-row justify-between items-start mb-3">
               <View
@@ -126,6 +135,7 @@ export default function MyHubsScreen() {
             </View>
           </TouchableOpacity>
 
+          {/* OFFLINE HUB CARD */}
           <TouchableOpacity
             className="rounded-2xl p-4 mb-4 border relative"
             style={{
@@ -133,6 +143,14 @@ export default function MyHubsScreen() {
               borderColor: theme.cardBorder,
             }}
             activeOpacity={0.8}
+            // UPDATED: Now passes status: "Offline"
+            onPress={() =>
+              navigation.navigate("DeviceConfig", {
+                hubName: "Bedroom Hub",
+                hubId: "GW-B205",
+                status: "Offline",
+              })
+            }
           >
             <View className="flex-row justify-between items-start mb-3">
               <View

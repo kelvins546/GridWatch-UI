@@ -203,7 +203,7 @@ export default function HubConfigScreen() {
           </Text>
 
           <ConfigDropdown
-            label="Outlet 1 (High Power 30A)"
+            label="Outlet 1"
             options={APPLIANCE_OPTIONS}
             state={outlet1}
             setState={setOutlet1}

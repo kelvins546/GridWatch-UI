@@ -1,22 +1,40 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   Image,
   TouchableOpacity,
   StatusBar,
   Animated,
+  ScrollView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import MaskedView from "@react-native-masked-view/masked-view";
+
+const SLIDES = [
+  {
+    id: 1,
+    text: "Smart energy monitoring and automated fault protection for your home.",
+  },
+  {
+    id: 2,
+    text: "Track your daily consumption in real-time and save on electricity bills.",
+  },
+  {
+    id: 3,
+    text: "Receive instant alerts and control your devices from anywhere.",
+  },
+];
 
 export default function LandingScreen() {
   const navigation = useNavigation();
   const { theme } = useTheme();
+  const [activeSlide, setActiveSlide] = useState(0);
 
   const floatAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.loop(
@@ -35,128 +53,112 @@ export default function LandingScreen() {
     ).start();
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setActiveSlide((prev) => (prev + 1) % SLIDES.length);
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      });
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
-    <View style={styles.container}>
+    <View className="flex-1 bg-[#0f0f0f]">
       <StatusBar barStyle="light-content" />
 
-      <LinearGradient colors={["#1a1a1a", "#1a1a1a"]} style={styles.hero}>
-        <Animated.View
-          style={[
-            styles.logoCircle,
-            { transform: [{ translateY: floatAnim }] },
-          ]}
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+        <LinearGradient
+          colors={["#1a1a1a", "#1a1a1a"]}
+          className="flex-1 justify-center items-center"
         >
-          <Image
-            source={require("../../../assets/GridWatch-logo.png")}
-            style={styles.logoImg}
-            resizeMode="contain"
-          />
-        </Animated.View>
+          <View className="w-full items-center p-10">
+            <Animated.View
+              style={{ transform: [{ translateY: floatAnim }] }}
+              className="w-[120px] h-[120px] rounded-full items-center justify-center mb-8 bg-[#1a1a1a] shadow-lg shadow-[#00ff99]/30 elevation-10"
+            >
+              <Image
+                source={require("../../../assets/GridWatch-logo.png")}
+                className="w-[120px] h-[120px]"
+                resizeMode="contain"
+              />
+            </Animated.View>
 
-        <View style={styles.slideContent}>
-          <Text style={styles.appName}>GridWatch</Text>
-          <Text style={styles.tagline}>
-            Smart energy monitoring and automated fault protection for your
-            home.
-          </Text>
-        </View>
+            <View className="items-center mb-4 h-[45px] justify-center">
+              <MaskedView
+                style={{ width: 280, height: 45 }}
+                maskElement={
+                  <View className="items-center justify-center flex-1">
+                    <Text className="text-[32px] font-black text-center tracking-[4px] uppercase">
+                      GridWatch
+                    </Text>
+                  </View>
+                }
+              >
+                <LinearGradient
+                  colors={["#0055ff", "#00ff99"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{ flex: 1 }}
+                />
+              </MaskedView>
+            </View>
 
-        {/* Dots */}
-        <View style={styles.dots}>
-          <View style={[styles.dot, styles.activeDot]} />
-          <View style={styles.dot} />
-          <View style={styles.dot} />
-        </View>
-      </LinearGradient>
+            <Animated.View
+              style={{ opacity: fadeAnim }}
+              className="h-[60px] items-center justify-center mb-6"
+            >
+              <Text className="text-sm text-[#888] text-center leading-[22px] max-w-[280px]">
+                {SLIDES[activeSlide].text}
+              </Text>
+            </Animated.View>
 
-      <View style={styles.bottomSheet}>
-        <TouchableOpacity onPress={() => navigation.navigate("Signup")}>
-          <LinearGradient
-            colors={["#0055ff", "#00ff99"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.btnPrimary}
-          >
-            <Text style={styles.btnText}>GET STARTED</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <View className="flex-row gap-2">
+              {SLIDES.map((_, index) => (
+                <View
+                  key={index}
+                  className={`h-2 rounded-full ${
+                    index === activeSlide ? "w-6 bg-[#00ff99]" : "w-2 bg-[#444]"
+                  }`}
+                />
+              ))}
+            </View>
+          </View>
+        </LinearGradient>
 
-        <View style={styles.loginLink}>
-          <Text style={{ color: "#666", fontSize: 13 }}>
-            Already have an account?{" "}
-          </Text>
-          <TouchableOpacity onPress={() => navigation.navigate("Login")}>
-            <Text style={styles.linkText}>Log In</Text>
+        <View className="bg-[#222] p-[30px] rounded-t-[30px] border-t border-[#333]">
+          <TouchableOpacity onPress={() => navigation.navigate("Signup")}>
+            <LinearGradient
+              colors={["#0055ff", "#00ff99"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              className="p-[18px] rounded-2xl items-center mb-5"
+            >
+              <Text className="font-bold text-base text-black tracking-widest">
+                GET STARTED
+              </Text>
+            </LinearGradient>
           </TouchableOpacity>
+
+          <View className="flex-row justify-center">
+            <Text className="text-[#666] text-[13px]">
+              Already have an account?{" "}
+            </Text>
+            <TouchableOpacity onPress={() => navigation.navigate("Login")}>
+              <Text className="text-white font-semibold underline">Log In</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0f0f0f" },
-  hero: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 40,
-  },
-
-  logoCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#00ff99",
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-    marginBottom: 40,
-    backgroundColor: "#1a1a1a",
-  },
-  logoImg: { width: 120, height: 120 },
-
-  slideContent: { alignItems: "center", marginBottom: 20 },
-  appName: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#fff",
-    marginBottom: 10,
-    letterSpacing: -1,
-  },
-  tagline: {
-    fontSize: 14,
-    color: "#888",
-    textAlign: "center",
-    lineHeight: 22,
-    maxWidth: 280,
-  },
-
-  dots: { flexDirection: "row", gap: 8, marginTop: 20 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#444" },
-  activeDot: { width: 24, backgroundColor: "#00ff99" },
-
-  bottomSheet: {
-    backgroundColor: "#222",
-    padding: 30,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    borderTopWidth: 1,
-    borderTopColor: "#333",
-  },
-  btnPrimary: {
-    padding: 18,
-    borderRadius: 16,
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  btnText: { fontWeight: "700", fontSize: 16, color: "#000", letterSpacing: 1 },
-  loginLink: { flexDirection: "row", justifyContent: "center" },
-  linkText: {
-    color: "#fff",
-    fontWeight: "600",
-    textDecorationLine: "underline",
-  },
-});

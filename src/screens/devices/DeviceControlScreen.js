@@ -248,7 +248,6 @@ export default function DeviceControlScreen() {
       <Modal visible={showSchedule} transparent animationType="slide">
         <View className="flex-1 bg-black/80 justify-center items-center">
           <View
-            // CHANGED: Fixed width to 300px and reduced padding to p-6 (24px)
             className="w-[300px] p-6 rounded-3xl items-center border"
             style={{
               backgroundColor: theme.card,
