@@ -14,6 +14,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
+import { requestNotificationPermission } from "./src/services/notifications";
+
 const HUBS_DATA = [
   {
     id: "hub1",
@@ -95,6 +97,10 @@ export default function HomeScreen() {
   useEffect(() => {
     const timer = setTimeout(() => navigation.navigate("DndCheck"), 1500);
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    requestNotificationPermission();
   }, []);
 
   const animateButton = (toValue) => {
