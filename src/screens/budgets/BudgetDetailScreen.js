@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   ScrollView,
   StatusBar,
@@ -33,7 +32,8 @@ export default function BudgetDetailScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.background }]}
+      className="flex-1"
+      style={{ backgroundColor: theme.background }}
       edges={["top", "left", "right"]}
     >
       <StatusBar
@@ -42,16 +42,14 @@ export default function BudgetDetailScreen() {
       />
 
       <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: theme.background,
-            borderBottomColor: theme.cardBorder,
-          },
-        ]}
+        className="flex-row items-center justify-between px-6 py-5 border-b"
+        style={{
+          backgroundColor: theme.background,
+          borderBottomColor: theme.cardBorder,
+        }}
       >
         <TouchableOpacity
-          style={styles.backBtn}
+          className="flex-row items-center gap-1.5"
           onPress={() => navigation.goBack()}
         >
           <MaterialIcons
@@ -59,140 +57,180 @@ export default function BudgetDetailScreen() {
             size={18}
             color={theme.textSecondary}
           />
-          <Text style={[styles.backText, { color: theme.textSecondary }]}>
+          <Text
+            className="text-sm font-medium"
+            style={{ color: theme.textSecondary }}
+          >
             Back
           </Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>
+        <Text className="text-base font-bold" style={{ color: theme.text }}>
           {deviceName}
         </Text>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={[styles.saveBtn, { color: theme.primary }]}>Save</Text>
+          <Text
+            className="text-sm font-semibold"
+            style={{ color: theme.primary }}
+          >
+            Save
+          </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-          Budget Period
-        </Text>
-        <View style={[styles.segmentControl, { backgroundColor: theme.card }]}>
-          {["Daily", "Weekly", "Monthly"].map((item) => (
-            <TouchableOpacity
-              key={item}
-              style={[
-                styles.segmentBtn,
-                period === item && {
-                  backgroundColor: isDarkMode ? "#333" : "#fff",
-                  shadowOpacity: 0.1,
-                },
-              ]}
-              onPress={() => setPeriod(item)}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  { color: period === item ? theme.text : theme.textSecondary },
-                ]}
-              >
-                {item}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-          Set Limit (Pesos)
-        </Text>
-        <View
-          style={[
-            styles.limitContainer,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-          ]}
-        >
-          <TouchableOpacity
-            style={[
-              styles.controlBtn,
-              { backgroundColor: isDarkMode ? "#333" : "#eee" },
-            ]}
-            onPress={() => adjustLimit(-100)}
+      <ScrollView>
+        <View className="p-6">
+          <Text
+            className="text-[11px] font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary }}
           >
-            <MaterialIcons name="remove" size={24} color={theme.text} />
-          </TouchableOpacity>
+            Budget Period
+          </Text>
+          <View
+            className="flex-row p-1 rounded-xl mb-8"
+            style={{ backgroundColor: theme.card }}
+          >
+            {["Daily", "Weekly", "Monthly"].map((item) => (
+              <TouchableOpacity
+                key={item}
+                className="flex-1 py-2 rounded-lg items-center justify-center"
+                style={
+                  period === item && {
+                    backgroundColor: isDarkMode ? "#333" : "#fff",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 1,
+                    elevation: 1,
+                  }
+                }
+                onPress={() => setPeriod(item)}
+              >
+                <Text
+                  className="text-xs font-semibold"
+                  style={{
+                    color: period === item ? theme.text : theme.textSecondary,
+                  }}
+                >
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-          <Text style={[styles.limitValue, { color: theme.text }]}>
-            ₱ {limit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          <Text
+            className="text-[11px] font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary }}
+          >
+            Set Limit (Pesos)
+          </Text>
+          <View
+            className="flex-row items-center justify-between p-5 rounded-[20px] border mb-8"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            }}
+          >
+            <TouchableOpacity
+              className="w-10 h-10 rounded-full items-center justify-center"
+              style={{ backgroundColor: isDarkMode ? "#333" : "#eee" }}
+              onPress={() => adjustLimit(-100)}
+            >
+              <MaterialIcons name="remove" size={24} color={theme.text} />
+            </TouchableOpacity>
+
+            <Text
+              className="text-[28px] font-bold"
+              style={{ color: theme.text }}
+            >
+              ₱ {limit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </Text>
+
+            <TouchableOpacity
+              className="w-10 h-10 rounded-full items-center justify-center"
+              style={{ backgroundColor: isDarkMode ? "#333" : "#eee" }}
+              onPress={() => adjustLimit(100)}
+            >
+              <MaterialIcons name="add" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+
+          <Text
+            className="text-[11px] font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary }}
+          >
+            Current Usage Status
+          </Text>
+          <View className="mb-8">
+            <View className="flex-row justify-between mb-2">
+              <Text
+                className="text-[13px]"
+                style={{ color: theme.textSecondary }}
+              >
+                Used: ₱ {usedAmount.toLocaleString()}
+              </Text>
+              <Text
+                className="text-[13px] font-bold"
+                style={{ color: theme.primary }}
+              >
+                {percentage}%
+              </Text>
+            </View>
+
+            <View
+              className="h-3 rounded-full overflow-hidden mb-2"
+              style={{ backgroundColor: isDarkMode ? "#333" : "#e0e0e0" }}
+            >
+              <View
+                className="h-full"
+                style={{
+                  width: `${percentage}%`,
+                  backgroundColor: theme.primary,
+                }}
+              />
+            </View>
+
+            <View className="flex-row justify-between">
+              <Text
+                className="text-[11px]"
+                style={{ color: theme.textSecondary }}
+              >
+                Remaining: ₱ {remaining}
+              </Text>
+              <Text
+                className="text-[11px]"
+                style={{ color: theme.textSecondary }}
+              >
+                Resets in: 12 Days
+              </Text>
+            </View>
+          </View>
+
+          <Text
+            className="text-[11px] font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary }}
+          >
+            Automation Rules
           </Text>
 
-          <TouchableOpacity
-            style={[
-              styles.controlBtn,
-              { backgroundColor: isDarkMode ? "#333" : "#eee" },
-            ]}
-            onPress={() => adjustLimit(100)}
-          >
-            <MaterialIcons name="add" size={24} color={theme.text} />
-          </TouchableOpacity>
+          <RuleItem
+            title="Auto-Cutoff Power"
+            desc="If limit is reached, automatically turn off the device to save cost."
+            value={autoCutoff}
+            onToggle={setAutoCutoff}
+            theme={theme}
+            isDarkMode={isDarkMode}
+          />
+
+          <RuleItem
+            title="Push Notifications"
+            desc="Receive alerts when usage hits 80%, 90%, and 100% of limit."
+            value={true}
+            onToggle={() => {}}
+            disabled={true}
+            theme={theme}
+            isDarkMode={isDarkMode}
+          />
         </View>
-
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-          Current Usage Status
-        </Text>
-        <View style={[styles.statusCard, { backgroundColor: "transparent" }]}>
-          <View style={styles.progressHeader}>
-            <Text style={[styles.usageText, { color: theme.textSecondary }]}>
-              Used: ₱ {usedAmount.toLocaleString()}
-            </Text>
-            <Text style={[styles.percentText, { color: theme.primary }]}>
-              {percentage}%
-            </Text>
-          </View>
-
-          <View
-            style={[
-              styles.progressTrack,
-              { backgroundColor: isDarkMode ? "#333" : "#e0e0e0" },
-            ]}
-          >
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${percentage}%`, backgroundColor: theme.primary },
-              ]}
-            />
-          </View>
-
-          <View style={styles.statsRow}>
-            <Text style={{ fontSize: 11, color: theme.textSecondary }}>
-              Remaining: ₱ {remaining}
-            </Text>
-            <Text style={{ fontSize: 11, color: theme.textSecondary }}>
-              Resets in: 12 Days
-            </Text>
-          </View>
-        </View>
-
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-          Automation Rules
-        </Text>
-
-        <RuleItem
-          title="Auto-Cutoff Power"
-          desc="If limit is reached, automatically turn off the device to save cost."
-          value={autoCutoff}
-          onToggle={setAutoCutoff}
-          theme={theme}
-          isDarkMode={isDarkMode}
-        />
-
-        <RuleItem
-          title="Push Notifications"
-          desc="Receive alerts when usage hits 80%, 90%, and 100% of limit."
-          value={true}
-          onToggle={() => {}}
-          disabled={true}
-          theme={theme}
-          isDarkMode={isDarkMode}
-        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -209,23 +247,31 @@ function RuleItem({
 }) {
   return (
     <View
-      style={[
-        styles.ruleItem,
-        { backgroundColor: theme.card, opacity: disabled ? 0.8 : 1 },
-      ]}
+      className="flex-row items-center justify-between p-4 rounded-2xl mb-3"
+      style={{
+        backgroundColor: theme.card,
+        opacity: disabled ? 0.8 : 1,
+      }}
     >
-      <View style={styles.ruleInfo}>
-        <Text style={[styles.ruleTitle, { color: theme.text }]}>
+      <View className="flex-1 mr-4">
+        <Text
+          className="text-sm font-semibold mb-1"
+          style={{ color: theme.text }}
+        >
           {title}{" "}
           {disabled && (
             <Text
-              style={{ fontSize: 10, color: theme.primary, fontWeight: "700" }}
+              className="text-[10px] font-bold"
+              style={{ color: theme.primary }}
             >
               (Always On)
             </Text>
           )}
         </Text>
-        <Text style={[styles.ruleDesc, { color: theme.textSecondary }]}>
+        <Text
+          className="text-[11px] leading-4"
+          style={{ color: theme.textSecondary }}
+        >
           {desc}
         </Text>
       </View>
@@ -242,90 +288,3 @@ function RuleItem({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-  },
-  backBtn: { flexDirection: "row", alignItems: "center", gap: 5 },
-  backText: { fontSize: 14, fontWeight: "500" },
-  headerTitle: { fontSize: 16, fontWeight: "700" },
-  saveBtn: { fontSize: 14, fontWeight: "600" },
-
-  content: { padding: 24 },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-
-  segmentControl: {
-    flexDirection: "row",
-    padding: 4,
-    borderRadius: 12,
-    marginBottom: 30,
-  },
-  segmentBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  segmentText: { fontSize: 12, fontWeight: "600" },
-
-  limitContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 20,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginBottom: 30,
-  },
-  controlBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  limitValue: { fontSize: 28, fontWeight: "700" },
-
-  statusCard: { marginBottom: 30 },
-  progressHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  usageText: { fontSize: 13 },
-  percentText: { fontSize: 13, fontWeight: "700" },
-  progressTrack: {
-    height: 12,
-    borderRadius: 6,
-    overflow: "hidden",
-    marginBottom: 8,
-  },
-  progressFill: { height: "100%" },
-  statsRow: { flexDirection: "row", justifyContent: "space-between" },
-
-  ruleItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 12,
-  },
-  ruleInfo: { flex: 1, marginRight: 15 },
-  ruleTitle: { fontSize: 14, fontWeight: "600", marginBottom: 4 },
-  ruleDesc: { fontSize: 11, lineHeight: 16 },
-});

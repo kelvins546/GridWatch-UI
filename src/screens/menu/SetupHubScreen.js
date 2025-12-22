@@ -1,12 +1,15 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   ScrollView,
   TextInput,
   StatusBar,
+  Modal,
+  ActivityIndicator,
+  Linking,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -16,262 +19,350 @@ import { useTheme } from "../../context/ThemeContext";
 
 export default function SetupHubScreen() {
   const navigation = useNavigation();
-  const { theme, isDarkMode } = useTheme();
+  const { theme } = useTheme();
+
+  const [wifiSSID, setWifiSSID] = useState("");
+  const [wifiPass, setWifiPass] = useState("");
+  const [showPass, setShowPass] = useState(false);
+
+  // Loading Modal State
+  const [isPairing, setIsPairing] = useState(false);
+  const [statusStep, setStatusStep] = useState("");
+
+  // --- CUSTOM ALERT STATE ---
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    type: "error", // 'error' or 'success'
+    onPress: null,
+  });
+
+  const showAlert = (title, message, type = "error", onPress = null) => {
+    setAlertConfig({ visible: true, title, message, type, onPress });
+  };
+
+  const closeAlert = () => {
+    const callback = alertConfig.onPress;
+    setAlertConfig({ ...alertConfig, visible: false });
+    if (callback) callback();
+  };
+
+  const openWifiSettings = () => {
+    if (Platform.OS === "ios") {
+      Linking.openURL("App-Prefs:root=WIFI");
+    } else {
+      Linking.sendIntent("android.settings.WIFI_SETTINGS");
+    }
+  };
+
+  const handleStartPairing = async () => {
+    if (!wifiSSID || !wifiPass) {
+      showAlert(
+        "Missing Info",
+        "Please enter the Home Wi-Fi details you want the Hub to use."
+      );
+      return;
+    }
+
+    setIsPairing(true);
+
+    try {
+      // --- HANDSHAKE PROCESS ---
+
+      setStatusStep("Connecting to Hub...");
+      await new Promise((r) => setTimeout(r, 1500));
+
+      setStatusStep("Sending Wi-Fi credentials to Hub...");
+      await new Promise((r) => setTimeout(r, 2000));
+
+      setStatusStep("Hub is verifying connection...");
+      await new Promise((r) => setTimeout(r, 3000));
+
+      // Success!
+      const mockHubID = "hub-123-uuid";
+      setIsPairing(false);
+
+      navigation.navigate("HubConfig", { hubId: mockHubID });
+    } catch (error) {
+      setIsPairing(false);
+      showAlert(
+        "Pairing Failed",
+        "Could not talk to the Hub. Please ensure you are connected to 'GridWatch-Setup'."
+      );
+    }
+  };
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.background }]}
-      edges={["top", "left", "right"]}
+      className="flex-1"
+      style={{ backgroundColor: theme.background }}
     >
-      <StatusBar
-        barStyle={theme.statusBarStyle}
-        backgroundColor={theme.background}
-      />
+      <StatusBar barStyle={theme.statusBarStyle} />
 
-      <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: theme.background,
-            borderBottomColor: theme.cardBorder,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-        >
-          <MaterialIcons
-            name="arrow-back"
-            size={18}
-            color={theme.textSecondary}
-          />
-          <Text style={[styles.backText, { color: theme.textSecondary }]}>
-            Back
-          </Text>
+      {/* Header */}
+      <View className="flex-row justify-between items-center p-5">
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <MaterialIcons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>
-          Add New Hub
+        <Text className="text-lg font-bold" style={{ color: theme.text }}>
+          Connect Hub
         </Text>
-        <View style={{ width: 50 }} />
+        <View className="w-6" />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* STEP 1 */}
-        <View style={styles.formGroup}>
-          <Text style={[styles.stepLabel, { color: theme.primary }]}>
-            Step 1: Wi-Fi Provisioning
-          </Text>
-          <Text style={[styles.stepDesc, { color: theme.textSecondary }]}>
-            Connect the ESP32 Gateway to your home network.
+      <ScrollView className="flex-1">
+        {/* WRAPPER VIEW: This forces the padding to work */}
+        <View className="px-6 py-6">
+          {/* STEP 1: CONNECT TO DEVICE */}
+          <Text
+            className="text-sm font-bold uppercase mb-2.5 tracking-wide"
+            style={{ color: theme.text }}
+          >
+            Step 1: Connect to Device
           </Text>
 
           <View
-            style={[
-              styles.wifiList,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            ]}
+            className="p-5 rounded-2xl border mb-5"
+            style={{
+              backgroundColor: "rgba(0, 85, 255, 0.08)",
+              borderColor: "rgba(0, 85, 255, 0.3)",
+            }}
           >
-            <TouchableOpacity
-              style={[
-                styles.wifiItem,
-                {
-                  borderBottomColor: theme.cardBorder,
-                  backgroundColor: isDarkMode
-                    ? "rgba(0, 255, 153, 0.1)"
-                    : "#f0fdf4",
-                },
-              ]}
+            <View className="flex-row gap-3 mb-2.5">
+              <View className="w-9 h-9 rounded-full bg-[#0055ff] justify-center items-center">
+                <MaterialIcons name="wifi-tethering" size={20} color="#fff" />
+              </View>
+              <View className="flex-1">
+                <Text
+                  className="font-bold mb-1 text-base"
+                  style={{ color: theme.text }}
+                >
+                  Connect Phone to Hub
+                </Text>
+                <Text
+                  className="text-xs leading-5"
+                  style={{ color: theme.textSecondary }}
+                >
+                  Your phone needs to talk directly to the Hub to configure it.
+                </Text>
+              </View>
+            </View>
+
+            <View
+              className="p-4 rounded-xl my-4"
+              style={{ backgroundColor: theme.card }}
             >
-              <MaterialIcons name="wifi" size={18} color={theme.text} />
-              <Text style={[styles.wifiName, { color: theme.text }]}>
-                PLDT_Home_FIBR_5G
+              <Text
+                className="text-xs mb-2 leading-5"
+                style={{ color: theme.textSecondary }}
+              >
+                1. Tap the button below to open Settings.
               </Text>
-              <MaterialIcons
-                name="check-circle"
-                size={18}
-                color={theme.primary}
-              />
-            </TouchableOpacity>
+              <Text
+                className="text-xs mb-2 leading-5"
+                style={{ color: theme.textSecondary }}
+              >
+                2. Connect to{" "}
+                <Text className="font-bold text-[#0055ff]">
+                  GridWatch-Setup
+                </Text>
+                .
+              </Text>
+              <Text
+                className="text-xs leading-5"
+                style={{ color: theme.textSecondary }}
+              >
+                3. Return to this app.
+              </Text>
+            </View>
 
-            <TouchableOpacity style={styles.wifiItem}>
-              <MaterialIcons
-                name="wifi"
-                size={18}
-                color={theme.textSecondary}
-              />
-              <Text style={[styles.wifiName, { color: theme.textSecondary }]}>
-                Globe_At_Home
+            <TouchableOpacity
+              onPress={openWifiSettings}
+              className="border border-[#0055ff] rounded-xl py-3 items-center"
+            >
+              <Text className="text-[#0055ff] font-semibold text-sm">
+                Open Wi-Fi Settings
               </Text>
             </TouchableOpacity>
           </View>
 
-          <View
-            style={[
-              styles.inputBox,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            ]}
+          {/* STEP 2: CONFIGURE */}
+          <Text
+            className="text-sm font-bold uppercase mt-5 mb-2.5 tracking-wide"
+            style={{ color: theme.text }}
           >
-            <TextInput
-              style={[styles.inputField, { color: theme.text }]}
-              value="MySecurePassword123"
-              secureTextEntry={true}
-              editable={false}
-            />
-            <Text style={{ fontSize: 12, color: "#0055ff", fontWeight: "600" }}>
-              Show
+            Step 2: Configure Network
+          </Text>
+          <Text
+            className="text-xs mb-5 leading-5"
+            style={{ color: theme.textSecondary }}
+          >
+            Enter the details of your **Home Wi-Fi**. We will send this to the
+            Hub so it can get online.
+          </Text>
+
+          <View className="mb-5">
+            <Text
+              className="text-xs font-semibold mb-2"
+              style={{ color: theme.text }}
+            >
+              Home Wi-Fi Name (SSID)
             </Text>
+            <TextInput
+              className="border rounded-xl p-4 text-base"
+              style={{
+                color: theme.text,
+                borderColor: theme.cardBorder,
+                backgroundColor: theme.card,
+              }}
+              placeholder="e.g. PLDT_Home_FIBR"
+              placeholderTextColor={theme.textSecondary}
+              value={wifiSSID}
+              onChangeText={setWifiSSID}
+            />
           </View>
-        </View>
 
-        <View style={[styles.divider, { borderTopColor: theme.cardBorder }]} />
+          <View className="mb-5">
+            <Text
+              className="text-xs font-semibold mb-2"
+              style={{ color: theme.text }}
+            >
+              Home Wi-Fi Password
+            </Text>
+            <View
+              className="flex-row border rounded-xl items-center pr-1.5"
+              style={{
+                borderColor: theme.cardBorder,
+                backgroundColor: theme.card,
+              }}
+            >
+              <TextInput
+                className="flex-1 p-4 text-base h-full border-0"
+                style={{ color: theme.text }}
+                placeholder="Enter Password"
+                placeholderTextColor={theme.textSecondary}
+                secureTextEntry={!showPass}
+                value={wifiPass}
+                onChangeText={setWifiPass}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPass(!showPass)}
+                className="p-2.5"
+              >
+                <MaterialIcons
+                  name={showPass ? "visibility" : "visibility-off"}
+                  size={20}
+                  color={theme.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
 
-        <View style={styles.formGroup}>
-          <Text style={[styles.stepLabel, { color: theme.primary }]}>
-            Step 2: Outlet Configuration
-          </Text>
-          <Text style={[styles.stepDesc, { color: theme.textSecondary }]}>
-            Identify appliances plugged into the Hub.
-          </Text>
-
-          <OutletRow
-            label="Outlet 1 (30A Relay)"
-            value="Air Conditioner"
-            theme={theme}
-          />
-          <OutletRow label="Outlet 2" value="Television" theme={theme} />
-          <OutletRow label="Outlet 3" value="Refrigerator" theme={theme} />
-          <OutletRow
-            label="Outlet 4"
-            value="Empty / Unused"
-            isPlaceholder
-            theme={theme}
-          />
+          {/* Bottom Padding for scroll */}
+          <View className="h-10" />
         </View>
       </ScrollView>
 
-      <View
-        style={[
-          styles.btnContainer,
-          {
-            backgroundColor: theme.background,
-            borderTopColor: theme.cardBorder,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          onPress={() => navigation.navigate("MainApp", { screen: "Home" })}
-        >
+      <View className="p-6">
+        <TouchableOpacity onPress={handleStartPairing}>
           <LinearGradient
             colors={["#0055ff", "#00ff99"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={styles.primaryBtn}
+            className="p-4 rounded-xl items-center"
           >
-            <Text style={styles.btnText}>Complete Setup & Pair</Text>
+            <Text className="font-bold text-base text-black">
+              Send Configuration to Hub
+            </Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>
+
+      {/* --- LOADING MODAL (Standard) --- */}
+      <Modal transparent visible={isPairing}>
+        <View className="flex-1 justify-center items-center bg-black/80">
+          <View
+            className="p-8 rounded-2xl items-center w-4/5"
+            style={{ backgroundColor: theme.card }}
+          >
+            <ActivityIndicator size="large" color="#00ff99" />
+            <Text
+              className="mt-5 text-base font-semibold"
+              style={{ color: theme.text }}
+            >
+              {statusStep}
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- CUSTOM COMPACT VALIDATION MODAL --- */}
+      <Modal transparent visible={alertConfig.visible} animationType="fade">
+        <View className="flex-1 justify-center items-center bg-black/60">
+          <View
+            className="w-3/4 p-6 rounded-3xl border items-center shadow-lg"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            }}
+          >
+            <View
+              className="w-12 h-12 rounded-full justify-center items-center mb-4"
+              style={{
+                backgroundColor:
+                  alertConfig.type === "success"
+                    ? "rgba(0, 255, 153, 0.1)"
+                    : "rgba(255, 68, 68, 0.1)",
+              }}
+            >
+              <MaterialIcons
+                name={
+                  alertConfig.type === "success" ? "check" : "priority-high"
+                }
+                size={28}
+                color={alertConfig.type === "success" ? "#00ff99" : "#ff4444"}
+              />
+            </View>
+
+            <Text
+              className="text-lg font-bold mb-2 text-center"
+              style={{ color: theme.text }}
+            >
+              {alertConfig.title}
+            </Text>
+
+            <Text
+              className="text-sm text-center mb-5 leading-5"
+              style={{ color: theme.textSecondary }}
+            >
+              {alertConfig.message}
+            </Text>
+
+            <TouchableOpacity onPress={closeAlert} className="w-full">
+              <LinearGradient
+                colors={
+                  alertConfig.type === "success"
+                    ? ["#0055ff", "#00ff99"]
+                    : ["#333", "#444"]
+                }
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                className="py-3 rounded-xl w-full items-center"
+              >
+                <Text
+                  className="font-bold text-xs tracking-widest uppercase"
+                  style={{
+                    color: alertConfig.type === "success" ? "#000" : "#fff",
+                  }}
+                >
+                  {alertConfig.type === "success" ? "CONTINUE" : "OKAY"}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
-
-function OutletRow({ label, value, isPlaceholder, theme }) {
-  return (
-    <View style={styles.outletRow}>
-      <Text style={[styles.outletLabel, { color: theme.textSecondary }]}>
-        {label}
-      </Text>
-      <View
-        style={[
-          styles.dropdown,
-          { backgroundColor: theme.card, borderColor: theme.cardBorder },
-        ]}
-      >
-        <Text
-          style={[
-            styles.dropdownText,
-            { color: isPlaceholder ? theme.textSecondary : theme.text },
-          ]}
-        >
-          {value}
-        </Text>
-        <MaterialIcons
-          name="keyboard-arrow-down"
-          size={20}
-          color={theme.textSecondary}
-        />
-      </View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-  },
-  backBtn: { flexDirection: "row", alignItems: "center", gap: 5 },
-  backText: { fontSize: 14, fontWeight: "500" },
-  headerTitle: { fontSize: 16, fontWeight: "700" },
-
-  content: { padding: 24 },
-
-  stepLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  stepDesc: { fontSize: 14, marginBottom: 20, lineHeight: 20 },
-  formGroup: { marginBottom: 25 },
-
-  wifiList: {
-    borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 1,
-    marginBottom: 15,
-  },
-  wifiItem: { flexDirection: "row", alignItems: "center", padding: 15 },
-  wifiName: { flex: 1, marginLeft: 10, fontSize: 14, fontWeight: "500" },
-
-  inputBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  inputField: { flex: 1, fontSize: 14 },
-
-  divider: { marginVertical: 30, borderTopWidth: 1, borderStyle: "dashed" },
-
-  outletRow: { marginBottom: 15 },
-  outletLabel: { fontSize: 13, marginBottom: 6 },
-  dropdown: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-  },
-  dropdownText: { fontSize: 14 },
-
-  btnContainer: { padding: 24, borderTopWidth: 1 },
-  primaryBtn: { padding: 16, borderRadius: 16, alignItems: "center" },
-  btnText: {
-    color: "#000",
-    fontWeight: "700",
-    fontSize: 15,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-});

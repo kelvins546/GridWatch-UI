@@ -1,11 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
+  TextInput,
   TouchableOpacity,
   ScrollView,
-  TextInput,
   StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,192 +15,136 @@ import { useTheme } from "../../context/ThemeContext";
 export default function HelpSupportScreen() {
   const navigation = useNavigation();
   const { theme } = useTheme();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const commonIssues = [
+    { id: 1, title: "How to reset the GridWatch Hub?" },
+    { id: 2, title: 'My device shows "Offline"' },
+    { id: 3, title: "Change Wi-Fi configuration" },
+    { id: 4, title: "Understanding Critical Faults" },
+  ];
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.background }]}
-      edges={["top", "left", "right"]}
+      className="flex-1"
+      style={{ backgroundColor: theme.background }}
     >
-      <StatusBar
-        barStyle={theme.statusBarStyle}
-        backgroundColor={theme.background}
-      />
+      <StatusBar barStyle={theme.statusBarStyle} />
 
-      <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: theme.background,
-            borderBottomColor: theme.cardBorder,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-        >
-          <MaterialIcons
-            name="arrow-back"
-            size={18}
-            color={theme.textSecondary}
-          />
-          <Text style={[styles.backText, { color: theme.textSecondary }]}>
-            Settings
-          </Text>
+      {/* Header */}
+      <View className="flex-row items-center justify-between px-6 py-4">
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <MaterialIcons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>
+        <Text className="text-lg font-bold" style={{ color: theme.text }}>
           Help & Support
         </Text>
-        <View style={{ width: 60 }} />
+        <View className="w-6" />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View
-          style={[
-            styles.searchBox,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-          ]}
-        >
-          <MaterialIcons name="search" size={20} color={theme.textSecondary} />
-          <TextInput
-            placeholder="Search for issues..."
-            placeholderTextColor={theme.textSecondary}
-            style={[styles.searchInput, { color: theme.text }]}
-          />
-        </View>
+      <ScrollView>
+        {/* WRAPPER VIEW: This guarantees the padding works */}
+        <View className="px-6 py-6">
+          {/* Search Bar */}
+          <View
+            className="flex-row items-center rounded-2xl px-4 py-3 mb-8"
+            style={{ backgroundColor: theme.card }}
+          >
+            <MaterialIcons
+              name="search"
+              size={24}
+              color={theme.textSecondary}
+            />
+            <TextInput
+              className="flex-1 ml-3 text-base"
+              style={{ color: theme.text }}
+              placeholder="Search for issues..."
+              placeholderTextColor={theme.textSecondary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+          </View>
 
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-          Contact Us
-        </Text>
-        <View style={styles.contactGrid}>
-          <ContactCard
-            icon="chat-bubble-outline"
-            label="Live Chat"
-            theme={theme}
-          />
-          <ContactCard icon="email" label="Email Us" theme={theme} />
-        </View>
+          {/* Contact Us Section */}
+          <Text
+            className="text-xs font-bold uppercase mb-4 tracking-widest"
+            style={{ color: theme.textSecondary }}
+          >
+            Contact Us
+          </Text>
 
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-          Common Issues
-        </Text>
-        <View style={styles.faqList}>
-          <FAQItem text="How to reset the GridWatch Hub?" theme={theme} first />
-          <FAQItem text='My device shows "Offline"' theme={theme} />
-          <FAQItem text="Change Wi-Fi configuration" theme={theme} />
-          <FAQItem text="Understanding Critical Faults" theme={theme} last />
-        </View>
+          <View className="flex-row gap-4 mb-8">
+            {/* Live Chat Button */}
+            <TouchableOpacity
+              className="flex-1 p-6 rounded-3xl items-center justify-center gap-3"
+              style={{ backgroundColor: theme.card }}
+            >
+              <MaterialIcons
+                name="chat-bubble-outline"
+                size={28}
+                color="#00ff99"
+              />
+              <Text className="font-bold text-sm" style={{ color: theme.text }}>
+                Live Chat
+              </Text>
+            </TouchableOpacity>
 
-        <Text
-          style={{
-            textAlign: "center",
-            marginTop: 40,
-            fontSize: 11,
-            color: theme.textSecondary,
-          }}
-        >
-          App Version 2.1.0 • Build 8821{"\n"}© 2025 GridWatch Inc.
-        </Text>
+            {/* Email Us Button */}
+            <TouchableOpacity
+              className="flex-1 p-6 rounded-3xl items-center justify-center gap-3"
+              style={{ backgroundColor: theme.card }}
+            >
+              <MaterialIcons name="mail-outline" size={28} color="#00ff99" />
+              <Text className="font-bold text-sm" style={{ color: theme.text }}>
+                Email Us
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Common Issues Section */}
+          <Text
+            className="text-xs font-bold uppercase mb-4 tracking-widest"
+            style={{ color: theme.textSecondary }}
+          >
+            Common Issues
+          </Text>
+
+          <View
+            className="rounded-2xl overflow-hidden"
+            style={{ backgroundColor: theme.card }}
+          >
+            {commonIssues.map((issue, index) => (
+              <TouchableOpacity
+                key={issue.id}
+                className={`flex-row items-center justify-between p-5 ${
+                  index !== commonIssues.length - 1 ? "border-b" : ""
+                }`}
+                style={{ borderColor: theme.cardBorder }}
+              >
+                <Text
+                  className="font-semibold text-sm"
+                  style={{ color: theme.text }}
+                >
+                  {issue.title}
+                </Text>
+                <MaterialIcons
+                  name="chevron-right"
+                  size={20}
+                  color={theme.textSecondary}
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Footer Version */}
+          <Text
+            className="text-center text-xs mt-10 opacity-50 mb-10"
+            style={{ color: theme.textSecondary }}
+          >
+            App Version 2.1.0 • Build 8821{"\n"}© 2025 GridWatch Inc.
+          </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
-
-function ContactCard({ icon, label, theme }) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.contactCard,
-        { backgroundColor: theme.card, borderColor: theme.cardBorder },
-      ]}
-    >
-      <MaterialIcons
-        name={icon}
-        size={28}
-        color={theme.primary}
-        style={{ marginBottom: 10 }}
-      />
-      <Text style={[styles.contactLabel, { color: theme.text }]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
-function FAQItem({ text, theme, first, last }) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.faqItem,
-        { backgroundColor: theme.card, borderBottomColor: theme.cardBorder },
-        first && styles.firstItem,
-        last && styles.lastItem,
-      ]}
-    >
-      <Text style={[styles.faqText, { color: theme.text }]}>{text}</Text>
-      <MaterialIcons
-        name="chevron-right"
-        size={20}
-        color={theme.textSecondary}
-      />
-    </TouchableOpacity>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 24,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-  },
-  backBtn: { flexDirection: "row", alignItems: "center" },
-  backText: { fontSize: 14, fontWeight: "500", marginLeft: 4 },
-  headerTitle: { fontSize: 16, fontWeight: "700" },
-  content: { padding: 24 },
-
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 30,
-  },
-  searchInput: { flex: 1, marginLeft: 10, fontSize: 14 },
-
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    color: "#666",
-    marginBottom: 15,
-    letterSpacing: 1,
-  },
-  contactGrid: { flexDirection: "row", gap: 15, marginBottom: 30 },
-  contactCard: {
-    flex: 1,
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  contactLabel: { fontSize: 13, fontWeight: "600" },
-
-  faqItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  firstItem: { borderTopLeftRadius: 16, borderTopRightRadius: 16 },
-  lastItem: {
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    borderBottomWidth: 0,
-  },
-  faqText: { fontSize: 14, fontWeight: "500" },
-});

@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   ScrollView,
   TextInput,
@@ -49,7 +48,8 @@ export default function ProfileSettingsScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.background }]}
+      className="flex-1"
+      style={{ backgroundColor: theme.background }}
       edges={["top", "left", "right"]}
     >
       <StatusBar
@@ -58,16 +58,14 @@ export default function ProfileSettingsScreen() {
       />
 
       <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: theme.background,
-            borderBottomColor: theme.cardBorder,
-          },
-        ]}
+        className="flex-row items-center justify-between px-6 py-5 border-b"
+        style={{
+          backgroundColor: theme.background,
+          borderBottomColor: theme.cardBorder,
+        }}
       >
         <TouchableOpacity
-          style={styles.backBtn}
+          className="flex-row items-center gap-1.5"
           onPress={() => navigation.goBack()}
         >
           <MaterialIcons
@@ -75,120 +73,138 @@ export default function ProfileSettingsScreen() {
             size={18}
             color={theme.textSecondary}
           />
-          <Text style={[styles.backText, { color: theme.textSecondary }]}>
+          <Text
+            className="text-sm font-medium"
+            style={{ color: theme.textSecondary }}
+          >
             Back
           </Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>
+        <Text className="text-base font-bold" style={{ color: theme.text }}>
           Edit Profile
         </Text>
         <TouchableOpacity onPress={handleSave}>
-          <Text style={[styles.saveBtn, { color: theme.primary }]}>Save</Text>
+          <Text
+            className="text-sm font-semibold"
+            style={{ color: theme.primary }}
+          >
+            Save
+          </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.avatarSection}>
-          <View style={styles.avatarWrapper}>
-            <LinearGradient
-              colors={
-                isDarkMode ? ["#0055ff", "#00ff99"] : ["#0055ff", "#00995e"]
-              }
-              style={styles.avatarImg}
-            >
-              <Text style={styles.avatarText}>NA</Text>
-            </LinearGradient>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View className="p-6 pb-10">
+          <View className="items-center mb-8">
+            <View className="relative w-24 h-24 mb-4">
+              <LinearGradient
+                colors={
+                  isDarkMode ? ["#0055ff", "#00ff99"] : ["#0055ff", "#00995e"]
+                }
+                className="w-full h-full rounded-full justify-center items-center"
+              >
+                <Text className="text-4xl font-bold text-gray-900">NA</Text>
+              </LinearGradient>
 
-            <TouchableOpacity
-              style={[styles.editBadge, { borderColor: theme.background }]}
-            >
-              <MaterialIcons name="camera-alt" size={16} color="#000" />
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                className="absolute bottom-0 right-0 bg-white w-8 h-8 rounded-full justify-center items-center border-[3px]"
+                style={{ borderColor: theme.background }}
+              >
+                <MaterialIcons name="camera-alt" size={16} color="#000" />
+              </TouchableOpacity>
+            </View>
 
-          <View
-            style={[
-              styles.userRole,
-              {
+            <View
+              className="px-3 py-1 rounded-xl border"
+              style={{
                 backgroundColor: isDarkMode
                   ? "rgba(0, 255, 153, 0.1)"
                   : "rgba(0, 153, 94, 0.1)",
                 borderColor: isDarkMode
                   ? "rgba(0, 255, 153, 0.2)"
                   : "rgba(0, 153, 94, 0.2)",
-              },
-            ]}
+              }}
+            >
+              <Text
+                className="text-xs font-semibold tracking-wider"
+                style={{ color: theme.primary }}
+              >
+                HOME ADMIN
+              </Text>
+            </View>
+          </View>
+
+          <Text
+            className="text-xs font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary }}
           >
-            <Text style={[styles.userRoleText, { color: theme.primary }]}>
-              HOME ADMIN
-            </Text>
-          </View>
-        </View>
-
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-          Personal Information
-        </Text>
-        <InputGroup label="Full Name" value="Natasha Alonzo" theme={theme} />
-        <InputGroup
-          label="Email Address"
-          value="natasha@ex.com"
-          theme={theme}
-          disabled
-        />
-        <InputGroup
-          label="Unit Number"
-          value="Unit 402, Congress Ville"
-          theme={theme}
-        />
-
-        <Text
-          style={[
-            styles.sectionLabel,
-            { color: theme.textSecondary, marginTop: 20 },
-          ]}
-        >
-          Security
-        </Text>
-        <InputGroup
-          label="Current Password"
-          placeholder="••••••••"
-          isPassword
-          theme={theme}
-        />
-        <InputGroup
-          label="New Password"
-          placeholder="Enter new password"
-          isPassword
-          theme={theme}
-        />
-
-        <View
-          style={[
-            styles.dangerCard,
-            { backgroundColor: dangerBg, borderColor: dangerBorder },
-          ]}
-        >
-          <View style={styles.dangerTitleRow}>
-            <MaterialIcons name="warning" size={18} color={dangerColor} />
-            <Text style={[styles.dangerTitle, { color: dangerColor }]}>
-              Deactivate Account
-            </Text>
-          </View>
-          <Text style={[styles.dangerDesc, { color: theme.textSecondary }]}>
-            This will disable your access and disconnect all linked hubs. This
-            action cannot be undone.
+            Personal Information
           </Text>
-          <TouchableOpacity
-            style={[styles.deactivateBtn, { borderColor: dangerColor }]}
-            onPress={() => setShowDeactivateModal(true)}
+          <InputGroup label="Full Name" value="Natasha Alonzo" theme={theme} />
+          <InputGroup
+            label="Email Address"
+            value="natasha@ex.com"
+            theme={theme}
+            disabled
+          />
+          <InputGroup
+            label="Unit Number"
+            value="Unit 402, Congress Ville"
+            theme={theme}
+          />
+
+          <Text
+            className="text-xs font-bold uppercase tracking-widest mb-3 mt-5"
+            style={{ color: theme.textSecondary }}
           >
-            <Text style={[styles.deactivateBtnText, { color: dangerColor }]}>
-              Deactivate Account
+            Security
+          </Text>
+          <InputGroup
+            label="Current Password"
+            placeholder="••••••••"
+            isPassword
+            theme={theme}
+          />
+          <InputGroup
+            label="New Password"
+            placeholder="Enter new password"
+            isPassword
+            theme={theme}
+          />
+
+          <View
+            className="border rounded-2xl p-5 mt-8"
+            style={{ backgroundColor: dangerBg, borderColor: dangerBorder }}
+          >
+            <View className="flex-row items-center gap-2 mb-1.5">
+              <MaterialIcons name="warning" size={18} color={dangerColor} />
+              <Text
+                className="text-sm font-bold"
+                style={{ color: dangerColor }}
+              >
+                Deactivate Account
+              </Text>
+            </View>
+            <Text
+              className="text-xs leading-5 mb-4"
+              style={{ color: theme.textSecondary }}
+            >
+              This will disable your access and disconnect all linked hubs. This
+              action cannot be undone.
             </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              className="w-full p-3 border rounded-xl items-center"
+              style={{ borderColor: dangerColor }}
+              onPress={() => setShowDeactivateModal(true)}
+            >
+              <Text
+                className="font-semibold text-xs"
+                style={{ color: dangerColor }}
+              >
+                Deactivate Account
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
 
@@ -239,20 +255,21 @@ function InputGroup({
   theme,
 }) {
   return (
-    <View style={styles.inputGroup}>
-      <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>
+    <View className="mb-4">
+      <Text
+        className="text-xs mb-1.5 font-medium"
+        style={{ color: theme.textSecondary }}
+      >
         {label}
       </Text>
       <TextInput
-        style={[
-          styles.inputField,
-          {
-            backgroundColor: theme.card,
-            borderColor: theme.cardBorder,
-            color: theme.text,
-            opacity: disabled ? 0.5 : 1,
-          },
-        ]}
+        className="w-full border rounded-xl p-3.5 text-sm"
+        style={{
+          backgroundColor: theme.card,
+          borderColor: theme.cardBorder,
+          color: theme.text,
+          opacity: disabled ? 0.5 : 1,
+        }}
         value={value}
         placeholder={placeholder}
         placeholderTextColor={theme.textSecondary}
@@ -281,12 +298,10 @@ function CustomModal({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
+      <View className="flex-1 bg-black/80 justify-center items-center z-50">
         <View
-          style={[
-            styles.modalContent,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-          ]}
+          className="border p-6 rounded-2xl w-72 items-center"
+          style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}
         >
           <MaterialIcons
             name={icon}
@@ -294,31 +309,29 @@ function CustomModal({
             color={iconColor}
             style={{ marginBottom: 15 }}
           />
-          <Text style={[styles.modalTitle, { color: theme.text }]}>
+          <Text
+            className="text-lg font-bold mb-2.5"
+            style={{ color: theme.text }}
+          >
             {title}
           </Text>
-          <Text style={[styles.modalMsg, { color: theme.textSecondary }]}>
+          <Text
+            className="text-xs text-center mb-6 leading-5"
+            style={{ color: theme.textSecondary }}
+          >
             {msg}
           </Text>
 
-          <View style={styles.modalActions}>
+          <View className="flex-row w-full justify-center">
             {secondaryAction && (
               <TouchableOpacity
-                style={[
-                  styles.modalBtn,
-                  {
-                    borderWidth: 1,
-                    borderColor: theme.textSecondary,
-                    marginRight: 10,
-                  },
-                ]}
+                className="flex-1 border mr-2.5 h-10 justify-center items-center rounded-lg"
+                style={{ borderColor: theme.textSecondary }}
                 onPress={secondaryAction.onPress}
               >
                 <Text
-                  style={{
-                    color: secondaryAction.textColor,
-                    fontWeight: "700",
-                  }}
+                  className="font-bold text-xs"
+                  style={{ color: secondaryAction.textColor }}
                 >
                   {secondaryAction.text}
                 </Text>
@@ -327,12 +340,10 @@ function CustomModal({
 
             {primaryAction && (
               <TouchableOpacity
-                style={[
-                  styles.modalBtn,
-                  {
-                    backgroundColor: primaryAction.solidColor || "transparent",
-                  },
-                ]}
+                className="flex-1 rounded-lg h-10 justify-center items-center overflow-hidden"
+                style={{
+                  backgroundColor: primaryAction.solidColor || "transparent",
+                }}
                 onPress={primaryAction.onPress}
               >
                 {primaryAction.color ? (
@@ -340,15 +351,15 @@ function CustomModal({
                     colors={primaryAction.color}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    style={styles.gradientBtn}
+                    className="w-full h-full justify-center items-center"
                   >
-                    <Text style={{ color: "#000", fontWeight: "700" }}>
+                    <Text className="text-black font-bold">
                       {primaryAction.text}
                     </Text>
                   </LinearGradient>
                 ) : (
-                  <View style={styles.gradientBtn}>
-                    <Text style={{ color: "#fff", fontWeight: "700" }}>
+                  <View className="w-full h-full justify-center items-center">
+                    <Text className="text-white font-bold">
                       {primaryAction.text}
                     </Text>
                   </View>
@@ -361,128 +372,3 @@ function CustomModal({
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-  },
-  backBtn: { flexDirection: "row", alignItems: "center", gap: 5 },
-  backText: { fontSize: 14, fontWeight: "500" },
-  headerTitle: { fontSize: 16, fontWeight: "700" },
-  saveBtn: { fontSize: 14, fontWeight: "600" },
-  scrollContent: { padding: 24, paddingBottom: 40 },
-  avatarSection: { alignItems: "center", marginBottom: 30 },
-  avatarWrapper: {
-    position: "relative",
-    width: 100,
-    height: 100,
-    marginBottom: 15,
-  },
-  avatarImg: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 50,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarText: { fontSize: 40, fontWeight: "700", color: "#1a1a1a" },
-  editBadge: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    backgroundColor: "#fff",
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 3,
-  },
-  userRole: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  userRoleText: { fontSize: 12, fontWeight: "600", letterSpacing: 0.5 },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-  inputGroup: { marginBottom: 15 },
-  inputLabel: { fontSize: 12, marginBottom: 6, fontWeight: "500" },
-  inputField: {
-    width: "100%",
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 14,
-  },
-  dangerCard: { borderWidth: 1, borderRadius: 16, padding: 20, marginTop: 30 },
-  dangerTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 5,
-  },
-  dangerTitle: { fontSize: 14, fontWeight: "700" },
-  dangerDesc: { fontSize: 11, lineHeight: 18, marginBottom: 15 },
-  deactivateBtn: {
-    width: "100%",
-    padding: 12,
-    borderWidth: 1,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  deactivateBtnText: { fontWeight: "600", fontSize: 13 },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
-  },
-  modalContent: {
-    borderWidth: 1,
-    padding: 25,
-    borderRadius: 20,
-    width: 280,
-    alignItems: "center",
-  },
-  modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 10 },
-  modalMsg: {
-    fontSize: 13,
-    textAlign: "center",
-    marginBottom: 25,
-    lineHeight: 18,
-  },
-  modalActions: {
-    flexDirection: "row",
-    width: "100%",
-    justifyContent: "center",
-  },
-  modalBtn: {
-    flex: 1,
-    borderRadius: 8,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
-  },
-  gradientBtn: {
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-});

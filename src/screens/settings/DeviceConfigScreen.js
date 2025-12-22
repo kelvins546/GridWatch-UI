@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   ScrollView,
   Modal,
@@ -96,7 +95,8 @@ export default function DeviceConfigScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.background }]}
+      className="flex-1"
+      style={{ backgroundColor: theme.background }}
       edges={["top", "left", "right"]}
     >
       <StatusBar
@@ -105,16 +105,14 @@ export default function DeviceConfigScreen() {
       />
 
       <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: theme.background,
-            borderBottomColor: theme.cardBorder,
-          },
-        ]}
+        className="flex-row items-center justify-between px-6 py-5 border-b"
+        style={{
+          backgroundColor: theme.background,
+          borderBottomColor: theme.cardBorder,
+        }}
       >
         <TouchableOpacity
-          style={styles.backBtn}
+          className="flex-row items-center"
           onPress={() => navigation.goBack()}
         >
           <MaterialIcons
@@ -122,140 +120,175 @@ export default function DeviceConfigScreen() {
             size={18}
             color={theme.textSecondary}
           />
-          <Text style={[styles.backText, { color: theme.textSecondary }]}>
+          <Text
+            className="text-sm font-medium ml-1"
+            style={{ color: theme.textSecondary }}
+          >
             Back
           </Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>
+        <Text className="text-base font-bold" style={{ color: theme.text }}>
           Device Config
         </Text>
-        <View style={{ width: 50 }} />
+        <View className="w-[50px]" />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={[styles.hubHero, { borderBottomColor: theme.cardBorder }]}>
+      <ScrollView>
+        <View className="p-6">
           <View
-            style={[
-              styles.hubIconCircle,
-              {
+            className="items-center py-5 border-b mb-5"
+            style={{ borderBottomColor: theme.cardBorder }}
+          >
+            <View
+              className="w-20 h-20 rounded-full border-2 justify-center items-center mb-4"
+              style={{
                 borderColor: theme.primary,
                 backgroundColor: isDarkMode
                   ? "rgba(0, 255, 153, 0.1)"
                   : "rgba(0, 153, 94, 0.1)",
-              },
-            ]}
-          >
-            <MaterialIcons name="router" size={40} color={theme.primary} />
-          </View>
-          <Text style={[styles.hubName, { color: theme.text }]}>
-            GridWatch Hub
-          </Text>
-          <View style={styles.hubStatus}>
-            <View
-              style={[styles.statusDot, { backgroundColor: theme.primary }]}
-            />
-            <Text style={[styles.statusText, { color: theme.primary }]}>
-              Online • Stable
+              }}
+            >
+              <MaterialIcons name="router" size={40} color={theme.primary} />
+            </View>
+            <Text
+              className="text-lg font-bold mb-1.5"
+              style={{ color: theme.text }}
+            >
+              GridWatch Hub
             </Text>
-          </View>
-        </View>
-
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-          System Information
-        </Text>
-        <View
-          style={[
-            styles.infoGroup,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-          ]}
-        >
-          <InfoItem label="Model" value="GW-ESP32-PRO" theme={theme} />
-          <InfoItem
-            label="Serial Number"
-            value="SN: 8821-992A-X1"
-            theme={theme}
-          />
-          <View
-            style={[styles.infoItem, { borderBottomColor: theme.cardBorder }]}
-          >
-            <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
-              Firmware
-            </Text>
-            <TouchableOpacity onPress={() => openModal("update")}>
-              <Text style={[styles.actionLink, { color: theme.primary }]}>
-                v1.0.4 (Check Update)
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-          Network Connection
-        </Text>
-        <View
-          style={[
-            styles.networkCard,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-          ]}
-        >
-          <View style={styles.netLeft}>
-            <MaterialIcons name="wifi" size={24} color={theme.text} />
-            <View>
-              <Text style={[styles.netName, { color: theme.text }]}>
-                PLDT_Home_FIBR
-              </Text>
-              <Text style={[styles.netIp, { color: theme.textSecondary }]}>
-                IP: 192.168.1.15
+            <View className="flex-row items-center gap-1.5">
+              <View
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: theme.primary }}
+              />
+              <Text
+                className="text-xs font-semibold"
+                style={{ color: theme.primary }}
+              >
+                Online • Stable
               </Text>
             </View>
           </View>
-          <TouchableOpacity
-            style={[
-              styles.changeBtn,
-              {
+
+          <Text
+            className="text-[11px] font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary }}
+          >
+            System Information
+          </Text>
+          <View
+            className="rounded-2xl border overflow-hidden mb-5"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            }}
+          >
+            <InfoItem label="Model" value="GW-ESP32-PRO" theme={theme} />
+            <InfoItem
+              label="Serial Number"
+              value="SN: 8821-992A-X1"
+              theme={theme}
+            />
+            <View
+              className="p-4 flex-row justify-between border-b"
+              style={{ borderBottomColor: theme.cardBorder }}
+            >
+              <Text className="text-sm" style={{ color: theme.textSecondary }}>
+                Firmware
+              </Text>
+              <TouchableOpacity onPress={() => openModal("update")}>
+                <Text
+                  className="text-[13px] font-semibold"
+                  style={{ color: theme.primary }}
+                >
+                  v1.0.4 (Check Update)
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <Text
+            className="text-[11px] font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary }}
+          >
+            Network Connection
+          </Text>
+          <View
+            className="p-4 rounded-2xl border flex-row justify-between items-center mb-6"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            }}
+          >
+            <View className="flex-row items-center gap-3">
+              <MaterialIcons name="wifi" size={24} color={theme.text} />
+              <View>
+                <Text
+                  className="text-sm font-semibold"
+                  style={{ color: theme.text }}
+                >
+                  PLDT_Home_FIBR
+                </Text>
+                <Text
+                  className="text-[11px] mt-0.5"
+                  style={{ color: theme.textSecondary }}
+                >
+                  IP: 192.168.1.15
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              className="px-3 py-1.5 rounded-lg border"
+              style={{
                 backgroundColor: isDarkMode ? "#333" : "#e0e0e0",
                 borderColor: theme.cardBorder,
-              },
-            ]}
-            onPress={() => openModal("wifi")}
-          >
-            <Text
-              style={{ color: theme.text, fontSize: 11, fontWeight: "600" }}
+              }}
+              onPress={() => openModal("wifi")}
             >
-              Change
+              <Text
+                className="text-[11px] font-semibold"
+                style={{ color: theme.text }}
+              >
+                Change
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text
+            className="text-[11px] font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary }}
+          >
+            Advanced Actions
+          </Text>
+
+          <TouchableOpacity
+            className="flex-row items-center justify-center gap-2 p-3.5 rounded-xl border mb-3"
+            style={{ backgroundColor: dangerBg, borderColor: dangerBorder }}
+            onPress={() => openModal("restart")}
+          >
+            <MaterialIcons name="restart-alt" size={18} color={dangerColor} />
+            <Text
+              className="font-semibold text-sm"
+              style={{ color: dangerColor }}
+            >
+              Restart Device
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className="flex-row items-center justify-center gap-2 p-3.5 rounded-xl border mb-3 bg-transparent"
+            style={{ borderColor: dangerColor }}
+            onPress={() => openModal("unpair")}
+          >
+            <MaterialIcons name="link-off" size={18} color={dangerColor} />
+            <Text
+              className="font-semibold text-sm"
+              style={{ color: dangerColor }}
+            >
+              Unpair from Account
             </Text>
           </TouchableOpacity>
         </View>
-
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-          Advanced Actions
-        </Text>
-
-        <TouchableOpacity
-          style={[
-            styles.dangerBtn,
-            { backgroundColor: dangerBg, borderColor: dangerBorder },
-          ]}
-          onPress={() => openModal("restart")}
-        >
-          <MaterialIcons name="restart-alt" size={18} color={dangerColor} />
-          <Text style={{ color: dangerColor, fontWeight: "600", fontSize: 14 }}>
-            Restart Device
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.dangerBtn,
-            { backgroundColor: "transparent", borderColor: dangerColor },
-          ]}
-          onPress={() => openModal("unpair")}
-        >
-          <MaterialIcons name="link-off" size={18} color={dangerColor} />
-          <Text style={{ color: dangerColor, fontWeight: "600", fontSize: 14 }}>
-            Unpair from Account
-          </Text>
-        </TouchableOpacity>
       </ScrollView>
 
       <Modal
@@ -264,18 +297,19 @@ export default function DeviceConfigScreen() {
         animationType="fade"
         onRequestClose={closeModal}
       >
-        <View style={styles.modalOverlay}>
+        <View className="flex-1 bg-black/80 justify-center items-center">
           <View
-            style={[
-              styles.modalContent,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            ]}
+            className="w-[280px] p-6 rounded-[20px] border items-center"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            }}
           >
             {modalState.loading ? (
               <ActivityIndicator
                 size="large"
                 color={theme.primary}
-                style={{ marginVertical: 20 }}
+                className="my-5"
               />
             ) : (
               <MaterialIcons
@@ -286,56 +320,54 @@ export default function DeviceConfigScreen() {
               />
             )}
 
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
+            <Text
+              className="text-lg font-bold mb-2.5"
+              style={{ color: theme.text }}
+            >
               {modalState.title}
             </Text>
-            <Text style={[styles.modalMsg, { color: theme.textSecondary }]}>
+            <Text
+              className="text-[13px] text-center mb-6 leading-5"
+              style={{ color: theme.textSecondary }}
+            >
               {modalState.msg}
             </Text>
 
             {!modalState.loading && (
-              <View style={styles.modalActions}>
+              <View className="flex-row w-full justify-center">
                 {(modalState.type === "restart" ||
                   modalState.type === "unpair") && (
                   <TouchableOpacity
-                    style={[
-                      styles.modalBtn,
-                      {
-                        borderColor: theme.textSecondary,
-                        borderWidth: 1,
-                        marginRight: 10,
-                      },
-                    ]}
+                    className="flex-1 h-10 rounded-lg justify-center items-center mr-2.5 border"
+                    style={{ borderColor: theme.textSecondary }}
                     onPress={closeModal}
                   >
-                    <Text style={{ color: theme.text, fontWeight: "700" }}>
+                    <Text className="font-bold" style={{ color: theme.text }}>
                       Cancel
                     </Text>
                   </TouchableOpacity>
                 )}
 
                 <TouchableOpacity
-                  style={[
-                    styles.modalBtn,
-                    {
-                      backgroundColor:
-                        modalState.type === "restart" ||
-                        modalState.type === "wifi"
-                          ? isDarkMode
-                            ? "#ffaa00"
-                            : "#b37400"
-                          : modalState.type === "unpair"
-                          ? dangerColor
-                          : theme.primary,
-                    },
-                  ]}
+                  className="flex-1 h-10 rounded-lg justify-center items-center"
+                  style={{
+                    backgroundColor:
+                      modalState.type === "restart" ||
+                      modalState.type === "wifi"
+                        ? isDarkMode
+                          ? "#ffaa00"
+                          : "#b37400"
+                        : modalState.type === "unpair"
+                        ? dangerColor
+                        : theme.primary,
+                  }}
                   onPress={
                     modalState.type === "update" || modalState.type === "wifi"
                       ? closeModal
                       : handleConfirm
                   }
                 >
-                  <Text style={{ color: "#fff", fontWeight: "700" }}>
+                  <Text className="text-white font-bold">
                     {modalState.type === "restart" ||
                     modalState.type === "unpair"
                       ? "Confirm"
@@ -353,135 +385,19 @@ export default function DeviceConfigScreen() {
 
 function InfoItem({ label, value, theme }) {
   return (
-    <View style={[styles.infoItem, { borderBottomColor: theme.cardBorder }]}>
-      <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
+    <View
+      className="p-4 flex-row justify-between border-b"
+      style={{ borderBottomColor: theme.cardBorder }}
+    >
+      <Text className="text-sm" style={{ color: theme.textSecondary }}>
         {label}
       </Text>
-      <Text style={[styles.infoVal, { color: theme.textSecondary }]}>
+      <Text
+        className="text-sm font-mono"
+        style={{ color: theme.textSecondary }}
+      >
         {value}
       </Text>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 24,
-    paddingTop: 20,
-    borderBottomWidth: 1,
-  },
-  backBtn: { flexDirection: "row", alignItems: "center" },
-  backText: { fontSize: 14, fontWeight: "500", marginLeft: 4 },
-  headerTitle: { fontSize: 16, fontWeight: "700" },
-  scrollContent: { padding: 24 },
-
-  hubHero: {
-    alignItems: "center",
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    marginBottom: 20,
-  },
-  hubIconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 2,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 15,
-  },
-  hubName: { fontSize: 18, fontWeight: "700", marginBottom: 5 },
-  hubStatus: { flexDirection: "row", alignItems: "center", gap: 6 },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 12, fontWeight: "600" },
-
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-  infoGroup: {
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: "hidden",
-    marginBottom: 20,
-  },
-  infoItem: {
-    padding: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-  },
-  infoLabel: { fontSize: 14 },
-  infoVal: { fontSize: 14, fontFamily: "monospace" },
-  actionLink: { fontSize: 13, fontWeight: "600" },
-
-  networkCard: {
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 25,
-  },
-  netLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  netName: { fontSize: 14, fontWeight: "600" },
-  netIp: { fontSize: 11, marginTop: 2 },
-  changeBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-
-  dangerBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    width: 280,
-    padding: 25,
-    borderRadius: 20,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 10 },
-  modalMsg: {
-    fontSize: 13,
-    textAlign: "center",
-    marginBottom: 25,
-    lineHeight: 18,
-  },
-  modalActions: {
-    flexDirection: "row",
-    width: "100%",
-    justifyContent: "center",
-  },
-  modalBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-});

@@ -2,7 +2,6 @@ import React from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   ScrollView,
   StatusBar,
@@ -19,7 +18,8 @@ export default function MenuScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.background }]}
+      className="flex-1"
+      style={{ backgroundColor: theme.background }}
       edges={["top", "left", "right"]}
     >
       <StatusBar
@@ -27,96 +27,125 @@ export default function MenuScreen() {
         backgroundColor={theme.background}
       />
 
-      <View style={styles.header}>
+      {/* Header */}
+      <View className="px-6 pt-5 pb-2.5 items-end">
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons name="close" size={28} color={theme.text} />
         </TouchableOpacity>
       </View>
 
+      {/* Profile Section */}
       <View
-        style={[styles.profileSection, { borderBottomColor: theme.cardBorder }]}
+        className="flex-row items-center px-6 pb-8 border-b gap-4"
+        style={{ borderBottomColor: theme.cardBorder }}
       >
         <LinearGradient
           colors={["#0055ff", "#00ff99"]}
-          style={styles.avatar}
+          className="justify-center items-center shadow-md"
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
+          style={{ width: 60, height: 60, borderRadius: 30 }}
         >
-          <Text style={styles.avatarText}>NA</Text>
+          <Text className="text-2xl font-bold text-[#1a1a1a]">NA</Text>
         </LinearGradient>
-        <View style={styles.userInfo}>
-          <Text style={[styles.userName, { color: theme.text }]}>
+
+        <View className="justify-center">
+          <Text className="text-lg font-bold" style={{ color: theme.text }}>
             Natasha Alonzo
           </Text>
-          <Text style={[styles.userRole, { color: theme.textSecondary }]}>
+          <Text className="text-xs mt-1" style={{ color: theme.textSecondary }}>
             Role: Home Admin
           </Text>
-          <Text style={styles.userId}>ID: GW-2025-CAL</Text>
+          <Text className="text-[11px] mt-1 text-[#00ff99] font-[monospace]">
+            ID: GW-2025-CAL
+          </Text>
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.menuContent}>
-        <Text style={[styles.groupTitle, { color: theme.textSecondary }]}>
-          Device Management
-        </Text>
+      <ScrollView className="flex-1">
+        {/* WRAPPER VIEW: Forces padding to apply correctly */}
+        <View className="px-6 py-2.5">
+          {/* GROUP 1 */}
+          <Text
+            className="text-[11px] uppercase font-bold tracking-widest mt-6 mb-2.5"
+            style={{ color: theme.textSecondary }}
+          >
+            Device Management
+          </Text>
 
-        <MenuItem
-          icon="router"
-          text="My Hubs (1 Active)"
-          theme={theme}
-          hasArrow
-          onPress={() => navigation.navigate("MyHubs")}
-        />
-        <MenuItem
-          icon="add-circle-outline"
-          text="Add New Device"
-          theme={theme}
-          iconColor="#00ff99"
-          textColor={theme.text}
-          onPress={() => navigation.navigate("SetupHub")}
-        />
+          <MenuItem
+            icon="router"
+            text="My Hubs (1 Active)"
+            theme={theme}
+            hasArrow
+            onPress={() => navigation.navigate("MyHubs")}
+          />
+          <MenuItem
+            icon="add-circle-outline"
+            text="Add New Device"
+            theme={theme}
+            iconColor="#00ff99"
+            textColor={theme.text}
+            onPress={() => navigation.navigate("SetupHub")}
+          />
 
-        <Text style={[styles.groupTitle, { color: theme.textSecondary }]}>
-          System Tools
-        </Text>
+          {/* GROUP 2 */}
+          <Text
+            className="text-[11px] uppercase font-bold tracking-widest mt-6 mb-2.5"
+            style={{ color: theme.textSecondary }}
+          >
+            System Tools
+          </Text>
 
-        <MenuItem
-          icon="tune"
-          text="Bill Calibration"
-          theme={theme}
-          badge="!"
-          badgeColor="#ffaa00"
-          onPress={() => console.log("Nav to Calibration")}
-        />
-        <MenuItem
-          icon="security"
-          text="Safety & Fault Logs"
-          theme={theme}
-          badge="2"
-          badgeColor="#ff4d4d"
-          onPress={() => console.log("Nav to Logs")}
-        />
+          <MenuItem
+            icon="tune"
+            text="Bill Calibration"
+            theme={theme}
+            badge="!"
+            badgeColor="#ffaa00"
+            onPress={() => console.log("Nav to Calibration")}
+          />
+          <MenuItem
+            icon="security"
+            text="Safety & Fault Logs"
+            theme={theme}
+            badge="2"
+            badgeColor="#ff4d4d"
+            onPress={() => console.log("Nav to Logs")}
+          />
 
-        <Text style={[styles.groupTitle, { color: theme.textSecondary }]}>
-          App Settings
-        </Text>
+          {/* GROUP 3 */}
+          <Text
+            className="text-[11px] uppercase font-bold tracking-widest mt-6 mb-2.5"
+            style={{ color: theme.textSecondary }}
+          >
+            App Settings
+          </Text>
 
-        <MenuItem
-          icon="bolt"
-          text="Utility Rates (₱/kWh)"
-          theme={theme}
-          onPress={() => navigation.navigate("ProviderSetup")}
-        />
-        <MenuItem
-          icon="notifications-none"
-          text="Notifications"
-          theme={theme}
-          onPress={() => navigation.navigate("Notifications")}
-        />
+          <MenuItem
+            icon="bolt"
+            text="Utility Rates (₱/kWh)"
+            theme={theme}
+            onPress={() => navigation.navigate("ProviderSetup")}
+          />
+          <MenuItem
+            icon="notifications-none"
+            text="Notifications"
+            theme={theme}
+            onPress={() => navigation.navigate("Notifications")}
+          />
+
+          {/* Bottom spacer for scrolling */}
+          <View className="h-5" />
+        </View>
       </ScrollView>
 
-      <View style={[styles.footer, { borderTopColor: theme.cardBorder }]}>
-        <Text style={[styles.versionText, { color: theme.textSecondary }]}>
+      {/* Footer */}
+      <View
+        className="p-6 border-t items-center"
+        style={{ borderTopColor: theme.cardBorder }}
+      >
+        <Text className="text-[11px]" style={{ color: theme.textSecondary }}>
           GridWatch v1.0.4
         </Text>
       </View>
@@ -137,26 +166,31 @@ function MenuItem({
 }) {
   return (
     <TouchableOpacity
-      style={[styles.menuItem, { borderBottomColor: theme.cardBorder }]}
+      className="flex-row items-center py-3.5 border-b"
+      style={{ borderBottomColor: theme.cardBorder }}
       onPress={onPress}
     >
       <MaterialIcons
         name={icon}
         size={22}
         color={iconColor || theme.textSecondary}
-        style={styles.menuIcon}
+        style={{ marginRight: 16 }}
       />
-      <Text style={[styles.menuText, { color: textColor || theme.text }]}>
+      <Text
+        className="flex-1 text-[15px] font-medium"
+        style={{ color: textColor || theme.text }}
+      >
         {text}
       </Text>
 
       {badge && (
-        <View style={[styles.badge, { backgroundColor: badgeColor }]}>
+        <View
+          className="px-2 py-0.5 rounded-[10px] mr-1.5"
+          style={{ backgroundColor: badgeColor }}
+        >
           <Text
-            style={[
-              styles.badgeText,
-              { color: badgeColor === "#ffaa00" ? "#1a1a1a" : "#fff" },
-            ]}
+            className="text-[10px] font-bold"
+            style={{ color: badgeColor === "#ffaa00" ? "#1a1a1a" : "#fff" }}
           >
             {badge}
           </Text>
@@ -173,72 +207,3 @@ function MenuItem({
     </TouchableOpacity>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    alignItems: "flex-end",
-    paddingBottom: 10,
-  },
-
-  profileSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingBottom: 30,
-    borderBottomWidth: 1,
-    gap: 16,
-  },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#00ff99",
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-  },
-  avatarText: { fontSize: 24, fontWeight: "700", color: "#1a1a1a" },
-  userInfo: { justifyContent: "center" },
-  userName: { fontSize: 18, fontWeight: "700" },
-  userRole: { fontSize: 12, marginTop: 4 },
-  userId: {
-    fontFamily: "monospace",
-    color: "#00ff99",
-    fontSize: 11,
-    marginTop: 4,
-  },
-
-  menuContent: { paddingHorizontal: 24, paddingVertical: 10 },
-  groupTitle: {
-    fontSize: 11,
-    textTransform: "uppercase",
-    fontWeight: "700",
-    letterSpacing: 1,
-    marginTop: 25,
-    marginBottom: 10,
-  },
-
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-  },
-  menuIcon: { marginRight: 16 },
-  menuText: { flex: 1, fontSize: 15, fontWeight: "500" },
-
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginRight: 5,
-  },
-  badgeText: { fontSize: 10, fontWeight: "700" },
-
-  footer: { padding: 24, borderTopWidth: 1, alignItems: "center" },
-  versionText: { fontSize: 11 },
-});

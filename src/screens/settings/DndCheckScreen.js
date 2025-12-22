@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   StatusBar,
   Animated,
@@ -93,66 +92,84 @@ export default function DndCheckScreen() {
   };
 
   return (
-    <View style={styles.overlay}>
+    <View className="flex-1 bg-black/85 justify-center items-center p-6">
       <StatusBar barStyle="light-content" backgroundColor="rgba(0,0,0,0.85)" />
 
       <Animated.View
-        style={[styles.modal, { transform: [{ translateY: slideAnim }] }]}
+        className="w-full max-w-xs bg-neutral-900 rounded-3xl p-8 items-center border border-neutral-800 shadow-2xl"
+        style={{ transform: [{ translateY: slideAnim }] }}
       >
         {step === "detect" ? (
           <>
-            <View style={styles.iconWrapper}>
+            <View className="relative w-[70px] h-[70px] rounded-full justify-center items-center mb-5 border border-purple-500/30 bg-purple-600/10">
               <MaterialIcons name="nights-stay" size={32} color="#a855f7" />
-              <Animated.Text style={[styles.zzz, getZStyle(z1Anim, 10, -10)]}>
+              <Animated.Text
+                className="absolute text-purple-500 font-bold text-sm"
+                style={getZStyle(z1Anim, 10, -10)}
+              >
                 Z
               </Animated.Text>
-              <Animated.Text style={[styles.zzz, getZStyle(z2Anim, 20, -25)]}>
+              <Animated.Text
+                className="absolute text-purple-500 font-bold text-sm"
+                style={getZStyle(z2Anim, 20, -25)}
+              >
                 Z
               </Animated.Text>
             </View>
 
-            <Text style={styles.title}>"Do Not Disturb" is On</Text>
+            <Text className="text-lg font-bold text-white mb-2.5 text-center">
+              "Do Not Disturb" is On
+            </Text>
 
-            <Text style={styles.message}>
+            <Text className="text-sm text-neutral-400 text-center leading-5 mb-6">
               GridWatch detected that your notifications are silenced. You might
-              miss <Text style={styles.highlight}>Critical Safety Alerts</Text>{" "}
+              miss{" "}
+              <Text className="text-red-500 font-bold">
+                Critical Safety Alerts
+              </Text>{" "}
               (Short Circuits).
             </Text>
 
-            <View style={styles.btnGroup}>
+            <View className="w-full gap-3">
               <TouchableOpacity
-                style={styles.btnPrimary}
+                className="w-full rounded-2xl overflow-hidden"
                 onPress={handleResolve}
               >
                 <LinearGradient
                   colors={["#0055ff", "#00ff99"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={styles.gradientBtn}
+                  className="py-3.5 items-center justify-center"
                 >
-                  <Text style={styles.btnTextPrimary}>Turn Off DND</Text>
+                  <Text className="text-black font-bold text-sm">
+                    Turn Off DND
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.btnSecondary}
+                className="py-2.5 items-center"
                 onPress={handleIgnore}
               >
-                <Text style={styles.btnTextSecondary}>I accept the risk</Text>
+                <Text className="text-neutral-500 text-xs font-semibold">
+                  I accept the risk
+                </Text>
               </TouchableOpacity>
             </View>
           </>
         ) : (
           <>
-            <View style={[styles.iconWrapper, styles.successWrapper]}>
+            <View className="w-[70px] h-[70px] rounded-full justify-center items-center mb-5 bg-green-500/10 border border-green-400">
               <MaterialIcons
                 name="notifications-active"
                 size={32}
                 color="#00ff99"
               />
             </View>
-            <Text style={styles.title}>Great!</Text>
-            <Text style={styles.message}>
+            <Text className="text-lg font-bold text-white mb-2.5 text-center">
+              Great!
+            </Text>
+            <Text className="text-sm text-neutral-400 text-center leading-5 mb-6">
               You will now receive safety alerts instantly.
             </Text>
           </>
@@ -161,95 +178,3 @@ export default function DndCheckScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.85)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  modal: {
-    width: "100%",
-    maxWidth: 320,
-    backgroundColor: "#1a1a1a",
-    borderRadius: 24,
-    padding: 30,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#333",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 20,
-  },
-  iconWrapper: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: "rgba(147, 51, 234, 0.1)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "rgba(147, 51, 234, 0.3)",
-  },
-  successWrapper: {
-    backgroundColor: "rgba(0, 255, 153, 0.1)",
-    borderColor: "#00ff99",
-  },
-  zzz: {
-    position: "absolute",
-    color: "#a855f7",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#fff",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  message: {
-    fontSize: 13,
-    color: "#bbb",
-    textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 25,
-  },
-  highlight: {
-    color: "#ff4444",
-    fontWeight: "700",
-  },
-  btnGroup: {
-    width: "100%",
-    gap: 12,
-  },
-  btnPrimary: {
-    width: "100%",
-    borderRadius: 14,
-    overflow: "hidden",
-  },
-  gradientBtn: {
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  btnTextPrimary: {
-    color: "#0f0f0f",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  btnSecondary: {
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  btnTextSecondary: {
-    color: "#666",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-});

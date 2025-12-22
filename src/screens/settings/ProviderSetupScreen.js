@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   ScrollView,
   StatusBar,
@@ -48,7 +47,8 @@ export default function ProviderSetupScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.background }]}
+      className="flex-1"
+      style={{ backgroundColor: theme.background }}
       edges={["top", "left", "right"]}
     >
       <StatusBar
@@ -56,100 +56,123 @@ export default function ProviderSetupScreen() {
         backgroundColor={theme.background}
       />
 
-      <View style={[styles.header, { borderBottomColor: theme.cardBorder }]}>
+      <View
+        className="flex-row items-center px-6 py-5 border-b"
+        style={{ borderBottomColor: theme.cardBorder }}
+      >
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons name="close" size={24} color={theme.textSecondary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>
+        <Text
+          className="flex-1 text-center text-base font-bold"
+          style={{ color: theme.text }}
+        >
           Select Utility Provider
         </Text>
-        <View style={{ width: 24 }} />
+        <View className="w-6" />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.description, { color: theme.textSecondary }]}>
-          Choose your local electricity distributor to sync the latest kWh rates
-          automatically.
-        </Text>
+      <ScrollView>
+        <View className="p-6">
+          <Text
+            className="text-center text-xs mb-8 leading-5 px-2.5"
+            style={{ color: theme.textSecondary }}
+          >
+            Choose your local electricity distributor to sync the latest kWh
+            rates automatically.
+          </Text>
 
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-          Recommended (Caloocan)
-        </Text>
-        <ProviderCard
-          item={providers[0]}
-          isSelected={selectedId === "meralco"}
-          onPress={() => handleSelect("meralco")}
-          theme={theme}
-          isDarkMode={isDarkMode}
-        />
-
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-          Other Providers
-        </Text>
-        {providers.slice(1).map((item) => (
+          <Text
+            className="text-xs font-bold uppercase tracking-widest mb-3 mt-2.5"
+            style={{ color: theme.textSecondary }}
+          >
+            Recommended (Caloocan)
+          </Text>
           <ProviderCard
-            key={item.id}
-            item={item}
-            isSelected={selectedId === item.id}
-            onPress={() => handleSelect(item.id)}
+            item={providers[0]}
+            isSelected={selectedId === "meralco"}
+            onPress={() => handleSelect("meralco")}
             theme={theme}
             isDarkMode={isDarkMode}
           />
-        ))}
 
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-          Manual Configuration
-        </Text>
-        <TouchableOpacity
-          style={[
-            styles.card,
-            {
+          <Text
+            className="text-xs font-bold uppercase tracking-widest mb-3 mt-2.5"
+            style={{ color: theme.textSecondary }}
+          >
+            Other Providers
+          </Text>
+          {providers.slice(1).map((item) => (
+            <ProviderCard
+              key={item.id}
+              item={item}
+              isSelected={selectedId === item.id}
+              onPress={() => handleSelect(item.id)}
+              theme={theme}
+              isDarkMode={isDarkMode}
+            />
+          ))}
+
+          <Text
+            className="text-xs font-bold uppercase tracking-widest mb-3 mt-2.5"
+            style={{ color: theme.textSecondary }}
+          >
+            Manual Configuration
+          </Text>
+          <TouchableOpacity
+            className="flex-row items-center p-4 rounded-2xl border mb-3"
+            style={{
               backgroundColor: theme.card,
               borderColor:
                 selectedId === "manual" ? "#0055ff" : theme.cardBorder,
-            },
-            selectedId === "manual" && {
-              backgroundColor: isDarkMode
-                ? "rgba(0, 85, 255, 0.1)"
-                : "rgba(0, 85, 255, 0.05)",
-            },
-          ]}
-          onPress={() => handleSelect("manual")}
-          activeOpacity={0.7}
-        >
-          {selectedId === "manual" && (
-            <View style={styles.checkIcon}>
-              <MaterialIcons name="check" size={12} color="#fff" />
-            </View>
-          )}
-
-          <View style={[styles.logoBox, { backgroundColor: "#333" }]}>
-            <MaterialIcons name="edit" size={20} color="#fff" />
-          </View>
-
-          <View>
-            <Text style={[styles.providerName, { color: theme.text }]}>
-              Set Custom Rate
-            </Text>
-            <Text style={[styles.rateText, { color: theme.textSecondary }]}>
-              Enter your own ₱/kWh value
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.confirmBtn}
-          onPress={() => navigation.goBack()}
-        >
-          <LinearGradient
-            colors={["#0055ff", "#00ff99"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.gradientBtn}
+              ...(selectedId === "manual" && {
+                backgroundColor: isDarkMode
+                  ? "rgba(0, 85, 255, 0.1)"
+                  : "rgba(0, 85, 255, 0.05)",
+              }),
+            }}
+            onPress={() => handleSelect("manual")}
+            activeOpacity={0.7}
           >
-            <Text style={styles.btnText}>Confirm Selection</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            {selectedId === "manual" && (
+              <View className="absolute -top-1.5 -right-1.5 bg-blue-600 w-5 h-5 rounded-full justify-center items-center border-2 border-white z-10">
+                <MaterialIcons name="check" size={12} color="#fff" />
+              </View>
+            )}
+
+            <View className="w-11 h-11 rounded-lg justify-center items-center mr-4 bg-gray-800">
+              <MaterialIcons name="edit" size={20} color="#fff" />
+            </View>
+
+            <View>
+              <Text
+                className="text-sm font-bold mb-1"
+                style={{ color: theme.text }}
+              >
+                Set Custom Rate
+              </Text>
+              <Text className="text-xs" style={{ color: theme.textSecondary }}>
+                Enter your own ₱/kWh value
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className="mt-5 h-12 rounded-2xl overflow-hidden"
+            onPress={() => navigation.goBack()}
+          >
+            <LinearGradient
+              colors={["#0055ff", "#00ff99"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              className="flex-1 justify-center items-center"
+            >
+              <Text className="text-black font-bold text-sm uppercase tracking-wider">
+                Confirm Selection
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -158,42 +181,43 @@ export default function ProviderSetupScreen() {
 function ProviderCard({ item, isSelected, onPress, theme, isDarkMode }) {
   return (
     <TouchableOpacity
-      style={[
-        styles.card,
-        {
-          backgroundColor: theme.card,
-          borderColor: isSelected ? "#0055ff" : theme.cardBorder,
-        },
-        isSelected && {
+      className="flex-row items-center p-4 rounded-2xl border mb-3"
+      style={{
+        backgroundColor: theme.card,
+        borderColor: isSelected ? "#0055ff" : theme.cardBorder,
+        ...(isSelected && {
           backgroundColor: isDarkMode
             ? "rgba(0, 85, 255, 0.15)"
             : "rgba(0, 85, 255, 0.05)",
-        },
-      ]}
+        }),
+      }}
       onPress={onPress}
       activeOpacity={0.7}
     >
       {isSelected && (
-        <View style={[styles.checkIcon, { borderColor: theme.card }]}>
+        <View
+          className="absolute -top-1.5 -right-1.5 bg-blue-600 w-5 h-5 rounded-full justify-center items-center border-2 z-10"
+          style={{ borderColor: theme.card }}
+        >
           <MaterialIcons name="check" size={12} color="#fff" />
         </View>
       )}
 
-      <View style={[styles.logoBox, { backgroundColor: "#fff" }]}>
-        <Text style={[styles.logoText, { color: item.color }]}>
+      <View className="w-11 h-11 rounded-lg justify-center items-center mr-4 bg-white">
+        <Text className="text-lg font-black" style={{ color: item.color }}>
           {item.logo}
         </Text>
       </View>
 
       <View>
-        <Text style={[styles.providerName, { color: theme.text }]}>
+        <Text className="text-sm font-bold mb-1" style={{ color: theme.text }}>
           {item.name}
         </Text>
-        <Text style={[styles.rateText, { color: theme.textSecondary }]}>
+        <Text className="text-xs" style={{ color: theme.textSecondary }}>
           {item.id === "meralco" ? (
             <Text>
               Rate:{" "}
-              <Text style={{ color: theme.primary, fontWeight: "600" }}>
+              <Text className="font-semibold" style={{ color: theme.primary }}>
                 ₱ 12.50 / kWh
               </Text>
             </Text>
@@ -205,85 +229,3 @@ function ProviderCard({ item, isSelected, onPress, theme, isDarkMode }) {
     </TouchableOpacity>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  content: { padding: 24 },
-  description: {
-    textAlign: "center",
-    fontSize: 13,
-    marginBottom: 30,
-    lineHeight: 20,
-    paddingHorizontal: 10,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 12,
-    marginTop: 10,
-  },
-
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
-  logoBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 15,
-  },
-  logoText: { fontSize: 18, fontWeight: "900" },
-  providerName: { fontSize: 15, fontWeight: "700", marginBottom: 4 },
-  rateText: { fontSize: 12 },
-
-  checkIcon: {
-    position: "absolute",
-    top: -6,
-    right: -6,
-    backgroundColor: "#0055ff",
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#fff",
-  },
-
-  confirmBtn: {
-    marginTop: 20,
-    height: 50,
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  gradientBtn: { flex: 1, justifyContent: "center", alignItems: "center" },
-  btnText: {
-    color: "#000",
-    fontWeight: "700",
-    fontSize: 15,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-});

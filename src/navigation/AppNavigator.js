@@ -34,6 +34,7 @@ import MonthlyBudgetScreen from "../screens/budgets/MonthlyBudgetScreen";
 import MenuScreen from "../screens/menu/MenuScreen";
 import MyHubsScreen from "../screens/menu/MyHubsScreen";
 import SetupHubScreen from "../screens/menu/SetupHubScreen";
+import HubConfigScreen from "../screens/menu/HubConfigScreen"; // <--- NEW IMPORT
 
 // --- DEVICE CONTROL SCREENS ---
 import FaultDetailScreen from "../screens/devices/FaultDetailScreen";
@@ -198,6 +199,7 @@ export default function AppNavigator() {
       />
       <Stack.Screen name="MyHubs" component={MyHubsScreen} />
       <Stack.Screen name="SetupHub" component={SetupHubScreen} />
+      <Stack.Screen name="HubConfig" component={HubConfigScreen} />
 
       <Stack.Screen name="FaultDetail" component={FaultDetailScreen} />
       <Stack.Screen name="DeviceControl" component={DeviceControlScreen} />

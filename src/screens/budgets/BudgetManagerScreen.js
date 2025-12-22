@@ -2,7 +2,6 @@ import React, { useRef } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   ScrollView,
   StatusBar,
@@ -50,7 +49,8 @@ export default function BudgetManagerScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.background }]}
+      className="flex-1"
+      style={{ backgroundColor: theme.background }}
       edges={["top", "left", "right"]}
     >
       <StatusBar
@@ -59,16 +59,14 @@ export default function BudgetManagerScreen() {
       />
 
       <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: theme.background,
-            borderBottomColor: theme.cardBorder,
-          },
-        ]}
+        className="flex-row items-center justify-between px-6 py-5 border-b"
+        style={{
+          backgroundColor: theme.background,
+          borderBottomColor: theme.cardBorder,
+        }}
       >
         <TouchableOpacity
-          style={styles.backBtn}
+          className="flex-row items-center gap-1.5"
           onPress={() => navigation.navigate("Home")}
         >
           <MaterialIcons
@@ -76,34 +74,42 @@ export default function BudgetManagerScreen() {
             size={18}
             color={theme.textSecondary}
           />
-          <Text style={[styles.backText, { color: theme.textSecondary }]}>
-            Home
+          <Text
+            className="text-sm font-medium"
+            style={{ color: theme.textSecondary }}
+          >
+            Back
           </Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>
+        <Text className="text-base font-bold" style={{ color: theme.text }}>
           Select Hub
         </Text>
-        <View style={{ width: 50 }} />
+        <View className="w-[50px]" />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.introText, { color: theme.textSecondary }]}>
-          Choose a Smart Hub to manage the budget and settings for its connected
-          appliances.
-        </Text>
+      <ScrollView>
+        <View className="p-6">
+          <Text
+            className="text-xm leading-5 mb-6"
+            style={{ color: theme.textSecondary }}
+          >
+            Choose a Smart Hub to manage the budget and settings for its
+            connected appliances.
+          </Text>
 
-        <View style={styles.hubList}>
-          {hubs.map((hub) => (
-            <HubCard
-              key={hub.id}
-              data={hub}
-              theme={theme}
-              isDarkMode={isDarkMode}
-              onPress={() =>
-                navigation.navigate("BudgetDeviceList", { hubName: hub.name })
-              }
-            />
-          ))}
+          <View className="gap-2">
+            {hubs.map((hub) => (
+              <HubCard
+                key={hub.id}
+                data={hub}
+                theme={theme}
+                isDarkMode={isDarkMode}
+                onPress={() =>
+                  navigation.navigate("BudgetDeviceList", { hubName: hub.name })
+                }
+              />
+            ))}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -152,45 +158,42 @@ function HubCard({ data, theme, isDarkMode, onPress }) {
       onPress={!isOffline ? onPress : null}
       onPressIn={!isOffline ? handlePressIn : null}
       onPressOut={!isOffline ? handlePressOut : null}
-      style={{ marginBottom: 12 }}
+      className="mb-4"
     >
       <Animated.View
-        style={[
-          styles.hubItem,
-          {
-            backgroundColor: theme.card,
-            borderColor: theme.cardBorder,
-            transform: [{ scale: scaleValue }],
-            opacity: isOffline ? 0.6 : 1,
-          },
-        ]}
+        className="flex-row items-center justify-between p-[18px] rounded-2xl border"
+        style={{
+          backgroundColor: theme.card,
+          borderColor: theme.cardBorder,
+          transform: [{ scale: scaleValue }],
+          opacity: isOffline ? 0.6 : 1,
+        }}
       >
-        <View style={styles.hubLeft}>
-          <View style={[styles.iconBox, { backgroundColor: iconBg }]}>
+        <View className="flex-row items-center gap-4">
+          <View
+            className="w-12 h-12 rounded-xl items-center justify-center"
+            style={{ backgroundColor: iconBg }}
+          >
             <MaterialIcons
               name={isOffline ? "wifi-off" : "router"}
               size={24}
               color={iconColor}
             />
           </View>
-          <View style={styles.hubInfo}>
-            <Text style={[styles.hubName, { color: theme.text }]}>
+          <View className="gap-1">
+            <Text className="text-sm font-bold" style={{ color: theme.text }}>
               {data.name}
             </Text>
-            <View style={styles.hubStatusRow}>
+            <View className="flex-row items-center gap-1.5">
               <View
-                style={[
-                  styles.statusDot,
-                  {
-                    backgroundColor: statusColor,
-                    boxShadow:
-                      data.type === "active"
-                        ? `0 0 5px ${statusColor}`
-                        : "none",
-                  },
-                ]}
+                className="w-1.5 h-1.5 rounded-full"
+                style={{
+                  backgroundColor: statusColor,
+                  boxShadow:
+                    data.type === "active" ? `0 0 5px ${statusColor}` : "none",
+                }}
               />
-              <Text style={[styles.statusText, { color: theme.textSecondary }]}>
+              <Text className="text-xs" style={{ color: theme.textSecondary }}>
                 {data.status}
                 {!isOffline && ` • ${data.devices} Devices`}
               </Text>
@@ -206,42 +209,3 @@ function HubCard({ data, theme, isDarkMode, onPress }) {
     </TouchableOpacity>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-  },
-  backBtn: { flexDirection: "row", alignItems: "center", gap: 5 },
-  backText: { fontSize: 14, fontWeight: "500" },
-  headerTitle: { fontSize: 16, fontWeight: "700" },
-  content: { padding: 24 },
-  introText: { fontSize: 13, lineHeight: 20, marginBottom: 25 },
-  hubList: { gap: 12 },
-  hubItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 18,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  hubLeft: { flexDirection: "row", alignItems: "center", gap: 15 },
-  iconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  hubInfo: { gap: 4 },
-  hubName: { fontSize: 15, fontWeight: "700" },
-  hubStatusRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 12 },
-});
