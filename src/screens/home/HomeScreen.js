@@ -14,7 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
-import { requestNotificationPermission } from "./src/services/notifications";
+import { requestNotificationPermission } from "../../services/notification";
 
 const HUBS_DATA = [
   {
