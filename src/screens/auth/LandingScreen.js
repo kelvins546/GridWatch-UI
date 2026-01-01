@@ -87,7 +87,7 @@ export default function LandingScreen() {
               className="w-[120px] h-[120px] rounded-full items-center justify-center mb-8 bg-[#1a1a1a] shadow-lg shadow-[#00ff99]/30 elevation-10"
             >
               <Image
-                source={require("../../../assets/GridWatch-logo.png")}
+                source={require("../../../assets/gridwatch-logo.png")}
                 className="w-[120px] h-[120px]"
                 resizeMode="contain"
               />

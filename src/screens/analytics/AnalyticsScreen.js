@@ -22,34 +22,25 @@ export default function AnalyticsScreen() {
       style={{ backgroundColor: theme.background }}
       edges={["top", "left", "right"]}
     >
+      <StatusBar
+        barStyle={theme.statusBarStyle}
+        backgroundColor={theme.background}
+      />
+
       <View
-        className="flex-row items-center justify-between px-6 py-5"
-        style={{ backgroundColor: theme.background }}
+        className="flex-row items-center justify-center px-6 py-5 border-b"
+        style={{
+          backgroundColor: theme.background,
+          borderBottomColor: theme.cardBorder,
+        }}
       >
-        <TouchableOpacity
-          className="flex-row items-center gap-1"
-          onPress={() => navigation.goBack()}
-        >
-          <MaterialIcons
-            name="arrow-back"
-            size={18}
-            color={theme.textSecondary}
-          />
-          <Text
-            className="text-sm font-medium"
-            style={{ color: theme.textSecondary }}
-          >
-            Back
-          </Text>
-        </TouchableOpacity>
         <Text className="text-base font-bold" style={{ color: theme.text }}>
-          Analytics & Trends
+          Energy Insights
         </Text>
-        <View className="w-[60px]" />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View className="px-6 pb-10">
+        <View className="px-6 pb-10 pt-6">
           <View
             className="flex-row p-1 rounded-xl mb-6"
             style={{ backgroundColor: isDarkMode ? "#222" : "#e0e0e0" }}
@@ -116,13 +107,14 @@ export default function AnalyticsScreen() {
               Cost Distribution
             </Text>
 
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => console.log("See All History")}>
               <Text className="text-xs" style={{ color: theme.primary }}>
                 See All
               </Text>
             </TouchableOpacity>
           </View>
 
+          {/* LIST ITEMS */}
           <DistributionItem
             name="1. Air Conditioner"
             cost="₱ 552.00"
@@ -181,17 +173,12 @@ function DistributionItem({ name, cost, percent, color, theme }) {
     <View className="mb-6">
       <View className="flex-row justify-between mb-2">
         <Text
-          // CHANGED: text-sm (14px)
           className="text-sm font-medium"
           style={{ color: theme.textSecondary }}
         >
           {name}
         </Text>
-        <Text
-          // CHANGED: text-sm (14px)
-          className="text-sm font-bold"
-          style={{ color: theme.text }}
-        >
+        <Text className="text-sm font-bold" style={{ color: theme.text }}>
           {cost}
         </Text>
       </View>

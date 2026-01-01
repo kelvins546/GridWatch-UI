@@ -59,6 +59,14 @@ export default function BudgetDeviceListScreen() {
     },
   ];
 
+  const handleDevicePress = (device) => {
+    if (device.id === "tv") {
+      navigation.navigate("LimitDetail");
+    } else {
+      navigation.navigate("BudgetDetail", { deviceName: device.name });
+    }
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background }]}
@@ -69,7 +77,6 @@ export default function BudgetDeviceListScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
       <View
         style={[
           styles.header,
@@ -114,9 +121,7 @@ export default function BudgetDeviceListScreen() {
               data={device}
               theme={theme}
               isDarkMode={isDarkMode}
-              onPress={() =>
-                navigation.navigate("BudgetDetail", { deviceName: device.name })
-              }
+              onPress={() => handleDevicePress(device)}
             />
           ))}
         </View>

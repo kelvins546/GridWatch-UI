@@ -1,20 +1,101 @@
-import React from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
   StatusBar,
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
 
 export default function MenuScreen() {
   const navigation = useNavigation();
-  const { theme } = useTheme();
+  const { theme, isDarkMode } = useTheme();
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [userData, setUserData] = useState({
+    fullName: "User",
+    role: "Resident",
+    initial: "US",
+    avatarUrl: null,
+  });
+
+  const fetchMenuProfile = async () => {
+    try {
+      setIsLoading(true);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data, error } = await supabase
+          .from("users")
+          .select("full_name, role, avatar_url")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (data) {
+          const name = data.full_name || "User";
+          setUserData({
+            fullName: name,
+            role: data.role
+              ? data.role.charAt(0).toUpperCase() + data.role.slice(1)
+              : "Resident",
+            initial: name.substring(0, 2).toUpperCase(),
+            avatarUrl: data.avatar_url,
+          });
+        } else {
+          const emailName = user.email ? user.email.split("@")[0] : "User";
+          const formattedName =
+            emailName.charAt(0).toUpperCase() + emailName.slice(1);
+          setUserData({
+            fullName: formattedName,
+            role: "Resident",
+            initial: formattedName.substring(0, 2).toUpperCase(),
+            avatarUrl: null,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Menu fetch error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchMenuProfile();
+    }, [])
+  );
+
+  if (isLoading) {
+    return (
+      <SafeAreaView
+        className="flex-1 justify-center items-center"
+        style={{ backgroundColor: theme.background }}
+      >
+        <StatusBar
+          barStyle={theme.statusBarStyle}
+          backgroundColor={theme.background}
+        />
+        <ActivityIndicator size="large" color={theme.primary} />
+        <Text
+          style={{ color: theme.textSecondary, marginTop: 10, fontSize: 12 }}
+        >
+          Loading...
+        </Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -27,45 +108,56 @@ export default function MenuScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* Header */}
       <View className="px-6 pt-5 pb-2.5 items-end">
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons name="close" size={28} color={theme.text} />
         </TouchableOpacity>
       </View>
 
-      {/* Profile Section */}
       <View
         className="flex-row items-center px-6 pb-8 border-b gap-4"
         style={{ borderBottomColor: theme.cardBorder }}
       >
-        <LinearGradient
-          colors={["#0055ff", "#00ff99"]}
-          className="justify-center items-center shadow-md"
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ width: 60, height: 60, borderRadius: 30 }}
-        >
-          <Text className="text-2xl font-bold text-[#1a1a1a]">NA</Text>
-        </LinearGradient>
+        <View style={{ width: 60, height: 60 }}>
+          {userData.avatarUrl ? (
+            <Image
+              source={{ uri: userData.avatarUrl }}
+              className="w-full h-full rounded-full"
+            />
+          ) : (
+            <LinearGradient
+              colors={
+                isDarkMode ? ["#0055ff", "#00ff99"] : ["#0055ff", "#00995e"]
+              }
+              className="w-full h-full rounded-full justify-center items-center shadow-md"
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Text className="text-2xl font-bold text-[#1a1a1a]">
+                {userData.initial}
+              </Text>
+            </LinearGradient>
+          )}
+        </View>
 
         <View className="justify-center">
           <Text className="text-lg font-bold" style={{ color: theme.text }}>
-            Natasha Alonzo
+            {userData.fullName}
           </Text>
           <Text className="text-xs mt-1" style={{ color: theme.textSecondary }}>
-            Role: Home Admin
+            Role: {userData.role}
           </Text>
-          <Text className="text-[11px] mt-1 text-[#00ff99] font-[monospace]">
+          <Text
+            className="text-[11px] mt-1 font-[monospace]"
+            style={{ color: isDarkMode ? "#00ff99" : "#00995e" }}
+          >
             ID: GW-2025-CAL
           </Text>
         </View>
       </View>
 
       <ScrollView className="flex-1">
-        {/* WRAPPER VIEW: Forces padding to apply correctly */}
         <View className="px-6 py-2.5">
-          {/* GROUP 1 */}
           <Text
             className="text-[11px] uppercase font-bold tracking-widest mt-6 mb-2.5"
             style={{ color: theme.textSecondary }}
@@ -84,12 +176,11 @@ export default function MenuScreen() {
             icon="add-circle-outline"
             text="Add New Device"
             theme={theme}
-            iconColor="#00ff99"
+            iconColor={isDarkMode ? "#00ff99" : "#00995e"}
             textColor={theme.text}
             onPress={() => navigation.navigate("SetupHub")}
           />
 
-          {/* GROUP 2 */}
           <Text
             className="text-[11px] uppercase font-bold tracking-widest mt-6 mb-2.5"
             style={{ color: theme.textSecondary }}
@@ -114,7 +205,6 @@ export default function MenuScreen() {
             onPress={() => console.log("Nav to Logs")}
           />
 
-          {/* GROUP 3 */}
           <Text
             className="text-[11px] uppercase font-bold tracking-widest mt-6 mb-2.5"
             style={{ color: theme.textSecondary }}
@@ -122,6 +212,12 @@ export default function MenuScreen() {
             App Settings
           </Text>
 
+          <MenuItem
+            icon="settings"
+            text="Account Settings"
+            theme={theme}
+            onPress={() => navigation.navigate("ProfileSettings")}
+          />
           <MenuItem
             icon="bolt"
             text="Utility Rates (₱/kWh)"
@@ -135,12 +231,10 @@ export default function MenuScreen() {
             onPress={() => navigation.navigate("Notifications")}
           />
 
-          {/* Bottom spacer for scrolling */}
           <View className="h-5" />
         </View>
       </ScrollView>
 
-      {/* Footer */}
       <View
         className="p-6 border-t items-center"
         style={{ borderTopColor: theme.cardBorder }}
@@ -182,7 +276,6 @@ function MenuItem({
       >
         {text}
       </Text>
-
       {badge && (
         <View
           className="px-2 py-0.5 rounded-[10px] mr-1.5"
@@ -196,7 +289,6 @@ function MenuItem({
           </Text>
         </View>
       )}
-
       {hasArrow && (
         <MaterialIcons
           name="chevron-right"

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,20 +10,36 @@ import {
   ActivityIndicator,
   Linking,
   Platform,
+  KeyboardAvoidingView,
+  StyleSheet,
+  LogBox,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { supabase } from "../../lib/supabase";
 
 export default function SetupHubScreen() {
   const navigation = useNavigation();
-  const { theme } = useTheme();
+  const { theme, isDarkMode } = useTheme();
+
+  useEffect(() => {
+    LogBox.ignoreLogs([
+      "Network request failed",
+      "Possible Unhandled Promise Rejection",
+    ]);
+  }, []);
 
   const [wifiSSID, setWifiSSID] = useState("");
   const [wifiPass, setWifiPass] = useState("");
   const [showPass, setShowPass] = useState(false);
+
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanned, setScanned] = useState(false);
 
   const [isPairing, setIsPairing] = useState(false);
   const [statusStep, setStatusStep] = useState("");
@@ -54,38 +70,119 @@ export default function SetupHubScreen() {
     }
   };
 
-  const handleStartPairing = async () => {
-    if (!wifiSSID || !wifiPass) {
-      showAlert(
-        "Missing Info",
-        "Please enter the Home Wi-Fi details you want the Hub to use."
-      );
+  const handleStartPairing = async (autoSSID = null, autoPass = null) => {
+    const targetSSID = autoSSID !== null ? autoSSID : wifiSSID;
+    const targetPass = autoPass !== null ? autoPass : wifiPass;
+
+    if (!targetSSID) {
+      showAlert("Missing Info", "Please scan a QR code or enter Wi-Fi Name.");
       return;
     }
 
     setIsPairing(true);
 
     try {
-      setStatusStep("Connecting to Hub...");
-      await new Promise((r) => setTimeout(r, 1500));
+      setStatusStep(`Connecting to Hub...`);
+      const formData = new FormData();
+      formData.append("ssid", targetSSID);
+      formData.append("pass", targetPass);
 
-      setStatusStep("Sending Wi-Fi credentials to Hub...");
-      await new Promise((r) => setTimeout(r, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      setStatusStep("Sending credentials...");
 
-      setStatusStep("Hub is verifying connection...");
-      await new Promise((r) => setTimeout(r, 3000));
+      const controller = new AbortController();
 
-      // Success!
-      const mockHubID = "hub-123-uuid";
-      setIsPairing(false);
+      const timeoutId = setTimeout(() => controller.abort(), 7000);
 
-      navigation.navigate("HubConfig", { hubId: mockHubID });
+      const response = await fetch("http://192.168.4.1/connect-hub", {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const data = await response.json();
+
+      if (data.status === "success") {
+        setStatusStep("Success! Connected.");
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        setIsPairing(false);
+        navigation.navigate("HubConfig", { hubId: data.hub_id });
+      } else {
+        throw new Error("Hub refused");
+      }
     } catch (error) {
-      setIsPairing(false);
-      showAlert(
-        "Pairing Failed",
-        "Could not talk to the Hub. Please ensure you are connected to 'GridWatch-Setup'."
-      );
+      setStatusStep("Verifying with cloud...");
+
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+
+      const { data: verifiedHub, error: dbError } = await supabase
+        .from("hubs")
+        .select("serial_number")
+        .eq("wifi_ssid", targetSSID)
+        .eq("status", "online")
+        .order("last_seen", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (verifiedHub && !dbError) {
+        setIsPairing(false);
+        navigation.navigate("HubConfig", { hubId: verifiedHub.serial_number });
+      } else {
+        setIsPairing(false);
+        if (autoSSID) {
+          setWifiSSID(autoSSID);
+          setWifiPass(autoPass);
+        }
+        showAlert(
+          "Connect to Hub",
+          "1. Go to Settings.\n2. Connect to 'GridWatch-Setup'.\n3. Return here and try again.",
+          "warning"
+        );
+      }
+    }
+  };
+
+  const handleOpenScanner = async () => {
+    if (!permission) return;
+    if (!permission.granted) {
+      const result = await requestPermission();
+      if (!result.granted) return;
+    }
+    setScanned(false);
+    setIsScanning(true);
+  };
+
+  const handleBarCodeScanned = ({ data }) => {
+    if (scanned) return;
+    setScanned(true);
+    setIsScanning(false);
+    let raw = data.trim();
+    let ssid = "";
+    let password = "";
+    const ssidMatch = raw.match(/S:(.*?)(?:;|$)/i);
+    const passMatch = raw.match(/P:(.*?)(?:;|$)/i);
+    if (ssidMatch) {
+      ssid = ssidMatch[1];
+      if (passMatch) password = passMatch[1];
+    } else if (raw.includes(",")) {
+      const parts = raw.split(",");
+      if (parts.length >= 2) {
+        ssid = parts[0].trim();
+        password = parts[1].trim();
+      }
+    } else if (raw.includes(" ")) {
+      const lastSpaceIndex = raw.lastIndexOf(" ");
+      if (lastSpaceIndex > 0) {
+        ssid = raw.substring(0, lastSpaceIndex).trim();
+        password = raw.substring(lastSpaceIndex + 1).trim();
+      }
+    }
+    if (ssid) {
+      handleStartPairing(ssid, password);
+    } else {
+      setWifiSSID(raw);
+      showAlert("Notice", "Could not read QR. Please check.");
     }
   };
 
@@ -93,182 +190,256 @@ export default function SetupHubScreen() {
     <SafeAreaView
       className="flex-1"
       style={{ backgroundColor: theme.background }}
+      edges={["top", "left", "right"]}
     >
-      <StatusBar barStyle={theme.statusBarStyle} />
+      <StatusBar
+        barStyle={theme.statusBarStyle}
+        backgroundColor={theme.background}
+      />
 
-      <View className="flex-row justify-between items-center p-5">
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <MaterialIcons name="arrow-back" size={24} color={theme.text} />
+      <View
+        className="flex-row items-center justify-between px-6 py-5 border-b"
+        style={{
+          backgroundColor: theme.background,
+          borderBottomColor: theme.cardBorder,
+        }}
+      >
+        <TouchableOpacity
+          className="flex-row items-center"
+          onPress={() => navigation.goBack()}
+        >
+          <MaterialIcons
+            name="arrow-back"
+            size={18}
+            color={theme.textSecondary}
+          />
+          <Text
+            className="text-sm font-medium ml-1"
+            style={{ color: theme.textSecondary }}
+          >
+            Back
+          </Text>
         </TouchableOpacity>
-        <Text className="text-lg font-bold" style={{ color: theme.text }}>
+        <Text className="text-base font-bold" style={{ color: theme.text }}>
           Connect Hub
         </Text>
-        <View className="w-6" />
+        <View className="w-[50px]" />
       </View>
 
-      <ScrollView className="flex-1">
-        <View className="px-6 py-6">
-          <Text
-            className="text-sm font-bold uppercase mb-2.5 tracking-wide"
-            style={{ color: theme.text }}
-          >
-            Step 1: Connect to Device
-          </Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          className="flex-1"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 100 }}
+        >
+          <View className="px-6 py-6">
+            <Text
+              className="text-[11px] font-bold uppercase tracking-widest mb-3"
+              style={{ color: theme.textSecondary }}
+            >
+              Step 1: Connect to Device
+            </Text>
 
-          <View
-            className="p-5 rounded-2xl border mb-5"
-            style={{
-              backgroundColor: "rgba(0, 85, 255, 0.08)",
-              borderColor: "rgba(0, 85, 255, 0.3)",
-            }}
-          >
-            <View className="flex-row gap-3 mb-2.5">
-              <View className="w-9 h-9 rounded-full bg-[#0055ff] justify-center items-center">
-                <MaterialIcons name="wifi-tethering" size={20} color="#fff" />
+            <View
+              className="p-5 rounded-2xl border mb-5"
+              style={{
+                backgroundColor: "rgba(0, 85, 255, 0.08)",
+                borderColor: "rgba(0, 85, 255, 0.3)",
+              }}
+            >
+              <View className="flex-row gap-3 mb-2.5">
+                <View className="w-9 h-9 rounded-full bg-[#0055ff] justify-center items-center">
+                  <MaterialIcons name="wifi-tethering" size={20} color="#fff" />
+                </View>
+                <View className="flex-1">
+                  <Text
+                    className="font-bold mb-1 text-base"
+                    style={{ color: theme.text }}
+                  >
+                    Connect Phone to Hub
+                  </Text>
+                  <Text
+                    className="text-xs leading-5"
+                    style={{ color: theme.textSecondary }}
+                  >
+                    Your phone needs to talk directly to the Hub to configure
+                    it.
+                  </Text>
+                </View>
               </View>
-              <View className="flex-1">
+
+              <View
+                className="p-4 rounded-xl my-4"
+                style={{ backgroundColor: theme.card }}
+              >
                 <Text
-                  className="font-bold mb-1 text-base"
-                  style={{ color: theme.text }}
+                  className="text-xs mb-2 leading-5"
+                  style={{ color: theme.textSecondary }}
                 >
-                  Connect Phone to Hub
+                  1. Tap the button below to open Settings.
+                </Text>
+                <Text
+                  className="text-xs mb-2 leading-5"
+                  style={{ color: theme.textSecondary }}
+                >
+                  2. Connect to{" "}
+                  <Text className="font-bold text-[#0055ff]">
+                    GridWatch-Setup
+                  </Text>
+                  .
                 </Text>
                 <Text
                   className="text-xs leading-5"
                   style={{ color: theme.textSecondary }}
                 >
-                  Your phone needs to talk directly to the Hub to configure it.
+                  3. Return to this app.
                 </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={openWifiSettings}
+                className="border border-[#0055ff] rounded-xl py-3 items-center"
+              >
+                <Text className="text-[#0055ff] font-semibold text-sm">
+                  Open Wi-Fi Settings
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text
+              className="text-[11px] font-bold uppercase tracking-widest mt-5 mb-3"
+              style={{ color: theme.textSecondary }}
+            >
+              Step 2: Configure Network
+            </Text>
+            <Text
+              className="text-xs mb-5 leading-5"
+              style={{ color: theme.textSecondary }}
+            >
+              Enter the details of your **Home Wi-Fi**. We will send this to the
+              Hub so it can get online.
+            </Text>
+
+            <View className="mb-5">
+              <Text
+                className="text-xs font-semibold mb-2"
+                style={{ color: theme.text }}
+              >
+                Home Wi-Fi Name (SSID)
+              </Text>
+              <View
+                className="flex-row border rounded-xl items-center pr-1.5"
+                style={{
+                  borderColor: theme.cardBorder,
+                  backgroundColor: theme.card,
+                }}
+              >
+                <TextInput
+                  className="flex-1 p-4 text-base h-full border-0"
+                  style={{ color: theme.text }}
+                  placeholder="e.g. PLDT_Home_FIBR"
+                  placeholderTextColor={theme.textSecondary}
+                  value={wifiSSID}
+                  onChangeText={setWifiSSID}
+                />
+                <TouchableOpacity onPress={handleOpenScanner} className="p-2.5">
+                  <MaterialIcons
+                    name="qr-code-scanner"
+                    size={22}
+                    color="#0055ff"
+                  />
+                </TouchableOpacity>
               </View>
             </View>
 
-            <View
-              className="p-4 rounded-xl my-4"
-              style={{ backgroundColor: theme.card }}
-            >
+            <View className="mb-5">
               <Text
-                className="text-xs mb-2 leading-5"
-                style={{ color: theme.textSecondary }}
-              >
-                1. Tap the button below to open Settings.
-              </Text>
-              <Text
-                className="text-xs mb-2 leading-5"
-                style={{ color: theme.textSecondary }}
-              >
-                2. Connect to{" "}
-                <Text className="font-bold text-[#0055ff]">
-                  GridWatch-Setup
-                </Text>
-                .
-              </Text>
-              <Text
-                className="text-xs leading-5"
-                style={{ color: theme.textSecondary }}
-              >
-                3. Return to this app.
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              onPress={openWifiSettings}
-              className="border border-[#0055ff] rounded-xl py-3 items-center"
-            >
-              <Text className="text-[#0055ff] font-semibold text-sm">
-                Open Wi-Fi Settings
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text
-            className="text-sm font-bold uppercase mt-5 mb-2.5 tracking-wide"
-            style={{ color: theme.text }}
-          >
-            Step 2: Configure Network
-          </Text>
-          <Text
-            className="text-xs mb-5 leading-5"
-            style={{ color: theme.textSecondary }}
-          >
-            Enter the details of your **Home Wi-Fi**. We will send this to the
-            Hub so it can get online.
-          </Text>
-
-          <View className="mb-5">
-            <Text
-              className="text-xs font-semibold mb-2"
-              style={{ color: theme.text }}
-            >
-              Home Wi-Fi Name (SSID)
-            </Text>
-            <TextInput
-              className="border rounded-xl p-4 text-base"
-              style={{
-                color: theme.text,
-                borderColor: theme.cardBorder,
-                backgroundColor: theme.card,
-              }}
-              placeholder="e.g. PLDT_Home_FIBR"
-              placeholderTextColor={theme.textSecondary}
-              value={wifiSSID}
-              onChangeText={setWifiSSID}
-            />
-          </View>
-
-          <View className="mb-5">
-            <Text
-              className="text-xs font-semibold mb-2"
-              style={{ color: theme.text }}
-            >
-              Home Wi-Fi Password
-            </Text>
-            <View
-              className="flex-row border rounded-xl items-center pr-1.5"
-              style={{
-                borderColor: theme.cardBorder,
-                backgroundColor: theme.card,
-              }}
-            >
-              <TextInput
-                className="flex-1 p-4 text-base h-full border-0"
+                className="text-xs font-semibold mb-2"
                 style={{ color: theme.text }}
-                placeholder="Enter Password"
-                placeholderTextColor={theme.textSecondary}
-                secureTextEntry={!showPass}
-                value={wifiPass}
-                onChangeText={setWifiPass}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPass(!showPass)}
-                className="p-2.5"
               >
-                <MaterialIcons
-                  name={showPass ? "visibility" : "visibility-off"}
-                  size={20}
-                  color={theme.textSecondary}
+                Home Wi-Fi Password
+              </Text>
+              <View
+                className="flex-row border rounded-xl items-center pr-1.5"
+                style={{
+                  borderColor: theme.cardBorder,
+                  backgroundColor: theme.card,
+                }}
+              >
+                <TextInput
+                  className="flex-1 p-4 text-base h-full border-0"
+                  style={{ color: theme.text }}
+                  placeholder="Enter Password"
+                  placeholderTextColor={theme.textSecondary}
+                  secureTextEntry={!showPass}
+                  value={wifiPass}
+                  onChangeText={setWifiPass}
                 />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setShowPass(!showPass)}
+                  className="p-2.5"
+                >
+                  <MaterialIcons
+                    name={showPass ? "visibility" : "visibility-off"}
+                    size={20}
+                    color={theme.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
+
+            <View className="h-10" />
           </View>
+        </ScrollView>
 
-          <View className="h-10" />
+        <View className="p-6">
+          <TouchableOpacity onPress={() => handleStartPairing()}>
+            <LinearGradient
+              colors={["#0055ff", "#00ff99"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              className="p-4 rounded-xl items-center"
+            >
+              <Text className="font-bold text-base text-black">
+                Send Configuration to Hub
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
-      </ScrollView>
+      </KeyboardAvoidingView>
 
-      <View className="p-6">
-        <TouchableOpacity onPress={handleStartPairing}>
-          <LinearGradient
-            colors={["#0055ff", "#00ff99"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            className="p-4 rounded-xl items-center"
-          >
-            <Text className="font-bold text-base text-black">
-              Send Configuration to Hub
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+      <Modal visible={isScanning} animationType="slide">
+        <SafeAreaView className="flex-1 bg-black">
+          <CameraView
+            style={StyleSheet.absoluteFill}
+            facing="back"
+            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+          />
+
+          <View className="flex-1 justify-between p-5">
+            <TouchableOpacity
+              onPress={() => setIsScanning(false)}
+              className="self-end p-2 bg-black/50 rounded-full"
+            >
+              <MaterialIcons name="close" size={30} color="white" />
+            </TouchableOpacity>
+
+            <View className="items-center mb-10">
+              <Text className="text-white font-bold text-lg mb-2">
+                Scan Wi-Fi QR Code
+              </Text>
+              <View className="w-64 h-64 border-2 border-[#00ff99] rounded-xl bg-transparent" />
+              <Text className="text-gray-300 text-sm mt-4 text-center">
+                Point at the QR code on your router or phone.
+              </Text>
+            </View>
+            <View />
+          </View>
+        </SafeAreaView>
+      </Modal>
 
       <Modal transparent visible={isPairing}>
         <View className="flex-1 justify-center items-center bg-black/80">
@@ -290,7 +461,7 @@ export default function SetupHubScreen() {
       <Modal transparent visible={alertConfig.visible} animationType="fade">
         <View className="flex-1 justify-center items-center bg-black/60">
           <View
-            className="w-3/4 p-6 rounded-3xl border items-center shadow-lg"
+            className="w-[280px] p-6 rounded-[20px] border items-center shadow-lg"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
@@ -302,15 +473,27 @@ export default function SetupHubScreen() {
                 backgroundColor:
                   alertConfig.type === "success"
                     ? "rgba(0, 255, 153, 0.1)"
+                    : alertConfig.type === "warning"
+                    ? "rgba(255, 165, 0, 0.1)"
                     : "rgba(255, 68, 68, 0.1)",
               }}
             >
               <MaterialIcons
                 name={
-                  alertConfig.type === "success" ? "check" : "priority-high"
+                  alertConfig.type === "success"
+                    ? "check"
+                    : alertConfig.type === "warning"
+                    ? "wifi-off"
+                    : "priority-high"
                 }
                 size={28}
-                color={alertConfig.type === "success" ? "#00ff99" : "#ff4444"}
+                color={
+                  alertConfig.type === "success"
+                    ? "#00ff99"
+                    : alertConfig.type === "warning"
+                    ? "#FFA500"
+                    : "#ff4444"
+                }
               />
             </View>
 
@@ -322,7 +505,7 @@ export default function SetupHubScreen() {
             </Text>
 
             <Text
-              className="text-sm text-center mb-5 leading-5"
+              className="text-[13px] text-center mb-6 leading-5"
               style={{ color: theme.textSecondary }}
             >
               {alertConfig.message}

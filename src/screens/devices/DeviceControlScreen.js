@@ -40,7 +40,7 @@ export default function DeviceControlScreen() {
     true,
     true,
   ]);
-  const [isActionOn, setIsActionOn] = useState(false); // false = Turn OFF, true = Turn ON
+  const [isActionOn, setIsActionOn] = useState(false);
 
   const heroColors = isPowered
     ? ["#0055ff", theme.background]
@@ -185,11 +185,9 @@ export default function DeviceControlScreen() {
         </View>
       </ScrollView>
 
-      {/* CONFIRM MODAL */}
       <Modal visible={showConfirm} transparent animationType="fade">
         <View className="flex-1 bg-black/80 justify-center items-center">
           <View
-            // CHANGED: Fixed width to 300px and reduced padding to p-6 (24px)
             className="w-[300px] p-6 rounded-3xl items-center border"
             style={{
               backgroundColor: theme.card,
@@ -244,7 +242,6 @@ export default function DeviceControlScreen() {
         </View>
       </Modal>
 
-      {/* SCHEDULE MODAL */}
       <Modal visible={showSchedule} transparent animationType="slide">
         <View className="flex-1 bg-black/80 justify-center items-center">
           <View

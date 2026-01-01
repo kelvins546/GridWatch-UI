@@ -14,8 +14,8 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
 
-// --- CONSTANTS ---
 const APPLIANCE_OPTIONS = [
   "Air Conditioner",
   "Television",
@@ -48,10 +48,10 @@ const PLACEHOLDER_HUB = "Select Location";
 export default function HubConfigScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { theme } = useTheme();
-  const { hubId } = route.params || { hubId: "test-id" };
+  const { theme, isDarkMode } = useTheme();
 
-  // --- STATE ---
+  const { hubId } = route.params || { hubId: null };
+
   const [hubName, setHubName] = useState({
     selection: PLACEHOLDER_HUB,
     custom: "",
@@ -73,7 +73,6 @@ export default function HubConfigScreen() {
     custom: "",
   });
 
-  // --- CUSTOM ALERT STATE ---
   const [alertConfig, setAlertConfig] = useState({
     visible: false,
     title: "",
@@ -102,6 +101,13 @@ export default function HubConfigScreen() {
   };
 
   const handleFinishSetup = async () => {
+    if (!hubId) {
+      return showAlert(
+        "Error",
+        "No Hub Serial Number found. Please scan again."
+      );
+    }
+
     if (!isValid(hubName, PLACEHOLDER_HUB))
       return showAlert("Missing Info", "Please select or name your Hub.");
     if (!isValid(outlet1, PLACEHOLDER_DEVICE))
@@ -114,13 +120,60 @@ export default function HubConfigScreen() {
       return showAlert("Missing Info", "Please configure Outlet 4.");
 
     try {
-      setTimeout(() => {
-        showAlert("Setup Complete", "Hub Configured!", "success", () =>
-          navigation.navigate("MainApp", { screen: "Home" })
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("No user logged in");
+
+      const { data: hubData, error: hubError } = await supabase
+        .from("hubs")
+        .upsert(
+          {
+            user_id: user.id,
+            serial_number: hubId,
+            name: getFinalName(hubName),
+            status: "online",
+            model: "GridWatch-V1",
+          },
+          { onConflict: "serial_number" }
+        )
+        .select()
+        .single();
+
+      if (hubError) throw hubError;
+
+      const realHubUUID = hubData.id;
+
+      const outlets = [
+        { data: outlet1, num: 1 },
+        { data: outlet2, num: 2 },
+        { data: outlet3, num: 3 },
+        { data: outlet4, num: 4 },
+      ];
+
+      for (const outlet of outlets) {
+        const { error: deviceError } = await supabase.from("devices").upsert(
+          {
+            hub_id: realHubUUID,
+            user_id: user.id,
+            name: getFinalName(outlet.data),
+            type: outlet.data.selection,
+            outlet_number: outlet.num,
+            status: "off",
+            is_monitored: true,
+          },
+          { onConflict: "hub_id, outlet_number" }
         );
-      }, 1000);
+
+        if (deviceError) throw deviceError;
+      }
+
+      showAlert("Setup Complete", "Hub & Outlets Synced!", "success", () =>
+        navigation.navigate("MainApp", { screen: "Home" })
+      );
     } catch (error) {
-      showAlert("Error", "Could not save configuration.");
+      console.error("Setup Error:", error);
+      showAlert("Error", "Could not save configuration: " + error.message);
     }
   };
 
@@ -134,22 +187,43 @@ export default function HubConfigScreen() {
     <SafeAreaView
       className="flex-1"
       style={{ backgroundColor: theme.background }}
+      edges={["top", "left", "right"]}
     >
-      <StatusBar barStyle={theme.statusBarStyle} />
+      <StatusBar
+        barStyle={theme.statusBarStyle}
+        backgroundColor={theme.background}
+      />
 
-      {/* Header */}
-      <View className="flex-row justify-between items-center px-6 py-4">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="p-1">
-          <MaterialIcons name="arrow-back" size={24} color={theme.text} />
+      <View
+        className="flex-row items-center justify-between px-6 py-5 border-b"
+        style={{
+          backgroundColor: theme.background,
+          borderBottomColor: theme.cardBorder,
+        }}
+      >
+        <TouchableOpacity
+          className="flex-row items-center"
+          onPress={() => navigation.goBack()}
+        >
+          <MaterialIcons
+            name="arrow-back"
+            size={18}
+            color={theme.textSecondary}
+          />
+          <Text
+            className="text-sm font-medium ml-1"
+            style={{ color: theme.textSecondary }}
+          >
+            Back
+          </Text>
         </TouchableOpacity>
-        <Text className="text-xl font-bold" style={{ color: theme.text }}>
+        <Text className="text-base font-bold" style={{ color: theme.text }}>
           Configure Hub
         </Text>
-        <View className="w-6" />
+        <View className="w-[50px]" />
       </View>
 
       <ScrollView className="flex-1">
-        {/* WRAPPER VIEW: This forces the padding (p-6) to work correctly */}
         <View className="p-6">
           <Text
             className="text-sm mb-5 leading-5"
@@ -235,12 +309,10 @@ export default function HubConfigScreen() {
             theme={theme}
           />
 
-          {/* Extra space at bottom for scrolling */}
           <View className="h-10" />
         </View>
       </ScrollView>
 
-      {/* Footer */}
       <View className="p-6">
         <TouchableOpacity onPress={handleFinishSetup}>
           <LinearGradient
@@ -256,7 +328,6 @@ export default function HubConfigScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Alert Modal */}
       <Modal transparent visible={alertConfig.visible} animationType="fade">
         <View className="flex-1 bg-black/60 justify-center items-center">
           <View
@@ -314,7 +385,6 @@ export default function HubConfigScreen() {
   );
 }
 
-// --- DROPDOWN COMPONENT ---
 function ConfigDropdown({
   label,
   options,

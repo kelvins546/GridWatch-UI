@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,14 +7,19 @@ import {
   Switch,
   Modal,
   StatusBar,
-  Animated,
-  Image, // <--- ADDED
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import {
+  useNavigation,
+  useRoute,
+  useFocusEffect,
+} from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
@@ -22,14 +27,63 @@ export default function SettingsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const { isDarkMode, toggleTheme, theme } = useTheme();
 
-  // 1. GET PARAMS FROM PROVIDER SETUP
-  const { providerName, rate } = route.params || {};
+  const [isLoading, setIsLoading] = useState(true);
+  const [userData, setUserData] = useState({
+    fullName: "User",
+    unitLocation: "Not Set",
+    initial: "US",
+    avatarUrl: null,
+  });
 
+  const fetchUserProfile = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const { data, error } = await supabase
+          .from("users")
+          .select("full_name, unit_location, avatar_url")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (data) {
+          const name = data.full_name || "User";
+          const initials = name.substring(0, 2).toUpperCase();
+
+          setUserData({
+            fullName: name,
+            unitLocation: data.unit_location || "Location not set",
+            initial: initials,
+            avatarUrl: data.avatar_url,
+          });
+        } else {
+          const emailName = user.email.split("@")[0];
+          setUserData({
+            fullName: emailName.charAt(0).toUpperCase() + emailName.slice(1),
+            unitLocation: "Profile incomplete",
+            initial: emailName.substring(0, 2).toUpperCase(),
+            avatarUrl: null,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Settings fetch error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchUserProfile();
+    }, [])
+  );
+
+  const { providerName, rate } = route.params || {};
   const displayProvider = providerName || "Meralco";
   const displayRate = rate || "12.50";
 
-  // 2. DEFINE LOGO MAPPING
-  // This maps the provider name to the required image
   const providerLogos = {
     Meralco: require("../../../assets/meralco.png"),
     "Visayan Electric": require("../../../assets/visayan.png"),
@@ -37,16 +91,35 @@ export default function SettingsScreen() {
     BENECO: require("../../../assets/beneco.png"),
     AKELCO: require("../../../assets/akelco.png"),
   };
-
   const logoSource = providerLogos[displayProvider];
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setModalVisible(false);
+    await supabase.auth.signOut();
     navigation.reset({
       index: 0,
       routes: [{ name: "Landing" }],
     });
   };
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: theme.background,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <StatusBar
+          barStyle={theme.statusBarStyle}
+          backgroundColor={theme.background}
+        />
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -60,32 +133,15 @@ export default function SettingsScreen() {
       />
 
       <View
-        className="flex-row items-center justify-between px-6 py-5 border-b"
+        className="flex-row items-center justify-center px-6 py-5 border-b"
         style={{
           backgroundColor: theme.background,
           borderBottomColor: theme.cardBorder,
         }}
       >
-        <TouchableOpacity
-          className="flex-row items-center"
-          onPress={() => navigation.goBack()}
-        >
-          <MaterialIcons
-            name="arrow-back"
-            size={18}
-            color={theme.textSecondary}
-          />
-          <Text
-            className="text-sm font-medium ml-1"
-            style={{ color: theme.textSecondary }}
-          >
-            Back
-          </Text>
-        </TouchableOpacity>
         <Text className="text-base font-bold" style={{ color: theme.text }}>
           Settings
         </Text>
-        <View className="w-14" />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -95,28 +151,41 @@ export default function SettingsScreen() {
             onPress={() => navigation.navigate("ProfileSettings")}
             activeOpacity={0.8}
           >
-            <LinearGradient
-              colors={
-                isDarkMode ? ["#0055ff", "#00ff99"] : ["#0055ff", "#00995e"]
-              }
-              className="w-14 h-14 rounded-full justify-center items-center mr-4"
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <Text className="text-xl font-bold text-gray-900">N</Text>
-            </LinearGradient>
+            <View className="w-14 h-14 mr-4">
+              {userData.avatarUrl ? (
+                <Image
+                  source={{ uri: userData.avatarUrl }}
+                  className="w-full h-full rounded-full"
+                  resizeMode="cover"
+                />
+              ) : (
+                <LinearGradient
+                  colors={
+                    isDarkMode ? ["#0055ff", "#00ff99"] : ["#0055ff", "#00995e"]
+                  }
+                  className="w-full h-full rounded-full justify-center items-center"
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Text className="text-xl font-bold text-gray-900">
+                    {userData.initial}
+                  </Text>
+                </LinearGradient>
+              )}
+            </View>
+
             <View className="flex-1">
               <Text
                 className="text-base font-bold"
                 style={{ color: theme.text }}
               >
-                Natasha Alonzo
+                {userData.fullName}
               </Text>
               <Text
                 className="text-xs mt-0.5"
                 style={{ color: theme.textSecondary }}
               >
-                Unit 402, Congress Ville
+                {userData.unitLocation}
               </Text>
             </View>
             <MaterialIcons name="edit" size={20} color={theme.textSecondary} />
@@ -129,7 +198,6 @@ export default function SettingsScreen() {
             Utility & Rates
           </Text>
 
-          {/* DYNAMIC PROVIDER ROW WITH LOGO */}
           <SettingsRow
             icon="business"
             title={displayProvider}
@@ -154,7 +222,7 @@ export default function SettingsScreen() {
           />
 
           <View
-            className="p-4 rounded-xl mb-3 flex-row justify-between items-center border"
+            className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
@@ -199,8 +267,8 @@ export default function SettingsScreen() {
 
           <SettingsRow
             icon="router"
-            title="GridWatch Hub"
-            subtitle="Online • 192.168.1.15"
+            title="My Hubs"
+            subtitle="Manage devices"
             onPress={() => navigation.navigate("MyHubs")}
             theme={theme}
           />
@@ -211,14 +279,12 @@ export default function SettingsScreen() {
           >
             Preferences
           </Text>
-
           <SettingsRow
             icon="notifications"
             title="Notifications"
             onPress={() => navigation.navigate("Notifications")}
             theme={theme}
           />
-
           <SettingsRow
             icon="help-outline"
             title="Help & Support"
@@ -227,7 +293,7 @@ export default function SettingsScreen() {
           />
 
           <View
-            className="p-4 rounded-xl mb-3 flex-row justify-between items-center border"
+            className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
@@ -302,7 +368,7 @@ export default function SettingsScreen() {
             </Text>
             <View className="flex-row gap-2.5 w-full">
               <TouchableOpacity
-                className="flex-1 rounded-xl h-10 justify-center items-center border bg-transparent"
+                className="flex-1 rounded-xl h-10 justify-center items-center border"
                 style={{ borderColor: theme.textSecondary }}
                 onPress={() => setModalVisible(false)}
               >
@@ -337,7 +403,7 @@ export default function SettingsScreen() {
 function SettingsRow({ icon, title, subtitle, onPress, theme, customIcon }) {
   return (
     <TouchableOpacity
-      className="p-4 rounded-xl mb-3 flex-row justify-between items-center border"
+      className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
       style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}
       onPress={onPress}
       activeOpacity={0.7}
@@ -348,7 +414,6 @@ function SettingsRow({ icon, title, subtitle, onPress, theme, customIcon }) {
         ) : (
           <MaterialIcons name={icon} size={22} color={theme.icon} />
         )}
-
         <View>
           <Text
             className="text-sm font-medium ml-3"

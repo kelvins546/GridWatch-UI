@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Linking, // <--- 1. IMPORT LINKING
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -21,12 +21,14 @@ import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../context/ThemeContext";
 
-// Enable LayoutAnimation for Android
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
+if (Platform.OS === "android") {
+  if (UIManager.setLayoutAnimationEnabledExperimental) {
+    const isNewArch = global?.nativeFabricUIManager != null;
+
+    if (!isNewArch) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }
 }
 
 export default function HelpSupportScreen() {
@@ -35,7 +37,6 @@ export default function HelpSupportScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState(null);
 
-  // Ticket State
   const [ticketModalVisible, setTicketModalVisible] = useState(false);
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
@@ -90,7 +91,6 @@ export default function HelpSupportScreen() {
 
     setIsSubmitting(true);
 
-    // Simulate API call
     setTimeout(() => {
       setIsSubmitting(false);
       setTicketModalVisible(false);
@@ -103,20 +103,21 @@ export default function HelpSupportScreen() {
     }, 2000);
   };
 
-  // 2. FUNCTION TO OPEN EMAIL APP
   const handleEmailSupport = () => {
-    const email = "support@gridwatch.com"; // Replace with your support email
+    const email = "support@gridwatch.com";
     const emailSubject = "GridWatch Support Request";
     const body = "Please describe your issue here...";
 
-    // Create mailto link
     const url = `mailto:${email}?subject=${encodeURIComponent(
       emailSubject
     )}&body=${encodeURIComponent(body)}`;
 
     Linking.openURL(url).catch((err) => {
       console.error("Error opening email app:", err);
-      Alert.alert("Error", "Could not open email client.");
+      Alert.alert(
+        "Error",
+        "Could not open email client. Please check if you have a mail app installed."
+      );
     });
   };
 
@@ -127,7 +128,6 @@ export default function HelpSupportScreen() {
     >
       <StatusBar barStyle={theme.statusBarStyle} />
 
-      {/* Header */}
       <View className="flex-row items-center justify-between px-6 py-4">
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.text} />
@@ -140,7 +140,6 @@ export default function HelpSupportScreen() {
 
       <ScrollView>
         <View className="px-6 py-6">
-          {/* Search Bar */}
           <View
             className="flex-row items-center rounded-2xl px-4 py-3 mb-8"
             style={{ backgroundColor: theme.card }}
@@ -160,7 +159,6 @@ export default function HelpSupportScreen() {
             />
           </View>
 
-          {/* Contact Us Section */}
           <Text
             className="text-xs font-bold uppercase mb-4 tracking-widest"
             style={{ color: theme.textSecondary }}
@@ -169,7 +167,6 @@ export default function HelpSupportScreen() {
           </Text>
 
           <View className="flex-row gap-4 mb-8">
-            {/* Submit Ticket Button */}
             <TouchableOpacity
               className="flex-1 p-6 rounded-3xl items-center justify-center gap-3"
               style={{ backgroundColor: theme.card }}
@@ -181,7 +178,6 @@ export default function HelpSupportScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* Email Us Button - UPDATED ONPRESS */}
             <TouchableOpacity
               className="flex-1 p-6 rounded-3xl items-center justify-center gap-3"
               style={{ backgroundColor: theme.card }}
@@ -194,7 +190,6 @@ export default function HelpSupportScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Common Issues Section */}
           <Text
             className="text-xs font-bold uppercase mb-4 tracking-widest"
             style={{ color: theme.textSecondary }}
@@ -235,7 +230,6 @@ export default function HelpSupportScreen() {
                     />
                   </TouchableOpacity>
 
-                  {/* Expanded Answer */}
                   {isExpanded && (
                     <View className="px-5 pb-5">
                       <Text
@@ -260,7 +254,6 @@ export default function HelpSupportScreen() {
         </View>
       </ScrollView>
 
-      {/* SUBMIT TICKET MODAL */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -271,14 +264,12 @@ export default function HelpSupportScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           className="flex-1 justify-end"
         >
-          {/* Overlay */}
           <TouchableOpacity
             className="absolute inset-0 bg-black/80"
             activeOpacity={1}
             onPress={() => setTicketModalVisible(false)}
           />
 
-          {/* Modal Content */}
           <View
             className="rounded-t-3xl p-6 h-3/4"
             style={{ backgroundColor: theme.background }}

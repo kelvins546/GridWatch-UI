@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,12 +7,14 @@ import {
   TouchableOpacity,
   StatusBar,
   Animated,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
 
 const HUBS_DATA = [
   {
@@ -92,10 +94,59 @@ export default function HomeScreen() {
   const navigation = useNavigation();
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
+  const [userName, setUserName] = useState("User");
+  const [isLoading, setIsLoading] = useState(true);
+
   useEffect(() => {
     const timer = setTimeout(() => navigation.navigate("DndCheck"), 1500);
+    fetchUserFullName();
     return () => clearTimeout(timer);
   }, []);
+
+  const fetchUserFullName = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data, error: dbError } = await supabase
+          .from("users")
+          .select("full_name")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (data && data.full_name) {
+          const firstName = data.full_name.split(" ")[0];
+          const capitalized =
+            firstName.charAt(0).toUpperCase() + firstName.slice(1);
+          setUserName(capitalized);
+        } else {
+          const emailName = user.email.split("@")[0];
+          const capitalized =
+            emailName.charAt(0).toUpperCase() + emailName.slice(1);
+          setUserName(capitalized);
+        }
+      }
+    } catch (err) {
+      console.error("Home fetch error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchUserFullName();
+    }, [])
+  );
+
+  const getGreeting = () => {
+    const hours = new Date().getHours();
+    if (hours < 12) return "Good Morning";
+    if (hours < 17) return "Good Afternoon";
+    return "Good Evening";
+  };
 
   const animateButton = (toValue) => {
     Animated.spring(scaleAnim, {
@@ -105,6 +156,25 @@ export default function HomeScreen() {
       useNativeDriver: true,
     }).start();
   };
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: theme.background,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <StatusBar
+          barStyle={theme.statusBarStyle}
+          backgroundColor={theme.background}
+        />
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -126,7 +196,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
 
         <Image
-          source={require("../../../assets/GridWatch-logo.png")}
+          source={require("../../../assets/gridwatch-logo.png")}
           className="w-8 h-8"
           resizeMode="contain"
         />
@@ -155,7 +225,7 @@ export default function HomeScreen() {
             className="text-sm font-medium mb-1"
             style={{ color: theme.textSecondary }}
           >
-            Good Evening, Natasha
+            {getGreeting()}, {userName}
           </Text>
           <View className="flex-row items-center">
             <View
@@ -253,10 +323,14 @@ export default function HomeScreen() {
                   theme={theme}
                   isDarkMode={isDarkMode}
                   onPress={() => {
-                    const target =
-                      device.type === "critical"
-                        ? "FaultDetail"
-                        : "DeviceControl";
+                    let target = "DeviceControl";
+
+                    if (device.type === "critical") {
+                      target = "FaultDetail";
+                    } else if (device.tag === "LIMIT") {
+                      target = "LimitDetail";
+                    }
+
                     navigation.navigate(target, {
                       deviceName: device.name,
                       status: device.cost,
@@ -274,7 +348,6 @@ export default function HomeScreen() {
 
 const DeviceItem = ({ data, theme, isDarkMode, onPress }) => {
   const scale = useRef(new Animated.Value(1)).current;
-
   const pressIn = () =>
     Animated.spring(scale, { toValue: 0.96, useNativeDriver: true }).start();
   const pressOut = () =>

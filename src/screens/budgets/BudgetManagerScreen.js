@@ -59,38 +59,21 @@ export default function BudgetManagerScreen() {
       />
 
       <View
-        className="flex-row items-center justify-between px-6 py-5 border-b"
+        className="flex-row items-center justify-center px-6 py-5 border-b"
         style={{
           backgroundColor: theme.background,
           borderBottomColor: theme.cardBorder,
         }}
       >
-        <TouchableOpacity
-          className="flex-row items-center gap-1.5"
-          onPress={() => navigation.navigate("Home")}
-        >
-          <MaterialIcons
-            name="arrow-back"
-            size={18}
-            color={theme.textSecondary}
-          />
-          <Text
-            className="text-sm font-medium"
-            style={{ color: theme.textSecondary }}
-          >
-            Back
-          </Text>
-        </TouchableOpacity>
         <Text className="text-base font-bold" style={{ color: theme.text }}>
           Select Hub
         </Text>
-        <View className="w-[50px]" />
       </View>
 
       <ScrollView>
         <View className="p-6">
           <Text
-            className="text-xm leading-5 mb-6"
+            className="text-xs leading-5 mb-5"
             style={{ color: theme.textSecondary }}
           >
             Choose a Smart Hub to manage the budget and settings for its
@@ -121,7 +104,7 @@ function HubCard({ data, theme, isDarkMode, onPress }) {
 
   const handlePressIn = () => {
     Animated.spring(scaleValue, {
-      toValue: 0.95,
+      toValue: 0.98,
       useNativeDriver: true,
     }).start();
   };
@@ -158,10 +141,10 @@ function HubCard({ data, theme, isDarkMode, onPress }) {
       onPress={!isOffline ? onPress : null}
       onPressIn={!isOffline ? handlePressIn : null}
       onPressOut={!isOffline ? handlePressOut : null}
-      className="mb-4"
+      className="mb-3"
     >
       <Animated.View
-        className="flex-row items-center justify-between p-[18px] rounded-2xl border"
+        className="flex-row items-center justify-between p-4 rounded-xl border"
         style={{
           backgroundColor: theme.card,
           borderColor: theme.cardBorder,
@@ -169,18 +152,18 @@ function HubCard({ data, theme, isDarkMode, onPress }) {
           opacity: isOffline ? 0.6 : 1,
         }}
       >
-        <View className="flex-row items-center gap-4">
+        <View className="flex-row items-center gap-3">
           <View
-            className="w-12 h-12 rounded-xl items-center justify-center"
+            className="w-10 h-10 rounded-lg items-center justify-center"
             style={{ backgroundColor: iconBg }}
           >
             <MaterialIcons
               name={isOffline ? "wifi-off" : "router"}
-              size={24}
+              size={20}
               color={iconColor}
             />
           </View>
-          <View className="gap-1">
+          <View className="gap-0.5">
             <Text className="text-sm font-bold" style={{ color: theme.text }}>
               {data.name}
             </Text>
@@ -189,11 +172,17 @@ function HubCard({ data, theme, isDarkMode, onPress }) {
                 className="w-1.5 h-1.5 rounded-full"
                 style={{
                   backgroundColor: statusColor,
-                  boxShadow:
-                    data.type === "active" ? `0 0 5px ${statusColor}` : "none",
+                  shadowColor: statusColor,
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: data.type === "active" ? 0.5 : 0,
+                  shadowRadius: 5,
+                  elevation: data.type === "active" ? 2 : 0,
                 }}
               />
-              <Text className="text-xs" style={{ color: theme.textSecondary }}>
+              <Text
+                className="text-[11px]"
+                style={{ color: theme.textSecondary }}
+              >
                 {data.status}
                 {!isOffline && ` • ${data.devices} Devices`}
               </Text>
@@ -202,7 +191,7 @@ function HubCard({ data, theme, isDarkMode, onPress }) {
         </View>
         <MaterialIcons
           name={isOffline ? "lock" : "chevron-right"}
-          size={20}
+          size={18}
           color={theme.textSecondary}
         />
       </Animated.View>
