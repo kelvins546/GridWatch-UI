@@ -1,4 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import {
   Animated,
   TouchableOpacity,
@@ -46,6 +48,7 @@ import DisconnectedScreen from "../screens/settings/DisconnectedScreen";
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+
 const BounceTabButton = ({ children, onPress }) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
   const handlePressIn = () =>
@@ -84,6 +87,7 @@ const BounceTabButton = ({ children, onPress }) => {
 
 function BottomTabNavigator() {
   const { theme, isDarkMode } = useTheme();
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={{
@@ -91,13 +95,17 @@ function BottomTabNavigator() {
         tabBarStyle: {
           backgroundColor: isDarkMode ? "#161616" : "#ffffff",
           borderTopColor: isDarkMode ? "#222" : "#e0e0e0",
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom,
           paddingTop: 8,
         },
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.textSecondary,
-        tabBarLabelStyle: { fontSize: 10, fontWeight: "500", paddingBottom: 4 },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: "500",
+          paddingBottom: 4,
+        },
       }}
     >
       <Tab.Screen

@@ -97,7 +97,7 @@ export default function LoginScreen() {
               className="w-[120px] h-[120px] rounded-full items-center justify-center mb-6 bg-[#1a1a1a] shadow-lg shadow-[#00ff99]/30 elevation-10"
             >
               <Image
-                source={require("../../../assets/gridwatch-logo.png")}
+                source={require("../../../assets/GridWatch-logo.png")}
                 className="w-[110px] h-[110px]"
                 resizeMode="contain"
               />

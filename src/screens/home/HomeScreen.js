@@ -196,7 +196,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
 
         <Image
-          source={require("../../../assets/gridwatch-logo.png")}
+          source={require("../../../assets/GridWatch-logo.png")}
           className="w-8 h-8"
           resizeMode="contain"
         />
