@@ -167,7 +167,7 @@ export default function MenuScreen() {
 
           <MenuItem
             icon="router"
-            text="My Hubs (1 Active)"
+            text="My Hubs"
             theme={theme}
             hasArrow
             onPress={() => navigation.navigate("MyHubs")}
@@ -179,30 +179,6 @@ export default function MenuScreen() {
             iconColor={isDarkMode ? "#00ff99" : "#00995e"}
             textColor={theme.text}
             onPress={() => navigation.navigate("SetupHub")}
-          />
-
-          <Text
-            className="text-[11px] uppercase font-bold tracking-widest mt-6 mb-2.5"
-            style={{ color: theme.textSecondary }}
-          >
-            System Tools
-          </Text>
-
-          <MenuItem
-            icon="tune"
-            text="Bill Calibration"
-            theme={theme}
-            badge="!"
-            badgeColor="#ffaa00"
-            onPress={() => console.log("Nav to Calibration")}
-          />
-          <MenuItem
-            icon="security"
-            text="Safety & Fault Logs"
-            theme={theme}
-            badge="2"
-            badgeColor="#ff4d4d"
-            onPress={() => console.log("Nav to Logs")}
           />
 
           <Text

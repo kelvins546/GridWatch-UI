@@ -9,7 +9,7 @@ import {
   StatusBar,
   Animated,
   ActivityIndicator,
-  Alert,
+  Modal, // Import Modal
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -19,6 +19,10 @@ import MaskedView from "@react-native-masked-view/masked-view";
 
 import { supabase } from "../../lib/supabase";
 
+// Strict Email Regex: Only allows specific providers
+const ALLOWED_EMAIL_REGEX =
+  /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
+
 export default function LoginScreen() {
   const navigation = useNavigation();
 
@@ -26,8 +30,14 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
 
-  const [isLoading, setIsLoading] = useState(false);
+  // Validation State
+  const [touched, setTouched] = useState({});
   const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+
+  // --- ERROR MODAL STATE ---
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const floatAnim = useRef(new Animated.Value(0)).current;
 
@@ -48,15 +58,42 @@ export default function LoginScreen() {
     ).start();
   }, []);
 
+  // --- REAL-TIME VALIDATION HANDLER ---
+  const validateField = (field, value) => {
+    let error = null;
+
+    switch (field) {
+      case "email":
+        if (!value) error = "Email is required";
+        else if (!ALLOWED_EMAIL_REGEX.test(value))
+          error = "Use a valid provider (Gmail, Yahoo, etc)";
+        break;
+      case "password":
+        if (!value) error = "Password is required";
+        break;
+    }
+
+    setErrors((prev) => ({ ...prev, [field]: error }));
+  };
+
+  const handleChange = (field, value) => {
+    if (field === "email") setEmail(value);
+    if (field === "password") setPassword(value);
+
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    validateField(field, value);
+  };
+
   const handleLogin = async () => {
-    setErrors({});
+    const formValues = { email, password };
+    let isValid = true;
 
-    let currentErrors = {};
-    if (!email) currentErrors.email = "Email is required";
-    if (!password) currentErrors.password = "Password is required";
+    Object.keys(formValues).forEach((key) => {
+      validateField(key, formValues[key]);
+      if (!formValues[key] || errors[key]) isValid = false;
+    });
 
-    if (Object.keys(currentErrors).length > 0) {
-      setErrors(currentErrors);
+    if (!isValid || !ALLOWED_EMAIL_REGEX.test(email)) {
       return;
     }
 
@@ -70,7 +107,9 @@ export default function LoginScreen() {
 
       if (error) throw error;
     } catch (error) {
-      Alert.alert("Login Failed", error.message);
+      // --- REPLACED ALERT WITH MODAL ---
+      setErrorMessage(error.message);
+      setErrorModalVisible(true);
     } finally {
       setIsLoading(false);
     }
@@ -133,23 +172,22 @@ export default function LoginScreen() {
             icon="email"
             placeholder="natasha@example.com"
             value={email}
-            onChangeText={(text) => {
-              setEmail(text);
-              if (errors.email) setErrors({ ...errors, email: null });
-            }}
-            error={errors.email}
+            onChangeText={(text) => handleChange("email", text)}
+            error={touched.email && errors.email}
           />
 
           <View className="mb-5">
             <View className="flex-row justify-between">
               <Text
                 className={`text-[11px] font-bold uppercase mb-2 ${
-                  errors.password ? "text-red-500" : "text-[#888]"
+                  touched.password && errors.password
+                    ? "text-red-500"
+                    : "text-[#888]"
                 }`}
               >
                 Password
               </Text>
-              {errors.password && (
+              {touched.password && errors.password && (
                 <Text className="text-[10px] text-red-500 italic mr-1">
                   {errors.password}
                 </Text>
@@ -158,13 +196,15 @@ export default function LoginScreen() {
 
             <View
               className={`flex-row items-center bg-[#222] rounded-xl px-4 py-2.5 border ${
-                errors.password ? "border-red-500" : "border-[#333]"
+                touched.password && errors.password
+                  ? "border-red-500"
+                  : "border-[#333]"
               }`}
             >
               <MaterialIcons
                 name="lock"
                 size={20}
-                color={errors.password ? "#ef4444" : "#666"}
+                color={touched.password && errors.password ? "#ef4444" : "#666"}
                 style={{ marginRight: 12 }}
               />
               <TextInput
@@ -173,10 +213,7 @@ export default function LoginScreen() {
                 placeholderTextColor="#555"
                 secureTextEntry={!showPass}
                 value={password}
-                onChangeText={(text) => {
-                  setPassword(text);
-                  if (errors.password) setErrors({ ...errors, password: null });
-                }}
+                onChangeText={(text) => handleChange("password", text)}
               />
               <TouchableOpacity onPress={() => setShowPass(!showPass)}>
                 <MaterialIcons
@@ -219,6 +256,45 @@ export default function LoginScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      {/* --- ERROR MODAL --- */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={errorModalVisible}
+        onRequestClose={() => setErrorModalVisible(false)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/80">
+          <View className="w-[80%] max-w-[320px] bg-[#1a1a1a] border border-[#333] p-8 rounded-2xl items-center">
+            <View className="mb-4 bg-red-500/10 p-4 rounded-full">
+              <MaterialIcons name="error-outline" size={40} color="#ef4444" />
+            </View>
+
+            <Text className="text-xl font-bold text-white mb-2 text-center">
+              Login Failed
+            </Text>
+            <Text className="text-xs text-[#888] text-center mb-6 leading-5">
+              {errorMessage}
+            </Text>
+
+            <TouchableOpacity
+              className="w-full"
+              onPress={() => setErrorModalVisible(false)}
+            >
+              <LinearGradient
+                colors={["#ef4444", "#b91c1c"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                className="p-3 rounded-xl items-center"
+              >
+                <Text className="font-bold text-sm text-white uppercase tracking-wider">
+                  TRY AGAIN
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

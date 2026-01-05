@@ -24,7 +24,7 @@ import { supabase } from "../../lib/supabase";
 
 export default function SetupHubScreen() {
   const navigation = useNavigation();
-  const { theme, isDarkMode } = useTheme();
+  const { theme } = useTheme();
 
   useEffect(() => {
     LogBox.ignoreLogs([
@@ -51,6 +51,18 @@ export default function SetupHubScreen() {
     type: "error",
     onPress: null,
   });
+
+  // --- 🔴 FIXED BACK BUTTON LOGIC ---
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      // Normal behavior for existing users coming from Menu
+      navigation.goBack();
+    } else {
+      // For New Users who landed here directly:
+      // "Replace" the current screen with MainApp (Home) so they can access the dashboard.
+      navigation.replace("MainApp");
+    }
+  };
 
   const showAlert = (title, message, type = "error", onPress = null) => {
     setAlertConfig({ visible: true, title, message, type, onPress });
@@ -83,25 +95,58 @@ export default function SetupHubScreen() {
 
     try {
       setStatusStep(`Connecting to Hub...`);
-      const formData = new FormData();
-      formData.append("ssid", targetSSID);
-      formData.append("pass", targetPass);
+
+      const details = {
+        ssid: targetSSID,
+        pass: targetPass,
+      };
+
+      const formBody = Object.keys(details)
+        .map(
+          (key) =>
+            encodeURIComponent(key) + "=" + encodeURIComponent(details[key])
+        )
+        .join("&");
 
       await new Promise((resolve) => setTimeout(resolve, 2000));
       setStatusStep("Sending credentials...");
 
       const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const timeoutId = setTimeout(() => controller.abort(), 7000);
+      console.log("Attempting fetch to 192.168.4.1...");
 
       const response = await fetch("http://192.168.4.1/connect-hub", {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        },
+        body: formBody,
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
-      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(`Server Error: ${response.status}`);
+      }
+
+      const text = await response.text();
+      console.log("Hub Response:", text);
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        if (
+          text.toLowerCase().includes("success") ||
+          text.includes("Connected")
+        ) {
+          data = { status: "success", hub_id: "unknown_hub" };
+        } else {
+          throw new Error("Invalid response from Hub");
+        }
+      }
 
       if (data.status === "success") {
         setStatusStep("Success! Connected.");
@@ -109,35 +154,39 @@ export default function SetupHubScreen() {
         setIsPairing(false);
         navigation.navigate("HubConfig", { hubId: data.hub_id });
       } else {
-        throw new Error("Hub refused");
+        throw new Error("Hub refused connection");
       }
     } catch (error) {
+      console.log("PAIRING ERROR:", error);
+
       setStatusStep("Verifying with cloud...");
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 4000));
 
-      await new Promise((resolve) => setTimeout(resolve, 4000));
+        const { data: verifiedHub, error: dbError } = await supabase
+          .from("hubs")
+          .select("serial_number")
+          .eq("wifi_ssid", targetSSID)
+          .eq("status", "online")
+          .order("last_seen", { ascending: false })
+          .limit(1)
+          .single();
 
-      const { data: verifiedHub, error: dbError } = await supabase
-        .from("hubs")
-        .select("serial_number")
-        .eq("wifi_ssid", targetSSID)
-        .eq("status", "online")
-        .order("last_seen", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (verifiedHub && !dbError) {
-        setIsPairing(false);
-        navigation.navigate("HubConfig", { hubId: verifiedHub.serial_number });
-      } else {
-        setIsPairing(false);
-        if (autoSSID) {
-          setWifiSSID(autoSSID);
-          setWifiPass(autoPass);
+        if (verifiedHub && !dbError) {
+          setIsPairing(false);
+          navigation.navigate("HubConfig", {
+            hubId: verifiedHub.serial_number,
+          });
+        } else {
+          throw error;
         }
+      } catch (cloudError) {
+        setIsPairing(false);
+
         showAlert(
-          "Connect to Hub",
-          "1. Go to Settings.\n2. Connect to 'GridWatch-Setup'.\n3. Return here and try again.",
-          "warning"
+          "Connection Failed",
+          `Could not reach Hub.\n\nDebug: ${error.message}\n\nTip: Ensure Mobile Data is OFF and you clicked 'Keep Connection'.`,
+          "error"
         );
       }
     }
@@ -206,10 +255,10 @@ export default function SetupHubScreen() {
       >
         <TouchableOpacity
           className="flex-row items-center"
-          onPress={() => navigation.goBack()}
+          onPress={handleBack} // <--- USING THE FIXED BACK HANDLER
         >
           <MaterialIcons
-            name="arrow-back"
+            name="arrow-back" // <--- RESTORED ICON
             size={18}
             color={theme.textSecondary}
           />

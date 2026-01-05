@@ -1,6 +1,6 @@
+// src/navigation/AppNavigator.js
 import React, { useRef, useState, useEffect } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
 import {
   Animated,
   TouchableOpacity,
@@ -13,17 +13,20 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 
+// --- AUTH SCREENS ---
 import LandingScreen from "../screens/auth/LandingScreen";
 import LoginScreen from "../screens/auth/LoginScreen";
 import SignupScreen from "../screens/auth/SignupScreen";
 import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
 import ResetPasswordScreen from "../screens/auth/ResetPasswordScreen";
 
+// --- MAIN SCREENS ---
 import HomeScreen from "../screens/home/HomeScreen";
 import AnalyticsScreen from "../screens/analytics/AnalyticsScreen";
 import BudgetManagerScreen from "../screens/budgets/BudgetManagerScreen";
 import SettingsScreen from "../screens/settings/SettingsScreen";
 
+// --- SETTINGS SUB-SCREENS ---
 import ProfileSettingsScreen from "../screens/settings/ProfileSettingsScreen";
 import DeviceConfigScreen from "../screens/settings/DeviceConfigScreen";
 import HelpSupportScreen from "../screens/settings/HelpSupportScreen";
@@ -31,16 +34,19 @@ import NotificationsScreen from "../screens/settings/NotificationsScreen";
 import ProviderSetupScreen from "../screens/settings/ProviderSetupScreen";
 import DndCheckScreen from "../screens/settings/DndCheckScreen";
 
+// --- BUDGET SUB-SCREENS ---
 import BudgetDeviceListScreen from "../screens/budgets/BudgetDeviceListScreen";
 import BudgetDetailScreen from "../screens/budgets/BudgetDetailScreen";
 import MonthlyBudgetScreen from "../screens/budgets/MonthlyBudgetScreen";
 import LimitDetailScreen from "../screens/budgets/LimitDetailScreen";
 
+// --- MENU / HUB SCREENS ---
 import MenuScreen from "../screens/menu/MenuScreen";
 import MyHubsScreen from "../screens/menu/MyHubsScreen";
 import SetupHubScreen from "../screens/menu/SetupHubScreen";
 import HubConfigScreen from "../screens/menu/HubConfigScreen";
 
+// --- DEVICE SCREENS ---
 import FaultDetailScreen from "../screens/devices/FaultDetailScreen";
 import DeviceControlScreen from "../screens/devices/DeviceControlScreen";
 import DisconnectedScreen from "../screens/settings/DisconnectedScreen";
@@ -48,7 +54,7 @@ import DisconnectedScreen from "../screens/settings/DisconnectedScreen";
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-
+// --- BOUNCE BUTTON COMPONENT ---
 const BounceTabButton = ({ children, onPress }) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
   const handlePressIn = () =>
@@ -85,6 +91,7 @@ const BounceTabButton = ({ children, onPress }) => {
   );
 };
 
+// --- BOTTOM TABS ---
 function BottomTabNavigator() {
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
@@ -160,27 +167,55 @@ function BottomTabNavigator() {
   );
 }
 
+// --- MAIN APP NAVIGATOR ---
 export default function AppNavigator() {
   const { isDarkMode } = useTheme();
 
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [initialRoute, setInitialRoute] = useState("MainApp"); // Default
 
   useEffect(() => {
+    // 1. Check Initial Session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
+      checkUserHubs(session);
     });
 
+    // 2. Listen for Login/Logout
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setLoading(false);
+      checkUserHubs(session);
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // --- LOGIC: Check if user has hubs to decide destination ---
+  const checkUserHubs = async (currentSession) => {
+    if (currentSession) {
+      try {
+        // Count how many hubs this user has
+        const { count, error } = await supabase
+          .from("hubs")
+          .select("*", { count: "exact", head: true });
+
+        // If 0 hubs, send to Setup. If > 0, send to Home.
+        if (count === 0 && !error) {
+          setInitialRoute("SetupHub");
+        } else {
+          setInitialRoute("MainApp");
+        }
+      } catch (err) {
+        console.log("Error checking hubs:", err);
+        setInitialRoute("MainApp"); // Fallback to home on error
+      }
+      setSession(currentSession);
+    } else {
+      setSession(null);
+    }
+    setLoading(false);
+  };
 
   if (loading) {
     return (
@@ -199,7 +234,8 @@ export default function AppNavigator() {
 
   return (
     <Stack.Navigator
-      initialRouteName={session ? "MainApp" : "Landing"}
+      // 🔴 THIS IS THE FIX: Dynamically set the start screen
+      initialRouteName={session ? initialRoute : "Landing"}
       screenOptions={{
         headerShown: false,
         animation: "slide_from_right",
@@ -220,6 +256,7 @@ export default function AppNavigator() {
         </>
       ) : (
         <>
+          {/* MainApp is the Tabs (Home, etc) */}
           <Stack.Screen name="MainApp" component={BottomTabNavigator} />
 
           <Stack.Screen

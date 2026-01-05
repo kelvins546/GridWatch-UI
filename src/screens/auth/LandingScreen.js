@@ -12,7 +12,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import MaskedView from "@react-native-masked-view/masked-view";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 const SLIDES = [
   {
@@ -77,9 +80,7 @@ export default function LandingScreen() {
 
   return (
     <SafeAreaView
-      style={[
-        { flex: 1, paddingBottom: insets.bottom }
-      ]}
+      style={[{ flex: 1, paddingBottom: insets.bottom }]}
       edges={["top", "left", "right"]}
     >
       <View className="flex-1 bg-[#0f0f0f]">
@@ -135,8 +136,11 @@ export default function LandingScreen() {
                 {SLIDES.map((_, index) => (
                   <View
                     key={index}
-                    className={`h-2 rounded-full ${index === activeSlide ? "w-6 bg-[#00ff99]" : "w-2 bg-[#444]"
-                      }`}
+                    className={`h-2 rounded-full ${
+                      index === activeSlide
+                        ? "w-6 bg-[#00ff99]"
+                        : "w-2 bg-[#444]"
+                    }`}
                   />
                 ))}
               </View>
@@ -162,7 +166,9 @@ export default function LandingScreen() {
                 Already have an account?{" "}
               </Text>
               <TouchableOpacity onPress={() => navigation.navigate("Login")}>
-                <Text className="text-white font-semibold underline">Log In</Text>
+                <Text className="text-white font-semibold underline">
+                  Log In
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
