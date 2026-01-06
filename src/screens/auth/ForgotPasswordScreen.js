@@ -9,24 +9,36 @@ import {
   Modal,
   ActivityIndicator,
   StatusBar,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 
-import { supabase } from "../../lib/supabase";
+const ALLOWED_EMAIL_REGEX =
+  /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
 
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation();
+
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
+
+  const [touched, setTouched] = useState(false);
+  const [emailError, setEmailError] = useState(null);
+
   const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [timer, setTimer] = useState(120);
   const [canResend, setCanResend] = useState(false);
+
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({
+    type: "error",
+    title: "",
+    message: "",
+  });
+
   const inputRefs = useRef([]);
 
   useEffect(() => {
@@ -41,65 +53,71 @@ export default function ForgotPasswordScreen() {
     return () => clearInterval(interval);
   }, [otpModalVisible, timer]);
 
-  const handleSendOtp = async () => {
-    setError(null);
-    if (!email) {
-      setError("Please enter your email address.");
-      return;
+  const showAlert = (type, title, message) => {
+    setAlertConfig({ type, title, message });
+    setAlertVisible(true);
+  };
+
+  const validateEmail = (value) => {
+    if (!value) return "Email is required";
+    if (!ALLOWED_EMAIL_REGEX.test(value)) {
+      return "Use a valid provider (Gmail, Yahoo, etc)";
     }
+    return null;
+  };
+
+  const handleEmailChange = (text) => {
+    setEmail(text);
+    setTouched(true);
+    setEmailError(validateEmail(text));
+  };
+
+  const handleSendOtp = async () => {
+    setTouched(true);
+    const error = validateEmail(email);
+    setEmailError(error);
+
+    if (error) return;
 
     setIsLoading(true);
 
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email,
-        options: {
-          shouldCreateUser: false,
-        },
-      });
-
-      if (error) throw error;
-
+    setTimeout(() => {
       setIsLoading(false);
       setOtpModalVisible(true);
       setTimer(120);
       setCanResend(false);
       setOtp(["", "", "", "", "", ""]);
-    } catch (err) {
-      setIsLoading(false);
-      setError(err.message);
-    }
+    }, 1500);
   };
 
   const handleVerify = async () => {
     const token = otp.join("");
+
     if (token.length < 6) {
-      Alert.alert("Invalid Code", "Please enter the full 6-digit code.");
+      showAlert(
+        "error",
+        "Incomplete Code",
+        "Please enter the full 6-digit code."
+      );
       return;
     }
 
     setIsLoading(true);
 
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: email,
-        token: token,
-        type: "email",
-      });
-
-      if (error) throw error;
-
+    setTimeout(() => {
       setIsLoading(false);
-      setOtpModalVisible(false);
 
-      navigation.navigate("ResetPassword", { email: email });
-    } catch (err) {
-      setIsLoading(false);
-      Alert.alert(
-        "Verification Failed",
-        "The code is incorrect or has expired."
-      );
-    }
+      if (token === "123456") {
+        setOtpModalVisible(false);
+        navigation.navigate("ResetPassword", { email: email });
+      } else {
+        showAlert(
+          "error",
+          "Verification Failed",
+          "The code is incorrect. For demo purposes, use '123456'."
+        );
+      }
+    }, 1500);
   };
 
   const handleOtpChange = (text, index) => {
@@ -119,12 +137,14 @@ export default function ForgotPasswordScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
+
       {isLoading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#00ff99" />
           <Text style={styles.loadingText}>Processing...</Text>
         </View>
       )}
+
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -134,6 +154,7 @@ export default function ForgotPasswordScreen() {
           <Text style={{ color: "#888", marginLeft: 5 }}>Back to Login</Text>
         </TouchableOpacity>
       </View>
+
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.iconContainer}>
           <MaterialIcons name="lock-reset" size={40} color="#00ff99" />
@@ -149,19 +170,29 @@ export default function ForgotPasswordScreen() {
           <View
             style={{ flexDirection: "row", justifyContent: "space-between" }}
           >
-            <Text style={[styles.label, error && { color: "#ff4444" }]}>
+            <Text
+              style={[
+                styles.label,
+                touched && emailError ? { color: "#ff4444" } : {},
+              ]}
+            >
               Registered Email
             </Text>
-            {error && <Text style={styles.errorText}>{error}</Text>}
+            {touched && emailError && (
+              <Text style={styles.errorText}>{emailError}</Text>
+            )}
           </View>
 
           <View
-            style={[styles.inputWrapper, error && { borderColor: "#ff4444" }]}
+            style={[
+              styles.inputWrapper,
+              touched && emailError ? { borderColor: "#ff4444" } : {},
+            ]}
           >
             <MaterialIcons
               name="email"
               size={20}
-              color={error ? "#ff4444" : "#666"}
+              color={touched && emailError ? "#ff4444" : "#666"}
               style={{ marginRight: 12 }}
             />
             <TextInput
@@ -171,10 +202,7 @@ export default function ForgotPasswordScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                setError(null);
-              }}
+              onChangeText={handleEmailChange}
             />
           </View>
         </View>
@@ -190,22 +218,17 @@ export default function ForgotPasswordScreen() {
           </LinearGradient>
         </TouchableOpacity>
       </ScrollView>
-      =
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={otpModalVisible}
-        onRequestClose={() => setOtpModalVisible(false)}
-      >
+
+      {}
+      <Modal animationType="fade" transparent={true} visible={otpModalVisible}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalIcon}>
               <MaterialIcons name="mark-email-read" size={24} color="#00ff99" />
             </View>
-
             <Text style={styles.modalTitle}>Verify Email</Text>
-            <Text style={styles.modalDesc}>
-              Enter the 6-digit code sent to your email.
+            <Text style={styles.modalDescSmall}>
+              Enter 123456 to simulate success.
             </Text>
 
             <View style={styles.otpContainer}>
@@ -218,8 +241,6 @@ export default function ForgotPasswordScreen() {
                   keyboardType="number-pad"
                   value={digit}
                   onChangeText={(text) => handleOtpChange(text, index)}
-                  placeholder="-"
-                  placeholderTextColor="#444"
                 />
               ))}
             </View>
@@ -232,9 +253,9 @@ export default function ForgotPasswordScreen() {
                 colors={["#0055ff", "#00ff99"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={styles.modalBtn}
+                style={styles.modalBtnSmall}
               >
-                <Text style={styles.btnText}>VERIFY CODE</Text>
+                <Text style={styles.btnTextBlack}>VERIFY CODE</Text>
               </LinearGradient>
             </TouchableOpacity>
 
@@ -245,7 +266,7 @@ export default function ForgotPasswordScreen() {
                 marginBottom: 15,
               }}
             >
-              <Text style={{ color: "#666", fontSize: 12 }}>
+              <Text style={{ color: "#666", fontSize: 11 }}>
                 Didn't receive code?{" "}
               </Text>
               <TouchableOpacity disabled={!canResend} onPress={handleSendOtp}>
@@ -253,7 +274,7 @@ export default function ForgotPasswordScreen() {
                   style={{
                     color: canResend ? "#00ff99" : "#444",
                     fontWeight: "bold",
-                    fontSize: 12,
+                    fontSize: 11,
                   }}
                 >
                   {canResend ? "Resend" : `Resend in ${formatTime(timer)}`}
@@ -263,6 +284,45 @@ export default function ForgotPasswordScreen() {
 
             <TouchableOpacity onPress={() => setOtpModalVisible(false)}>
               <Text style={{ color: "#888", fontSize: 12 }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {}
+      <Modal animationType="fade" transparent={true} visible={alertVisible}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.alertCard}>
+            <MaterialIcons
+              name={
+                alertConfig.type === "success"
+                  ? "check-circle"
+                  : "error-outline"
+              }
+              size={36}
+              color={alertConfig.type === "success" ? "#00ff99" : "#ff4444"}
+              style={{ marginBottom: 12 }}
+            />
+            <Text style={styles.modalTitleSmall}>{alertConfig.title}</Text>
+            <Text style={styles.modalDescSmall}>{alertConfig.message}</Text>
+            <TouchableOpacity
+              style={{ width: "100%" }}
+              onPress={() => setAlertVisible(false)}
+            >
+              <LinearGradient
+                colors={
+                  alertConfig.type === "success"
+                    ? ["#0055ff", "#00ff99"]
+                    : ["#ff4444", "#ff8800"]
+                }
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.modalBtnSmall}
+              >
+                <Text style={styles.btnTextBlack}>
+                  {alertConfig.type === "success" ? "OK" : "TRY AGAIN"}
+                </Text>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </View>
@@ -331,6 +391,13 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 1,
   },
+  btnTextBlack: {
+    fontWeight: "700",
+    fontSize: 12,
+    color: "#000",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
   modalOverlay: {
     flex: 1,
     justifyContent: "center",
@@ -338,11 +405,21 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.85)",
   },
   modalCard: {
-    width: "85%",
-    maxWidth: 340,
+    width: "80%",
+    maxWidth: 300,
     backgroundColor: "#1a1a1a",
-    padding: 24,
+    padding: 20,
     borderRadius: 20,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  alertCard: {
+    width: "70%",
+    maxWidth: 260,
+    backgroundColor: "#1a1a1a",
+    padding: 20,
+    borderRadius: 18,
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#333",
@@ -357,21 +434,35 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "bold",
     color: "#fff",
     marginBottom: 8,
   },
+  modalTitleSmall: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#fff",
+    marginBottom: 6,
+    textAlign: "center",
+  },
   modalDesc: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#888",
     textAlign: "center",
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  otpContainer: { flexDirection: "row", gap: 8, marginBottom: 24 },
+  modalDescSmall: {
+    fontSize: 12,
+    color: "#999",
+    textAlign: "center",
+    marginBottom: 18,
+    lineHeight: 16,
+  },
+  otpContainer: { flexDirection: "row", gap: 6, marginBottom: 20 },
   otpInput: {
-    width: 40,
-    height: 48,
+    width: 38,
+    height: 44,
     backgroundColor: "#222",
     borderWidth: 1,
     borderColor: "#333",
@@ -381,9 +472,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
   },
-  modalBtn: {
-    padding: 14,
-    borderRadius: 12,
+  modalBtnSmall: {
+    padding: 12,
+    borderRadius: 10,
     alignItems: "center",
     width: "100%",
   },

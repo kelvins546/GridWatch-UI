@@ -13,14 +13,16 @@ import {
   KeyboardAvoidingView,
   StyleSheet,
   LogBox,
+  Dimensions,
+  IntentLauncherAndroid,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
-import { CameraView, useCameraPermissions } from "expo-camera";
-import { supabase } from "../../lib/supabase";
+
+const { width } = Dimensions.get("window");
 
 export default function SetupHubScreen() {
   const navigation = useNavigation();
@@ -37,10 +39,7 @@ export default function SetupHubScreen() {
   const [wifiPass, setWifiPass] = useState("");
   const [showPass, setShowPass] = useState(false);
 
-  const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
-  const [scanned, setScanned] = useState(false);
-
   const [isPairing, setIsPairing] = useState(false);
   const [statusStep, setStatusStep] = useState("");
 
@@ -52,14 +51,10 @@ export default function SetupHubScreen() {
     onPress: null,
   });
 
-  // --- 🔴 FIXED BACK BUTTON LOGIC ---
   const handleBack = () => {
     if (navigation.canGoBack()) {
-      // Normal behavior for existing users coming from Menu
       navigation.goBack();
     } else {
-      // For New Users who landed here directly:
-      // "Replace" the current screen with MainApp (Home) so they can access the dashboard.
       navigation.replace("MainApp");
     }
   };
@@ -74,165 +69,55 @@ export default function SetupHubScreen() {
     if (callback) callback();
   };
 
-  const openWifiSettings = () => {
-    if (Platform.OS === "ios") {
-      Linking.openURL("App-Prefs:root=WIFI");
-    } else {
-      Linking.sendIntent("android.settings.WIFI_SETTINGS");
+  const openWifiSettings = async () => {
+    try {
+      if (Platform.OS === "ios") {
+        await Linking.openURL("App-Prefs:root=WIFI");
+      } else {
+        await Linking.sendIntent("android.settings.WIFI_SETTINGS");
+      }
+    } catch (error) {
+      console.log(
+        "Failed to open specific settings, fallback to general settings"
+      );
+
+      await Linking.openSettings();
     }
   };
 
-  const handleStartPairing = async (autoSSID = null, autoPass = null) => {
-    const targetSSID = autoSSID !== null ? autoSSID : wifiSSID;
-    const targetPass = autoPass !== null ? autoPass : wifiPass;
-
-    if (!targetSSID) {
-      showAlert("Missing Info", "Please scan a QR code or enter Wi-Fi Name.");
+  const handleStartPairing = async () => {
+    if (!wifiSSID || !wifiPass) {
+      showAlert("Missing Info", "Please enter Wi-Fi Name and Password.");
       return;
     }
 
     setIsPairing(true);
 
-    try {
-      setStatusStep(`Connecting to Hub...`);
-
-      const details = {
-        ssid: targetSSID,
-        pass: targetPass,
-      };
-
-      const formBody = Object.keys(details)
-        .map(
-          (key) =>
-            encodeURIComponent(key) + "=" + encodeURIComponent(details[key])
-        )
-        .join("&");
-
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+    setStatusStep(`Connecting to Hub...`);
+    setTimeout(() => {
       setStatusStep("Sending credentials...");
+      setTimeout(() => {
+        setStatusStep("Verifying with cloud...");
+        setTimeout(() => {
+          setStatusStep("Success! Connected.");
+          setTimeout(() => {
+            setIsPairing(false);
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-      console.log("Attempting fetch to 192.168.4.1...");
-
-      const response = await fetch("http://192.168.4.1/connect-hub", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-        },
-        body: formBody,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`Server Error: ${response.status}`);
-      }
-
-      const text = await response.text();
-      console.log("Hub Response:", text);
-
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        if (
-          text.toLowerCase().includes("success") ||
-          text.includes("Connected")
-        ) {
-          data = { status: "success", hub_id: "unknown_hub" };
-        } else {
-          throw new Error("Invalid response from Hub");
-        }
-      }
-
-      if (data.status === "success") {
-        setStatusStep("Success! Connected.");
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        setIsPairing(false);
-        navigation.navigate("HubConfig", { hubId: data.hub_id });
-      } else {
-        throw new Error("Hub refused connection");
-      }
-    } catch (error) {
-      console.log("PAIRING ERROR:", error);
-
-      setStatusStep("Verifying with cloud...");
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 4000));
-
-        const { data: verifiedHub, error: dbError } = await supabase
-          .from("hubs")
-          .select("serial_number")
-          .eq("wifi_ssid", targetSSID)
-          .eq("status", "online")
-          .order("last_seen", { ascending: false })
-          .limit(1)
-          .single();
-
-        if (verifiedHub && !dbError) {
-          setIsPairing(false);
-          navigation.navigate("HubConfig", {
-            hubId: verifiedHub.serial_number,
-          });
-        } else {
-          throw error;
-        }
-      } catch (cloudError) {
-        setIsPairing(false);
-
-        showAlert(
-          "Connection Failed",
-          `Could not reach Hub.\n\nDebug: ${error.message}\n\nTip: Ensure Mobile Data is OFF and you clicked 'Keep Connection'.`,
-          "error"
-        );
-      }
-    }
+            navigation.navigate("HubConfig", { hubId: "demo_hub_123" });
+          }, 1000);
+        }, 2000);
+      }, 2000);
+    }, 2000);
   };
 
-  const handleOpenScanner = async () => {
-    if (!permission) return;
-    if (!permission.granted) {
-      const result = await requestPermission();
-      if (!result.granted) return;
-    }
-    setScanned(false);
+  const handleSimulateScan = () => {
     setIsScanning(true);
-  };
 
-  const handleBarCodeScanned = ({ data }) => {
-    if (scanned) return;
-    setScanned(true);
-    setIsScanning(false);
-    let raw = data.trim();
-    let ssid = "";
-    let password = "";
-    const ssidMatch = raw.match(/S:(.*?)(?:;|$)/i);
-    const passMatch = raw.match(/P:(.*?)(?:;|$)/i);
-    if (ssidMatch) {
-      ssid = ssidMatch[1];
-      if (passMatch) password = passMatch[1];
-    } else if (raw.includes(",")) {
-      const parts = raw.split(",");
-      if (parts.length >= 2) {
-        ssid = parts[0].trim();
-        password = parts[1].trim();
-      }
-    } else if (raw.includes(" ")) {
-      const lastSpaceIndex = raw.lastIndexOf(" ");
-      if (lastSpaceIndex > 0) {
-        ssid = raw.substring(0, lastSpaceIndex).trim();
-        password = raw.substring(lastSpaceIndex + 1).trim();
-      }
-    }
-    if (ssid) {
-      handleStartPairing(ssid, password);
-    } else {
-      setWifiSSID(raw);
-      showAlert("Notice", "Could not read QR. Please check.");
-    }
+    setTimeout(() => {
+      setIsScanning(false);
+      setWifiSSID("PLDT_Home_FIBR");
+      setWifiPass("password123");
+    }, 2500);
   };
 
   return (
@@ -255,10 +140,10 @@ export default function SetupHubScreen() {
       >
         <TouchableOpacity
           className="flex-row items-center"
-          onPress={handleBack} // <--- USING THE FIXED BACK HANDLER
+          onPress={handleBack}
         >
           <MaterialIcons
-            name="arrow-back" // <--- RESTORED ICON
+            name="arrow-back"
             size={18}
             color={theme.textSecondary}
           />
@@ -394,7 +279,10 @@ export default function SetupHubScreen() {
                   value={wifiSSID}
                   onChangeText={setWifiSSID}
                 />
-                <TouchableOpacity onPress={handleOpenScanner} className="p-2.5">
+                <TouchableOpacity
+                  onPress={handleSimulateScan}
+                  className="p-2.5"
+                >
                   <MaterialIcons
                     name="qr-code-scanner"
                     size={22}
@@ -460,36 +348,66 @@ export default function SetupHubScreen() {
         </View>
       </KeyboardAvoidingView>
 
+      {}
       <Modal visible={isScanning} animationType="slide">
-        <SafeAreaView className="flex-1 bg-black">
-          <CameraView
-            style={StyleSheet.absoluteFill}
-            facing="back"
-            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-          />
-
-          <View className="flex-1 justify-between p-5">
-            <TouchableOpacity
-              onPress={() => setIsScanning(false)}
-              className="self-end p-2 bg-black/50 rounded-full"
-            >
-              <MaterialIcons name="close" size={30} color="white" />
-            </TouchableOpacity>
-
-            <View className="items-center mb-10">
-              <Text className="text-white font-bold text-lg mb-2">
-                Scan Wi-Fi QR Code
+        <View className="flex-1 bg-black">
+          {}
+          <SafeAreaView edges={["top"]} className="bg-black z-20">
+            <View className="flex-row justify-between items-center px-5 py-4">
+              <TouchableOpacity onPress={() => setIsScanning(false)}>
+                <MaterialIcons name="close" size={28} color="white" />
+              </TouchableOpacity>
+              <Text className="text-white font-bold text-base">
+                Scan QR Code
               </Text>
-              <View className="w-64 h-64 border-2 border-[#00ff99] rounded-xl bg-transparent" />
-              <Text className="text-gray-300 text-sm mt-4 text-center">
-                Point at the QR code on your router or phone.
+              <View style={{ width: 28 }} />
+            </View>
+          </SafeAreaView>
+
+          {}
+          <View className="flex-1 justify-center items-center relative">
+            {}
+            <View style={StyleSheet.absoluteFill} className="bg-gray-800" />
+
+            {}
+            <View
+              style={StyleSheet.absoluteFill}
+              className="justify-center items-center"
+            >
+              <View className="w-full h-full bg-black/60 absolute" />
+
+              {}
+              <View className="w-64 h-64 bg-transparent justify-center items-center relative">
+                {}
+                <View className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#00ff99]" />
+                <View className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#00ff99]" />
+                <View className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[#00ff99]" />
+                <View className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[#00ff99]" />
+
+                {}
+                <View className="w-[90%] h-[2px] bg-[#00ff99] opacity-70 shadow-lg shadow-[#00ff99]" />
+              </View>
+
+              <Text className="text-white text-sm mt-8 opacity-80">
+                Align QR code within the frame
               </Text>
             </View>
-            <View />
           </View>
-        </SafeAreaView>
+
+          {}
+          <SafeAreaView
+            edges={["bottom"]}
+            className="bg-black p-8 items-center"
+          >
+            <Text className="text-[#888] text-xs mb-4">
+              Searching for code...
+            </Text>
+            <ActivityIndicator size="small" color="#00ff99" />
+          </SafeAreaView>
+        </View>
       </Modal>
 
+      {}
       <Modal transparent visible={isPairing}>
         <View className="flex-1 justify-center items-center bg-black/80">
           <View
@@ -507,6 +425,7 @@ export default function SetupHubScreen() {
         </View>
       </Modal>
 
+      {}
       <Modal transparent visible={alertConfig.visible} animationType="fade">
         <View className="flex-1 justify-center items-center bg-black/60">
           <View

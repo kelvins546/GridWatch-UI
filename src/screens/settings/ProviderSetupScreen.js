@@ -11,6 +11,7 @@ import {
   Platform,
   LayoutAnimation,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -26,6 +27,10 @@ export default function ProviderSetupScreen() {
   const [customRate, setCustomRate] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const [realtimeError, setRealtimeError] = useState(null);
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const providers = [
     {
@@ -430,7 +435,6 @@ export default function ProviderSetupScreen() {
       rate: "11.95",
       image: require("../../../assets/mopreco.png"),
     },
-    // --- NEW ADDITIONS FROM FILE EXPLORER ---
     {
       id: "morescoi",
       name: "MORESCO I",
@@ -674,13 +678,43 @@ export default function ProviderSetupScreen() {
     setShowAll(!showAll);
   };
 
+  const handleRateChange = (text) => {
+    const cleaned = text.replace(/[^0-9.]/g, "");
+
+    if ((cleaned.match(/\./g) || []).length > 1) return;
+
+    setCustomRate(cleaned);
+
+    const val = parseFloat(cleaned);
+
+    if (cleaned !== "" && !isNaN(val)) {
+      if (val > 50) {
+        setRealtimeError("Rate exceeds limit (Max: ₱50.00)");
+      } else {
+        setRealtimeError(null);
+      }
+    } else {
+      setRealtimeError(null);
+    }
+  };
+
   const handleConfirm = () => {
     let finalProviderName = "";
     let finalRate = "";
 
     if (selectedId === "manual") {
+      const rateValue = parseFloat(customRate);
+
+      if (!customRate || isNaN(rateValue) || rateValue <= 0 || rateValue > 50) {
+        setErrorMessage(
+          "Please enter a valid rate between ₱ 0.01 and ₱ 50.00."
+        );
+        setErrorModalVisible(true);
+        return;
+      }
+
       finalProviderName = "Manual Config";
-      finalRate = customRate || "0.00";
+      finalRate = customRate;
     } else {
       const selectedProvider = providers.find((p) => p.id === selectedId);
       finalProviderName = selectedProvider?.name || "Unknown";
@@ -702,6 +736,9 @@ export default function ProviderSetupScreen() {
   const restOfProviders = providers.slice(3);
   const visibleRest = showAll ? restOfProviders : restOfProviders.slice(0, 3);
 
+  const isButtonDisabled =
+    selectedId === "manual" && (!!realtimeError || !customRate);
+
   return (
     <SafeAreaView
       className="flex-1"
@@ -712,6 +749,55 @@ export default function ProviderSetupScreen() {
         barStyle={theme.statusBarStyle}
         backgroundColor={theme.background}
       />
+
+      {}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={errorModalVisible}
+        onRequestClose={() => setErrorModalVisible(false)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/80">
+          <View
+            className="w-[70%] max-w-[280px] p-5 rounded-2xl items-center border"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            }}
+          >
+            <View className="mb-3 bg-red-500/10 p-3 rounded-full">
+              <MaterialIcons name="error-outline" size={32} color="#ef4444" />
+            </View>
+            <Text
+              className="text-lg font-bold mb-2 text-center"
+              style={{ color: theme.text }}
+            >
+              Invalid Rate
+            </Text>
+            <Text
+              className="text-xs text-center mb-5 leading-4"
+              style={{ color: theme.textSecondary }}
+            >
+              {errorMessage}
+            </Text>
+            <TouchableOpacity
+              className="w-full"
+              onPress={() => setErrorModalVisible(false)}
+            >
+              <LinearGradient
+                colors={["#ef4444", "#b91c1c"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                className="p-3 rounded-xl items-center"
+              >
+                <Text className="font-bold text-xs text-white uppercase tracking-wider">
+                  OKAY
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <View
         className="flex-row items-center px-6 py-5 border-b"
@@ -905,7 +991,7 @@ export default function ProviderSetupScreen() {
                     className="flex-row items-center rounded-xl px-4 py-3 border"
                     style={{
                       backgroundColor: isDarkMode ? "#0f0f0f" : "#f5f5f5",
-                      borderColor: theme.cardBorder,
+                      borderColor: realtimeError ? "#ef4444" : theme.cardBorder,
                     }}
                   >
                     <Text
@@ -921,9 +1007,15 @@ export default function ProviderSetupScreen() {
                       placeholderTextColor={theme.textSecondary}
                       keyboardType="decimal-pad"
                       value={customRate}
-                      onChangeText={setCustomRate}
+                      onChangeText={handleRateChange}
                     />
                   </View>
+                  {}
+                  {realtimeError && (
+                    <Text className="text-xs text-red-500 mt-2 font-medium ml-1">
+                      {realtimeError}
+                    </Text>
+                  )}
                 </View>
               )}
             </TouchableOpacity>
@@ -931,6 +1023,8 @@ export default function ProviderSetupScreen() {
             <TouchableOpacity
               className="mt-8 h-12 rounded-2xl overflow-hidden"
               onPress={handleConfirm}
+              disabled={isButtonDisabled}
+              style={{ opacity: isButtonDisabled ? 0.5 : 1 }}
             >
               <LinearGradient
                 colors={["#0055ff", "#00ff99"]}

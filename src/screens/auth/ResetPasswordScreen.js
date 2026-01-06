@@ -14,7 +14,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { supabase } from "../../lib/supabase";
 
 export default function ResetPasswordScreen() {
   const navigation = useNavigation();
@@ -27,43 +26,61 @@ export default function ResetPasswordScreen() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [successModalVisible, setSuccessModalVisible] = useState(false);
+
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalConfig, setModalConfig] = useState({
+    type: "success",
+    title: "",
+    message: "",
+    onPress: null,
+  });
 
   const hasLength = password.length >= 8;
   const hasNumber = /\d/.test(password);
+  const hasUpper = /[A-Z]/.test(password);
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<> ]/.test(password);
   const isMatch = password === confirmPassword && password.length > 0;
 
+  const showModal = (type, title, message, onPress = null) => {
+    setModalConfig({ type, title, message, onPress });
+    setModalVisible(true);
+  };
+
   const handleUpdatePassword = async () => {
-    setError(null);
     if (!password || !confirmPassword) {
-      setError("Please fill in both fields.");
+      showModal(
+        "error",
+        "Missing Fields",
+        "Please fill in both password fields."
+      );
       return;
     }
-    if (!hasLength || !hasNumber) {
-      setError("Password does not meet requirements.");
+
+    if (!hasLength || !hasNumber || !hasUpper || !hasSpecial) {
+      showModal(
+        "error",
+        "Weak Password",
+        "Please follow all password requirements before proceeding."
+      );
       return;
     }
+
     if (!isMatch) {
-      setError("Passwords do not match.");
+      showModal("error", "Mismatch", "Passwords do not match.");
       return;
     }
 
     setIsLoading(true);
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: password,
-      });
 
-      if (error) throw error;
-
+    setTimeout(() => {
       setIsLoading(false);
-      setSuccessModalVisible(true);
-      await supabase.auth.signOut();
-    } catch (err) {
-      setIsLoading(false);
-      setError(err.message);
-    }
+      showModal(
+        "success",
+        "Password Updated!",
+        "Successfully changed. Use your new password to log in.",
+        () => navigation.reset({ index: 0, routes: [{ name: "Login" }] })
+      );
+    }, 1500);
   };
 
   return (
@@ -113,10 +130,7 @@ export default function ResetPasswordScreen() {
               placeholderTextColor="#555"
               secureTextEntry={!showPass}
               value={password}
-              onChangeText={(t) => {
-                setPassword(t);
-                setError(null);
-              }}
+              onChangeText={setPassword}
             />
             <TouchableOpacity onPress={() => setShowPass(!showPass)}>
               <MaterialIcons
@@ -141,10 +155,7 @@ export default function ResetPasswordScreen() {
               placeholderTextColor="#555"
               secureTextEntry={!showConfirm}
               value={confirmPassword}
-              onChangeText={(t) => {
-                setConfirmPassword(t);
-                setError(null);
-              }}
+              onChangeText={setConfirmPassword}
             />
             <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)}>
               <MaterialIcons
@@ -154,14 +165,19 @@ export default function ResetPasswordScreen() {
               />
             </TouchableOpacity>
           </View>
-          {error && <Text style={styles.errorText}>{error}</Text>}
         </View>
 
+        {}
         {password.length > 0 && (
           <View style={styles.requirementsBox}>
             <Text style={styles.reqTitle}>PASSWORD REQUIREMENTS</Text>
             <RequirementRow met={hasLength} text="At least 8 characters" />
+            <RequirementRow met={hasUpper} text="At least 1 uppercase letter" />
             <RequirementRow met={hasNumber} text="Contains at least 1 number" />
+            <RequirementRow
+              met={hasSpecial}
+              text="At least 1 special character"
+            />
             <RequirementRow met={isMatch} text="Passwords match" />
           </View>
         )}
@@ -181,36 +197,49 @@ export default function ResetPasswordScreen() {
         </TouchableOpacity>
       </ScrollView>
 
+      {}
       <Modal
         animationType="fade"
         transparent={true}
-        visible={successModalVisible}
+        visible={modalVisible}
+        onRequestClose={() => {
+          if (modalConfig.type === "error") setModalVisible(false);
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <MaterialIcons
-              name="check-circle"
+              name={
+                modalConfig.type === "success"
+                  ? "check-circle"
+                  : "error-outline"
+              }
               size={40}
-              color="#00ff99"
+              color={modalConfig.type === "success" ? "#00ff99" : "#ff4444"}
               style={{ marginBottom: 15 }}
             />
-            <Text style={styles.modalTitleSmall}>Password Updated!</Text>
-            <Text style={styles.modalDescSmall}>
-              Successfully changed. Use your new password to log in.
-            </Text>
+            <Text style={styles.modalTitleSmall}>{modalConfig.title}</Text>
+            <Text style={styles.modalDescSmall}>{modalConfig.message}</Text>
             <TouchableOpacity
               style={{ width: "100%" }}
-              onPress={() =>
-                navigation.reset({ index: 0, routes: [{ name: "Login" }] })
-              }
+              onPress={() => {
+                setModalVisible(false);
+                if (modalConfig.onPress) modalConfig.onPress();
+              }}
             >
               <LinearGradient
-                colors={["#0055ff", "#00ff99"]}
+                colors={
+                  modalConfig.type === "success"
+                    ? ["#0055ff", "#00ff99"]
+                    : ["#ff4444", "#ff8800"]
+                }
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.modalBtnSmall}
               >
-                <Text style={styles.btnTextBlack}>OK</Text>
+                <Text style={styles.btnTextBlack}>
+                  {modalConfig.type === "success" ? "OK" : "TRY AGAIN"}
+                </Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -284,12 +313,6 @@ const styles = StyleSheet.create({
     borderColor: "#333",
   },
   inputField: { flex: 1, color: "#fff", fontSize: 14 },
-  errorText: {
-    color: "#ff4444",
-    fontSize: 12,
-    marginTop: 10,
-    textAlign: "center",
-  },
   requirementsBox: {
     backgroundColor: "#1a1a1a",
     padding: 16,

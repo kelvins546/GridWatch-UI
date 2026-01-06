@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -12,9 +12,60 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
+const INITIAL_NOTIFICATIONS = [
+  {
+    id: 1,
+    type: "critical",
+    icon: "error-outline",
+    title: "Critical Fault",
+    time: "2m ago",
+    desc: "Short circuit detected on Outlet 3. Power was cut automatically.",
+    action: "Review Logs >",
+    unread: true,
+  },
+  {
+    id: 2,
+    type: "budget",
+    icon: "account-balance-wallet",
+    title: "Budget Alert",
+    time: "2h ago",
+    desc: "AC reached 90% of your daily limit (₱135 / ₱150).",
+    action: "Adjust Limit >",
+    unread: true,
+  },
+  {
+    id: 3,
+    type: "info",
+    icon: "power",
+    title: "Device Offline",
+    time: "5h ago",
+    desc: "Living Room Hub lost connection. Please check your Wi-Fi.",
+    action: "Troubleshoot >",
+    unread: true,
+  },
+  {
+    id: 4,
+    type: "info",
+    icon: "lightbulb-outline",
+    title: "Energy Tip",
+    time: "Yesterday",
+    desc: "You saved ₱45.00 yesterday by turning off the TV during peak hours.",
+    unread: false,
+  },
+];
+
 export default function NotificationsScreen() {
   const navigation = useNavigation();
   const { theme, isDarkMode } = useTheme();
+  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+
+  const handleMarkAllRead = () => {
+    const updated = notifications.map((n) => ({ ...n, unread: false }));
+    setNotifications(updated);
+  };
+
+  const newNotifications = notifications.filter((n) => n.unread);
+  const earlierNotifications = notifications.filter((n) => !n.unread);
 
   return (
     <SafeAreaView
@@ -51,7 +102,7 @@ export default function NotificationsScreen() {
         <Text style={[styles.headerTitle, { color: theme.text }]}>
           Notifications
         </Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={handleMarkAllRead}>
           <Text style={[styles.markRead, { color: theme.primary }]}>
             Mark all read
           </Text>
@@ -59,41 +110,21 @@ export default function NotificationsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
-          New (3)
-        </Text>
-
-        <NotificationCard
-          type="critical"
-          icon="error-outline"
-          title="Critical Fault"
-          time="2m ago"
-          desc="Short circuit detected on Outlet 3. Power was cut automatically."
-          action="Review Logs >"
-          theme={theme}
-          isDarkMode={isDarkMode}
-        />
-
-        <NotificationCard
-          type="budget"
-          icon="account-balance-wallet"
-          title="Budget Alert"
-          time="2h ago"
-          desc="AC reached 90% of your daily limit (₱135 / ₱150)."
-          action="Adjust Limit >"
-          theme={theme}
-          isDarkMode={isDarkMode}
-        />
-
-        <NotificationCard
-          type="info"
-          icon="system-update"
-          title="Update Available"
-          time="1d ago"
-          desc="New Meralco Rates downloaded. Your billing accuracy has been improved."
-          theme={theme}
-          isDarkMode={isDarkMode}
-        />
+        {newNotifications.length > 0 && (
+          <>
+            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+              New ({newNotifications.length})
+            </Text>
+            {newNotifications.map((item) => (
+              <NotificationCard
+                key={item.id}
+                data={item}
+                theme={theme}
+                isDarkMode={isDarkMode}
+              />
+            ))}
+          </>
+        )}
 
         <Text
           style={[
@@ -103,37 +134,40 @@ export default function NotificationsScreen() {
         >
           Earlier
         </Text>
-        <Text
-          style={{
-            textAlign: "center",
-            marginTop: 30,
-            color: theme.textSecondary,
-            fontSize: 12,
-          }}
-        >
-          No earlier notifications.
-        </Text>
+
+        {earlierNotifications.length > 0 ? (
+          earlierNotifications.map((item) => (
+            <NotificationCard
+              key={item.id}
+              data={item}
+              theme={theme}
+              isDarkMode={isDarkMode}
+            />
+          ))
+        ) : (
+          <Text
+            style={{
+              textAlign: "center",
+              marginTop: 10,
+              color: theme.textSecondary,
+              fontSize: 12,
+            }}
+          >
+            No earlier notifications.
+          </Text>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function NotificationCard({
-  type,
-  icon,
-  title,
-  time,
-  desc,
-  action,
-  theme,
-  isDarkMode,
-}) {
+function NotificationCard({ data, theme, isDarkMode }) {
   let mainColor, bgColor;
 
-  if (type === "critical") {
+  if (data.type === "critical") {
     mainColor = isDarkMode ? "#ff4444" : "#c62828";
     bgColor = isDarkMode ? "rgba(255, 68, 68, 0.15)" : "rgba(198, 40, 40, 0.1)";
-  } else if (type === "budget") {
+  } else if (data.type === "budget") {
     mainColor = isDarkMode ? "#ffaa00" : "#b37400";
     bgColor = isDarkMode ? "rgba(255, 170, 0, 0.15)" : "rgba(179, 116, 0, 0.1)";
   } else {
@@ -152,24 +186,28 @@ function NotificationCard({
         },
       ]}
     >
-      <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} />
+      {data.unread && (
+        <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} />
+      )}
       <View style={[styles.iconBox, { backgroundColor: bgColor }]}>
-        <MaterialIcons name={icon} size={24} color={mainColor} />
+        <MaterialIcons name={data.icon} size={24} color={mainColor} />
       </View>
       <View style={{ flex: 1 }}>
         <View style={styles.cardHeader}>
-          <Text style={[styles.cardTitle, { color: theme.text }]}>{title}</Text>
+          <Text style={[styles.cardTitle, { color: theme.text }]}>
+            {data.title}
+          </Text>
           <Text style={[styles.timeAgo, { color: theme.textSecondary }]}>
-            {time}
+            {data.time}
           </Text>
         </View>
         <Text style={[styles.cardDesc, { color: theme.textSecondary }]}>
-          {desc}
+          {data.desc}
         </Text>
-        {action && (
+        {data.action && (
           <TouchableOpacity>
             <Text style={[styles.actionLink, { color: mainColor }]}>
-              {action}
+              {data.action}
             </Text>
           </TouchableOpacity>
         )}

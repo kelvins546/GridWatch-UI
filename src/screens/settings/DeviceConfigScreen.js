@@ -12,117 +12,47 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
-import { supabase } from "../../lib/supabase";
 
 export default function DeviceConfigScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { theme, isDarkMode } = useTheme();
 
-  const { hubName, hubId } = route.params || {};
+  const { hubName, hubId, status } = route.params || {};
+
+  const [isOnline, setIsOnline] = useState(status === "Offline" ? false : true);
 
   const [hubData, setHubData] = useState({
-    wifi_ssid: "Loading...",
-    ip_address: "---",
+    wifi_ssid: "PLDT_Home_FIBR",
+    ip_address: "192.168.1.45",
     model: "GW-ESP32-PRO",
-    serial_number: "---",
-    last_seen: null,
-    current_firmware: "1.0.0",
+    serial_number: "HUB-8821-X9",
+    current_firmware: "1.2.4",
   });
 
-  const [now, setNow] = useState(Date.now());
-  const [loading, setLoading] = useState(true);
-
+  const [loading, setLoading] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
 
-  useEffect(() => {
-    const fetchHubInfo = async () => {
-      const { data, error } = await supabase
-        .from("hubs")
-        .select("*")
-        .eq("id", hubId)
-        .single();
+  const toggleStatus = () => {
+    setIsOnline(!isOnline);
+  };
 
-      if (!error && data) {
-        setHubData(data);
-      }
-      setLoading(false);
-    };
-
-    if (hubId) fetchHubInfo();
-
-    const channel = supabase
-      .channel(`device_config_${hubId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "hubs",
-          filter: `id=eq.${hubId}`,
-        },
-        (payload) => {
-          setHubData((prev) => ({ ...prev, ...payload.new }));
-        }
-      )
-      .subscribe();
-
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-
-    return () => {
-      supabase.removeChannel(channel);
-      clearInterval(timer);
-    };
-  }, [hubId]);
-
-  let isOnline = false;
-  let diffInSeconds = 0;
-  let statusDetailText = "Checking...";
-  let statusColor = theme.textSecondary;
-  let statusBg = "transparent";
-  let statusIcon = "help-outline";
-
-  if (hubData.last_seen) {
-    let timeStr = hubData.last_seen.replace(" ", "T");
-    if (!timeStr.endsWith("Z") && !timeStr.includes("+")) {
-      timeStr += "Z";
-    }
-    const lastSeenMs = new Date(timeStr).getTime();
-    if (!isNaN(lastSeenMs)) {
-      diffInSeconds = (now - lastSeenMs) / 1000;
-      isOnline = diffInSeconds < 8 && diffInSeconds > -5;
-    }
-  }
+  let statusDetailText = isOnline
+    ? "Online • Stable"
+    : "Offline • Check Connection";
+  let statusColor = isOnline ? theme.primary : "#ff4444";
+  let statusBg = isOnline
+    ? isDarkMode
+      ? "rgba(0, 255, 153, 0.1)"
+      : "rgba(0, 153, 94, 0.1)"
+    : "rgba(255, 68, 68, 0.1)";
+  let statusIcon = isOnline ? "router" : "wifi-off";
 
   if (isRestarting) {
     statusDetailText = "System Rebooting...";
     statusColor = "#FFC107";
     statusBg = "rgba(255, 193, 7, 0.15)";
     statusIcon = "hourglass-top";
-  } else if (isOnline) {
-    statusDetailText = "Online • Stable";
-    statusColor = theme.primary;
-    statusBg = isDarkMode ? "rgba(0, 255, 153, 0.1)" : "rgba(0, 153, 94, 0.1)";
-    statusIcon = "router";
-  } else if (!loading) {
-    let displayDiff = Math.max(1, diffInSeconds - 7);
-    let timeAgo = "";
-    if (displayDiff < 60) timeAgo = `${Math.floor(displayDiff)}s ago`;
-    else if (displayDiff < 3600)
-      timeAgo = `${Math.floor(displayDiff / 60)}m ago`;
-    else if (displayDiff < 86400)
-      timeAgo = `${Math.floor(displayDiff / 3600)}h ago`;
-    else timeAgo = `${Math.floor(displayDiff / 86400)}d ago`;
-
-    statusDetailText = `Offline • Seen ${timeAgo}`;
-    statusColor = "#ff4444";
-    statusBg = "rgba(255, 68, 68, 0.1)";
-    statusIcon = "wifi-off";
-  } else {
-    statusDetailText = "Offline • Never Seen";
-    statusColor = "#ff4444";
-    statusBg = "rgba(255, 68, 68, 0.1)";
-    statusIcon = "wifi-off";
   }
 
   const [modalState, setModalState] = useState({
@@ -158,7 +88,7 @@ export default function DeviceConfigScreen() {
       config = {
         ...config,
         title: "Reset & Unpair?",
-        msg: "This will wipe the Hub's Wi-Fi memory, delete ALL connected devices, and remove this Hub from your account.",
+        msg: "This will remove this Hub from your account.",
         icon: "delete-forever",
         iconColor: isDarkMode ? "#ff4444" : "#c62828",
       };
@@ -176,11 +106,7 @@ export default function DeviceConfigScreen() {
       msg: "Removing device from your account...",
     }));
 
-    try {
-      await supabase.from("devices").delete().eq("hub_id", hubId);
-      const { error } = await supabase.from("hubs").delete().eq("id", hubId);
-      if (error) throw error;
-
+    setTimeout(() => {
       setModalState({
         visible: true,
         type: "success",
@@ -193,19 +119,9 @@ export default function DeviceConfigScreen() {
 
       setTimeout(() => {
         closeModal();
-        navigation.navigate("MainApp", { screen: "Home" });
+        navigation.navigate("MainApp");
       }, 1500);
-    } catch (err) {
-      setModalState({
-        visible: true,
-        type: "error",
-        title: "Error",
-        msg: err.message,
-        icon: "error",
-        iconColor: "#ff4444",
-        loading: false,
-      });
-    }
+    }, 2000);
   };
 
   const handleConfirm = async () => {
@@ -217,73 +133,46 @@ export default function DeviceConfigScreen() {
         msg: "Contacting Hub...",
       }));
 
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-        await fetch(`http://${hubData.ip_address}/reboot`, {
-          method: "POST",
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-      } catch (e) {
-        closeModal();
-        navigation.navigate("Disconnected", {
-          hubName: hubName,
-          lastSeen: "Just now",
-        });
-        return;
-      }
-
-      setIsRestarting(true);
-      let countdown = 10;
-      setModalState((prev) => ({
-        ...prev,
-        title: "Restarting Device...",
-        msg: `Please wait while the system reboots.\nTime remaining: ${countdown}s`,
-      }));
-
-      const intervalId = setInterval(() => {
-        countdown -= 1;
-        if (countdown <= 0) {
-          clearInterval(intervalId);
-          setIsRestarting(false);
-          closeModal();
-        } else {
-          setModalState((prev) => ({
-            ...prev,
-            msg: `Please wait while the system reboots.\nTime remaining: ${countdown}s`,
-          }));
+      setTimeout(() => {
+        if (!isOnline) {
+          setModalState({ ...modalState, visible: false });
+          navigation.navigate("Disconnected", {
+            hubName: hubName || "Living Room Hub",
+            lastSeen: "2h ago",
+          });
+          return;
         }
-      }, 1000);
-    } else if (modalState.type === "unpair") {
-      setModalState((prev) => ({ ...prev, loading: true }));
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-        const response = await fetch(`http://${hubData.ip_address}/reset`, {
-          method: "POST",
-          signal: controller.signal,
-        });
+        setIsRestarting(true);
+        setIsOnline(false);
 
-        clearTimeout(timeoutId);
-        if (!response.ok) throw new Error("Connection Refused");
-
-        await deleteDeviceFromDB();
-      } catch (e) {
-        setModalState({
-          visible: true,
-          type: "force_unpair",
-          title: "Device Offline",
-          msg: "Please turn on the Hub if you want to erase its data, or you can Force Remove it from the app only.",
-          icon: "wifi-off",
-          iconColor: isDarkMode ? "#ffaa00" : "#ff8c00",
+        let countdown = 10;
+        setModalState((prev) => ({
+          ...prev,
           loading: false,
-        });
-      }
-    } else if (modalState.type === "force_unpair") {
+          title: "Restarting Device...",
+          msg: `Please wait while the system reboots.\nTime remaining: ${countdown}s`,
+        }));
+
+        const intervalId = setInterval(() => {
+          countdown -= 1;
+          if (countdown <= 0) {
+            clearInterval(intervalId);
+            setIsRestarting(false);
+            setIsOnline(true);
+            closeModal();
+          } else {
+            setModalState((prev) => ({
+              ...prev,
+              msg: `Please wait while the system reboots.\nTime remaining: ${countdown}s`,
+            }));
+          }
+        }, 1000);
+      }, 1500);
+    } else if (
+      modalState.type === "unpair" ||
+      modalState.type === "force_unpair"
+    ) {
       await deleteDeviceFromDB();
     }
   };
@@ -353,30 +242,41 @@ export default function DeviceConfigScreen() {
             className="items-center py-5 border-b mb-5"
             style={{ borderBottomColor: theme.cardBorder }}
           >
-            <View
-              className="w-20 h-20 rounded-full border-2 justify-center items-center mb-4"
-              style={{ borderColor: statusColor, backgroundColor: statusBg }}
+            {}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={toggleStatus}
+              className="items-center"
             >
-              <MaterialIcons name={statusIcon} size={40} color={statusColor} />
-            </View>
-            <Text
-              className="text-lg font-bold mb-1.5"
-              style={{ color: theme.text }}
-            >
-              {hubName || "GridWatch Hub"}
-            </Text>
-            <View className="flex-row items-center gap-1.5">
               <View
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ backgroundColor: statusColor }}
-              />
-              <Text
-                className="text-xs font-semibold"
-                style={{ color: statusColor }}
+                className="w-20 h-20 rounded-full border-2 justify-center items-center mb-4"
+                style={{ borderColor: statusColor, backgroundColor: statusBg }}
               >
-                {statusDetailText}
+                <MaterialIcons
+                  name={statusIcon}
+                  size={40}
+                  color={statusColor}
+                />
+              </View>
+              <Text
+                className="text-lg font-bold mb-1.5"
+                style={{ color: theme.text }}
+              >
+                {hubName || "Living Room Hub"}
               </Text>
-            </View>
+              <View className="flex-row items-center gap-1.5">
+                <View
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: statusColor }}
+                />
+                <Text
+                  className="text-xs font-semibold"
+                  style={{ color: statusColor }}
+                >
+                  {statusDetailText}
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
 
           <Text

@@ -11,7 +11,6 @@ import {
   UIManager,
   Modal,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Linking,
 } from "react-native";
@@ -41,6 +40,18 @@ export default function HelpSupportScreen() {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({
+    title: "",
+    message: "",
+    type: "error",
+  });
+
+  const showAlert = (title, message, type = "error") => {
+    setAlertConfig({ title, message, type });
+    setAlertVisible(true);
+  };
 
   const commonIssues = [
     {
@@ -73,7 +84,43 @@ export default function HelpSupportScreen() {
       answer:
         "Ensure you have selected the correct Utility Provider in Settings. If you chose 'Manual Configuration', double-check that the ₱/kWh rate matches your latest electricity bill.",
     },
+    {
+      id: 6,
+      title: "How do I update my electricity rate?",
+      answer:
+        "Go to Settings > Utility & Rates. You can select your provider from the list for auto-updates or choose 'Manual Configuration' to input the specific rate from your bill.",
+    },
+    {
+      id: 7,
+      title: "The app keeps crashing",
+      answer:
+        "Please ensure you are using the latest version of the app from the App Store/Play Store. Try clearing the app cache or reinstalling. If the issue persists, submit a ticket with your phone model details.",
+    },
+    {
+      id: 8,
+      title: "Can I control the hub from multiple phones?",
+      answer:
+        "Yes. Simply log in with the same GridWatch account on multiple devices. All settings and controls are synchronized in the cloud.",
+    },
+    {
+      id: 9,
+      title: "I am not receiving notifications",
+      answer:
+        "1. Check if 'Push Notifications' are enabled in the App Settings.\n2. Verify that your phone's system settings allow notifications for GridWatch.\n3. Ensure 'Do Not Disturb' mode is off.",
+    },
+    {
+      id: 10,
+      title: "How to check for firmware updates?",
+      answer:
+        "The Hub automatically checks for updates every 24 hours. You can manually check by going to Device Configuration > System Information. The LED will blink blue during an update.",
+    },
   ];
+
+  const filteredIssues = commonIssues.filter(
+    (issue) =>
+      issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      issue.answer.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const toggleExpand = (id) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -81,10 +128,11 @@ export default function HelpSupportScreen() {
   };
 
   const handleSubmitTicket = () => {
-    if (!subject || !message) {
-      Alert.alert(
+    if (!subject.trim() || !message.trim()) {
+      showAlert(
         "Missing Info",
-        "Please fill in both the subject and description."
+        "Please fill in both the subject and description.",
+        "error"
       );
       return;
     }
@@ -96,9 +144,11 @@ export default function HelpSupportScreen() {
       setTicketModalVisible(false);
       setSubject("");
       setMessage("");
-      Alert.alert(
+
+      showAlert(
         "Ticket Submitted",
-        "Your support ticket #8821 has been created. We will contact you shortly."
+        "Your support ticket #8821 has been created. We will contact you shortly.",
+        "success"
       );
     }, 2000);
   };
@@ -114,9 +164,10 @@ export default function HelpSupportScreen() {
 
     Linking.openURL(url).catch((err) => {
       console.error("Error opening email app:", err);
-      Alert.alert(
+      showAlert(
         "Error",
-        "Could not open email client. Please check if you have a mail app installed."
+        "Could not open email client. Please check if you have a mail app installed.",
+        "error"
       );
     });
   };
@@ -157,6 +208,15 @@ export default function HelpSupportScreen() {
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <MaterialIcons
+                  name="close"
+                  size={20}
+                  color={theme.textSecondary}
+                />
+              </TouchableOpacity>
+            )}
           </View>
 
           <Text
@@ -197,53 +257,72 @@ export default function HelpSupportScreen() {
             Common Issues
           </Text>
 
-          <View
-            className="rounded-2xl overflow-hidden"
-            style={{ backgroundColor: theme.card }}
-          >
-            {commonIssues.map((issue, index) => {
-              const isExpanded = expandedId === issue.id;
-              return (
-                <View
-                  key={issue.id}
-                  style={{
-                    borderBottomWidth:
-                      index !== commonIssues.length - 1 ? 1 : 0,
-                    borderBottomColor: theme.cardBorder,
-                  }}
-                >
-                  <TouchableOpacity
-                    className="flex-row items-center justify-between p-5"
-                    onPress={() => toggleExpand(issue.id)}
-                    activeOpacity={0.7}
+          {filteredIssues.length === 0 ? (
+            <View className="py-10 items-center">
+              <MaterialIcons
+                name="search-off"
+                size={48}
+                color={theme.textSecondary}
+                style={{ opacity: 0.5 }}
+              />
+              <Text
+                className="mt-4 text-sm"
+                style={{ color: theme.textSecondary }}
+              >
+                No matching issues found.
+              </Text>
+            </View>
+          ) : (
+            <View
+              className="rounded-2xl overflow-hidden"
+              style={{ backgroundColor: theme.card }}
+            >
+              {filteredIssues.map((issue, index) => {
+                const isExpanded = expandedId === issue.id;
+                return (
+                  <View
+                    key={issue.id}
+                    style={{
+                      borderBottomWidth:
+                        index !== filteredIssues.length - 1 ? 1 : 0,
+                      borderBottomColor: theme.cardBorder,
+                    }}
                   >
-                    <Text
-                      className="font-semibold text-sm flex-1 mr-4"
-                      style={{ color: theme.text }}
+                    <TouchableOpacity
+                      className="flex-row items-center justify-between p-5"
+                      onPress={() => toggleExpand(issue.id)}
+                      activeOpacity={0.7}
                     >
-                      {issue.title}
-                    </Text>
-                    <MaterialIcons
-                      name={isExpanded ? "keyboard-arrow-up" : "chevron-right"}
-                      size={20}
-                      color={theme.textSecondary}
-                    />
-                  </TouchableOpacity>
-
-                  {isExpanded && (
-                    <View className="px-5 pb-5">
                       <Text
-                        className="text-sm leading-6"
-                        style={{ color: theme.textSecondary }}
+                        className="font-semibold text-sm flex-1 mr-4"
+                        style={{ color: theme.text }}
                       >
-                        {issue.answer}
+                        {issue.title}
                       </Text>
-                    </View>
-                  )}
-                </View>
-              );
-            })}
-          </View>
+                      <MaterialIcons
+                        name={
+                          isExpanded ? "keyboard-arrow-up" : "chevron-right"
+                        }
+                        size={20}
+                        color={theme.textSecondary}
+                      />
+                    </TouchableOpacity>
+
+                    {isExpanded && (
+                      <View className="px-5 pb-5">
+                        <Text
+                          className="text-sm leading-6"
+                          style={{ color: theme.textSecondary }}
+                        >
+                          {issue.answer}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
 
           <Text
             className="text-center text-xs mt-10 opacity-50 mb-10"
@@ -254,6 +333,7 @@ export default function HelpSupportScreen() {
         </View>
       </ScrollView>
 
+      {}
       <Modal
         animationType="slide"
         transparent={true}
@@ -271,25 +351,25 @@ export default function HelpSupportScreen() {
           />
 
           <View
-            className="rounded-t-3xl p-6 h-3/4"
+            className="rounded-t-3xl p-5 h-[60%]"
             style={{ backgroundColor: theme.background }}
           >
-            <View className="items-center mb-6">
-              <View className="w-12 h-1.5 rounded-full bg-gray-600 mb-4" />
-              <Text className="text-xl font-bold" style={{ color: theme.text }}>
+            <View className="items-center mb-4">
+              <View className="w-10 h-1 rounded-full bg-gray-600 mb-3" />
+              <Text className="text-lg font-bold" style={{ color: theme.text }}>
                 New Support Ticket
               </Text>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text
-                className="text-sm font-bold mb-2"
+                className="text-xs font-bold mb-1.5"
                 style={{ color: theme.textSecondary }}
               >
                 Subject
               </Text>
               <TextInput
-                className="p-4 rounded-xl mb-5"
+                className="p-3 rounded-xl mb-4 text-sm"
                 style={{
                   backgroundColor: theme.card,
                   color: theme.text,
@@ -303,19 +383,19 @@ export default function HelpSupportScreen() {
               />
 
               <Text
-                className="text-sm font-bold mb-2"
+                className="text-xs font-bold mb-1.5"
                 style={{ color: theme.textSecondary }}
               >
                 Description
               </Text>
               <TextInput
-                className="p-4 rounded-xl mb-8"
+                className="p-3 rounded-xl mb-6 text-sm"
                 style={{
                   backgroundColor: theme.card,
                   color: theme.text,
                   borderWidth: 1,
                   borderColor: theme.cardBorder,
-                  height: 150,
+                  height: 100,
                   textAlignVertical: "top",
                 }}
                 placeholder="Describe your issue in detail..."
@@ -333,12 +413,12 @@ export default function HelpSupportScreen() {
                   colors={["#0055ff", "#00ff99"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  className="p-4 rounded-xl items-center"
+                  className="p-3.5 rounded-xl items-center"
                 >
                   {isSubmitting ? (
                     <ActivityIndicator color="black" />
                   ) : (
-                    <Text className="text-black font-bold text-base uppercase">
+                    <Text className="text-black font-bold text-sm uppercase">
                       Submit Ticket
                     </Text>
                   )}
@@ -346,14 +426,91 @@ export default function HelpSupportScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                className="mt-4 p-4 items-center"
+                className="mt-3 p-3 items-center"
                 onPress={() => setTicketModalVisible(false)}
               >
-                <Text style={{ color: theme.textSecondary }}>Cancel</Text>
+                <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={alertVisible}
+        onRequestClose={() => setAlertVisible(false)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/80">
+          <View
+            className="w-[70%] max-w-[280px] p-5 rounded-2xl items-center border"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            }}
+          >
+            <View
+              className="w-10 h-10 rounded-full justify-center items-center mb-3"
+              style={{
+                backgroundColor:
+                  alertConfig.type === "success"
+                    ? "rgba(0, 255, 153, 0.1)"
+                    : "rgba(255, 68, 68, 0.1)",
+              }}
+            >
+              <MaterialIcons
+                name={
+                  alertConfig.type === "success" ? "check" : "priority-high"
+                }
+                size={22}
+                color={alertConfig.type === "success" ? "#00ff99" : "#ff4444"}
+              />
+            </View>
+
+            <Text
+              className="text-base font-bold mb-1.5 text-center"
+              style={{ color: theme.text }}
+            >
+              {alertConfig.title}
+            </Text>
+
+            <Text
+              className="text-xs text-center mb-5 leading-4"
+              style={{ color: theme.textSecondary }}
+            >
+              {alertConfig.message}
+            </Text>
+
+            <TouchableOpacity
+              className="w-full"
+              onPress={() => setAlertVisible(false)}
+            >
+              <LinearGradient
+                colors={
+                  alertConfig.type === "success"
+                    ? ["#0055ff", "#00ff99"]
+                    : ["#ff4444", "#ff8800"]
+                }
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                className="p-2.5 rounded-xl items-center"
+              >
+                <Text
+                  className="font-bold text-xs uppercase tracking-wider"
+                  style={{
+                    color: alertConfig.type === "success" ? "black" : "white",
+                  }}
+                >
+                  {alertConfig.type === "success" ? "Okay" : "Try Again"}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

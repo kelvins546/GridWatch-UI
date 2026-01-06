@@ -8,13 +8,15 @@ import {
   StatusBar,
   Modal,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
-import { supabase } from "../../lib/supabase";
 
 const APPLIANCE_OPTIONS = [
   "Air Conditioner",
@@ -50,7 +52,9 @@ export default function HubConfigScreen() {
   const route = useRoute();
   const { theme, isDarkMode } = useTheme();
 
-  const { hubId } = route.params || { hubId: null };
+  const { hubId } = route.params || { hubId: "demo_hub_123" };
+
+  const [isLoading, setIsLoading] = useState(false);
 
   const [hubName, setHubName] = useState({
     selection: PLACEHOLDER_HUB,
@@ -119,62 +123,15 @@ export default function HubConfigScreen() {
     if (!isValid(outlet4, PLACEHOLDER_DEVICE))
       return showAlert("Missing Info", "Please configure Outlet 4.");
 
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("No user logged in");
+    setIsLoading(true);
 
-      const { data: hubData, error: hubError } = await supabase
-        .from("hubs")
-        .upsert(
-          {
-            user_id: user.id,
-            serial_number: hubId,
-            name: getFinalName(hubName),
-            status: "online",
-            model: "GridWatch-V1",
-          },
-          { onConflict: "serial_number" }
-        )
-        .select()
-        .single();
-
-      if (hubError) throw hubError;
-
-      const realHubUUID = hubData.id;
-
-      const outlets = [
-        { data: outlet1, num: 1 },
-        { data: outlet2, num: 2 },
-        { data: outlet3, num: 3 },
-        { data: outlet4, num: 4 },
-      ];
-
-      for (const outlet of outlets) {
-        const { error: deviceError } = await supabase.from("devices").upsert(
-          {
-            hub_id: realHubUUID,
-            user_id: user.id,
-            name: getFinalName(outlet.data),
-            type: outlet.data.selection,
-            outlet_number: outlet.num,
-            status: "off",
-            is_monitored: true,
-          },
-          { onConflict: "hub_id, outlet_number" }
-        );
-
-        if (deviceError) throw deviceError;
-      }
+    setTimeout(() => {
+      setIsLoading(false);
 
       showAlert("Setup Complete", "Hub & Outlets Synced!", "success", () =>
         navigation.navigate("MainApp", { screen: "Home" })
       );
-    } catch (error) {
-      console.error("Setup Error:", error);
-      showAlert("Error", "Could not save configuration: " + error.message);
-    }
+    }, 2000);
   };
 
   const getAlertColor = (type) => (type === "success" ? "#00ff99" : "#ff4444");
@@ -193,6 +150,26 @@ export default function HubConfigScreen() {
         barStyle={theme.statusBarStyle}
         backgroundColor={theme.background}
       />
+
+      {}
+      {isLoading && (
+        <View
+          style={{
+            position: "absolute",
+            zIndex: 50,
+            width: "100%",
+            height: "100%",
+            backgroundColor: "rgba(0,0,0,0.7)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <ActivityIndicator size="large" color="#00ff99" />
+          <Text style={{ color: "#fff", marginTop: 15, fontWeight: "bold" }}>
+            Finalizing Setup...
+          </Text>
+        </View>
+      )}
 
       <View
         className="flex-row items-center justify-between px-6 py-5 border-b"
@@ -223,110 +200,122 @@ export default function HubConfigScreen() {
         <View className="w-[50px]" />
       </View>
 
-      <ScrollView className="flex-1">
-        <View className="p-6">
-          <Text
-            className="text-sm mb-5 leading-5"
-            style={{ color: theme.textSecondary }}
-          >
-            Give your hub a name and identify the devices plugged into each
-            outlet.
-          </Text>
-
-          <ConfigDropdown
-            label="Hub Location / Name"
-            options={HUB_LOCATIONS}
-            state={hubName}
-            setState={setHubName}
-            placeholder={PLACEHOLDER_HUB}
-            theme={theme}
-          />
-
-          <View
-            className="border-t border-dashed mb-5"
-            style={{ borderColor: theme.cardBorder }}
-          />
-
-          <View
-            className="p-4 rounded-xl border mb-8"
-            style={{
-              backgroundColor: "rgba(255, 170, 0, 0.1)",
-              borderColor: "#ffaa00",
-            }}
-          >
-            <View className="flex-row gap-2.5 mb-1.5 items-center">
-              <MaterialIcons name="warning" size={20} color="#ffaa00" />
-              <Text className="font-bold text-sm" style={{ color: "#ffaa00" }}>
-                Important for Accuracy
-              </Text>
-            </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="p-6">
             <Text
-              className="text-xs leading-5"
+              className="text-sm mb-5 leading-5"
               style={{ color: theme.textSecondary }}
             >
-              Ensure you plug the correct appliance into the matching physical
-              outlet number on the Hub.
+              Give your hub a name and identify the devices plugged into each
+              outlet.
             </Text>
+
+            <ConfigDropdown
+              label="Hub Location / Name"
+              options={HUB_LOCATIONS}
+              state={hubName}
+              setState={setHubName}
+              placeholder={PLACEHOLDER_HUB}
+              theme={theme}
+            />
+
+            <View
+              className="border-t border-dashed mb-5"
+              style={{ borderColor: theme.cardBorder }}
+            />
+
+            <View
+              className="p-4 rounded-xl border mb-8"
+              style={{
+                backgroundColor: "rgba(255, 170, 0, 0.1)",
+                borderColor: "#ffaa00",
+              }}
+            >
+              <View className="flex-row gap-2.5 mb-1.5 items-center">
+                <MaterialIcons name="warning" size={20} color="#ffaa00" />
+                <Text
+                  className="font-bold text-sm"
+                  style={{ color: "#ffaa00" }}
+                >
+                  Important for Accuracy
+                </Text>
+              </View>
+              <Text
+                className="text-xs leading-5"
+                style={{ color: theme.textSecondary }}
+              >
+                Ensure you plug the correct appliance into the matching physical
+                outlet number on the Hub.
+              </Text>
+            </View>
+
+            <Text
+              className="text-base font-bold mb-5"
+              style={{ color: theme.text }}
+            >
+              Outlet Devices
+            </Text>
+
+            <ConfigDropdown
+              label="Outlet 1"
+              options={APPLIANCE_OPTIONS}
+              state={outlet1}
+              setState={setOutlet1}
+              placeholder={PLACEHOLDER_DEVICE}
+              theme={theme}
+            />
+            <ConfigDropdown
+              label="Outlet 2"
+              options={APPLIANCE_OPTIONS}
+              state={outlet2}
+              setState={setOutlet2}
+              placeholder={PLACEHOLDER_DEVICE}
+              theme={theme}
+            />
+            <ConfigDropdown
+              label="Outlet 3"
+              options={APPLIANCE_OPTIONS}
+              state={outlet3}
+              setState={setOutlet3}
+              placeholder={PLACEHOLDER_DEVICE}
+              theme={theme}
+            />
+            <ConfigDropdown
+              label="Outlet 4"
+              options={APPLIANCE_OPTIONS}
+              state={outlet4}
+              setState={setOutlet4}
+              placeholder={PLACEHOLDER_DEVICE}
+              theme={theme}
+            />
+
+            <View className="h-10" />
           </View>
+        </ScrollView>
 
-          <Text
-            className="text-base font-bold mb-5"
-            style={{ color: theme.text }}
-          >
-            Outlet Devices
-          </Text>
-
-          <ConfigDropdown
-            label="Outlet 1"
-            options={APPLIANCE_OPTIONS}
-            state={outlet1}
-            setState={setOutlet1}
-            placeholder={PLACEHOLDER_DEVICE}
-            theme={theme}
-          />
-          <ConfigDropdown
-            label="Outlet 2"
-            options={APPLIANCE_OPTIONS}
-            state={outlet2}
-            setState={setOutlet2}
-            placeholder={PLACEHOLDER_DEVICE}
-            theme={theme}
-          />
-          <ConfigDropdown
-            label="Outlet 3"
-            options={APPLIANCE_OPTIONS}
-            state={outlet3}
-            setState={setOutlet3}
-            placeholder={PLACEHOLDER_DEVICE}
-            theme={theme}
-          />
-          <ConfigDropdown
-            label="Outlet 4"
-            options={APPLIANCE_OPTIONS}
-            state={outlet4}
-            setState={setOutlet4}
-            placeholder={PLACEHOLDER_DEVICE}
-            theme={theme}
-          />
-
-          <View className="h-10" />
+        <View className="p-6">
+          <TouchableOpacity onPress={handleFinishSetup}>
+            <LinearGradient
+              colors={["#0055ff", "#00ff99"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              className="p-4 rounded-xl items-center"
+            >
+              <Text className="font-bold text-base text-black uppercase">
+                Finish Setup
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
-      </ScrollView>
-
-      <View className="p-6">
-        <TouchableOpacity onPress={handleFinishSetup}>
-          <LinearGradient
-            colors={["#0055ff", "#00ff99"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            className="p-4 rounded-xl items-center"
-          >
-            <Text className="font-bold text-base text-black uppercase">
-              Finish Setup
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+      </KeyboardAvoidingView>
 
       <Modal transparent visible={alertConfig.visible} animationType="fade">
         <View className="flex-1 bg-black/60 justify-center items-center">

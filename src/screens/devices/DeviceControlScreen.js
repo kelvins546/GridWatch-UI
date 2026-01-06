@@ -8,6 +8,8 @@ import {
   Modal,
   Switch,
   TextInput,
+  FlatList,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -30,7 +32,17 @@ export default function DeviceControlScreen() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
 
-  const [scheduleTime, setScheduleTime] = useState("22:00");
+  const [schedules, setSchedules] = useState([
+    {
+      id: "1",
+      time: "22:00",
+      days: [true, true, true, true, true, true, true],
+      action: false,
+      active: true,
+    },
+  ]);
+
+  const [scheduleTime, setScheduleTime] = useState("07:00");
   const [selectedDays, setSelectedDays] = useState([
     true,
     true,
@@ -40,7 +52,7 @@ export default function DeviceControlScreen() {
     true,
     true,
   ]);
-  const [isActionOn, setIsActionOn] = useState(false);
+  const [isActionOn, setIsActionOn] = useState(true);
 
   const heroColors = isPowered
     ? ["#0055ff", theme.background]
@@ -58,18 +70,39 @@ export default function DeviceControlScreen() {
   };
 
   const saveSchedule = () => {
+    const newSchedule = {
+      id: Date.now().toString(),
+      time: scheduleTime,
+      days: selectedDays,
+      action: isActionOn,
+      active: true,
+    };
+    setSchedules([...schedules, newSchedule]);
     setShowSchedule(false);
+  };
+
+  const toggleScheduleActive = (id) => {
+    setSchedules((current) =>
+      current.map((s) => (s.id === id ? { ...s, active: !s.active } : s))
+    );
   };
 
   return (
     <SafeAreaView
       className="flex-1"
       style={{ backgroundColor: theme.background }}
-      edges={["top", "left", "right"]}
+      edges={["left", "right", "bottom"]}
     >
-      <StatusBar barStyle="light-content" />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent={true}
+      />
 
-      <View className="absolute top-12 left-6 right-6 z-10 flex-row justify-between">
+      <View
+        className="absolute left-6 right-6 z-10 flex-row justify-between"
+        style={{ top: Platform.OS === "android" ? 50 : 60 }}
+      >
         <TouchableOpacity
           className="flex-row items-center gap-1.5"
           onPress={() => navigation.goBack()}
@@ -84,7 +117,7 @@ export default function DeviceControlScreen() {
         />
       </View>
 
-      <LinearGradient colors={heroColors} className="pt-24 pb-8 items-center">
+      <LinearGradient colors={heroColors} className="pt-32 pb-8 items-center">
         <View className="w-20 h-20 rounded-full bg-black/20 items-center justify-center border-2 border-white/20 mb-4">
           <MaterialIcons
             name={isPowered ? "ac-unit" : "power-off"}
@@ -148,47 +181,55 @@ export default function DeviceControlScreen() {
 
           <View className="flex-row justify-between items-center mb-4">
             <Text className="text-xs font-bold uppercase tracking-widest text-[#888]">
-              UPCOMING SCHEDULE
+              UPCOMING SCHEDULES
             </Text>
             <TouchableOpacity onPress={() => setShowSchedule(true)}>
-              <Text className="text-xs font-semibold text-[#00ff99]">Edit</Text>
+              <Text className="text-xs font-semibold text-[#00ff99]">
+                Add New
+              </Text>
             </TouchableOpacity>
           </View>
 
-          <View
-            className="flex-row items-center justify-between p-4 rounded-xl border"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
-          >
-            <View>
-              <Text
-                className="text-base font-bold"
-                style={{ color: theme.text }}
-              >
-                {scheduleTime}
-              </Text>
-              <Text
-                className="text-xs mt-0.5"
-                style={{ color: theme.textSecondary }}
-              >
-                {isActionOn ? "Auto-ON" : "Auto-OFF"} • Daily
-              </Text>
+          {}
+          {schedules.map((item) => (
+            <View
+              key={item.id}
+              className="flex-row items-center justify-between p-4 rounded-xl border mb-3"
+              style={{
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+              }}
+            >
+              <View>
+                <Text
+                  className="text-base font-bold"
+                  style={{ color: theme.text }}
+                >
+                  {item.time}
+                </Text>
+                <Text
+                  className="text-xs mt-0.5"
+                  style={{ color: theme.textSecondary }}
+                >
+                  {item.action ? "Auto-ON" : "Auto-OFF"} • Daily
+                </Text>
+              </View>
+              <Switch
+                value={item.active}
+                onValueChange={() => toggleScheduleActive(item.id)}
+                trackColor={{ true: "#00ff99", false: "#333" }}
+                thumbColor="#fff"
+              />
             </View>
-            <Switch
-              value={true}
-              trackColor={{ true: "#00ff99" }}
-              thumbColor="#fff"
-            />
-          </View>
+          ))}
         </View>
       </ScrollView>
 
+      {}
       <Modal visible={showConfirm} transparent animationType="fade">
         <View className="flex-1 bg-black/80 justify-center items-center">
           <View
-            className="w-[300px] p-6 rounded-3xl items-center border"
+            className="w-[80%] max-w-[300px] p-5 rounded-3xl items-center border"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
@@ -196,12 +237,12 @@ export default function DeviceControlScreen() {
           >
             <MaterialIcons
               name={isPowered ? "power-off" : "power"}
-              size={48}
+              size={40}
               color={isPowered ? "#ff4444" : "#00ff99"}
               style={{ marginBottom: 15 }}
             />
             <Text
-              className="text-lg font-bold mb-2.5"
+              className="text-lg font-bold mb-2"
               style={{ color: theme.text }}
             >
               {isPowered ? "Turn Off Device?" : "Restore Power?"}
@@ -211,8 +252,8 @@ export default function DeviceControlScreen() {
               style={{ color: theme.textSecondary }}
             >
               {isPowered
-                ? "This will physically cut power to the outlet. The device will enter standby mode."
-                : "This will reactivate the outlet relay. Ensure appliance is safe to turn on."}
+                ? "This will physically cut power to the outlet."
+                : "This will reactivate the outlet relay."}
             </Text>
             <View className="flex-row gap-2.5 w-full">
               <TouchableOpacity
@@ -242,25 +283,26 @@ export default function DeviceControlScreen() {
         </View>
       </Modal>
 
+      {}
       <Modal visible={showSchedule} transparent animationType="slide">
         <View className="flex-1 bg-black/80 justify-center items-center">
           <View
-            className="w-[300px] p-6 rounded-3xl items-center border"
+            className="w-[80%] max-w-[320px] p-4 rounded-3xl items-center border"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
             }}
           >
             <Text
-              className="text-lg font-bold mb-5"
+              className="text-base font-bold mb-4"
               style={{ color: theme.text }}
             >
-              Edit Schedule
+              Set Schedule
             </Text>
 
-            <View className="mb-6 items-center">
+            <View className="mb-4 items-center">
               <TextInput
-                className="text-3xl font-bold py-2.5 px-8 rounded-xl border text-center min-w-[140px]"
+                className="text-3xl font-bold py-1 px-4 rounded-xl border text-center min-w-[100px]"
                 style={{
                   color: theme.text,
                   borderColor: theme.cardBorder,
@@ -273,26 +315,20 @@ export default function DeviceControlScreen() {
               />
             </View>
 
-            <View className="flex-row justify-between w-full mb-6">
+            <View className="flex-row justify-between w-full mb-4 px-1">
               {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => (
                 <TouchableOpacity
                   key={index}
                   onPress={() => toggleDay(index)}
-                  className="w-8 h-8 rounded-full justify-center items-center"
+                  className="w-7 h-7 rounded-full justify-center items-center"
                   style={{
                     backgroundColor: selectedDays[index]
                       ? "#00ff99"
                       : theme.background,
-                    ...(selectedDays[index] && {
-                      shadowColor: "#00ff99",
-                      shadowOpacity: 0.4,
-                      shadowRadius: 8,
-                      elevation: 5,
-                    }),
                   }}
                 >
                   <Text
-                    className="text-xs font-bold"
+                    className="text-[10px] font-bold"
                     style={{
                       color: selectedDays[index] ? "#000" : theme.textSecondary,
                     }}
@@ -304,7 +340,7 @@ export default function DeviceControlScreen() {
             </View>
 
             <TouchableOpacity
-              className="flex-row justify-between items-center w-full p-4 rounded-xl border mb-6"
+              className="flex-row justify-between items-center w-full p-3 rounded-xl border mb-5"
               style={{
                 backgroundColor: theme.background,
                 borderColor: theme.cardBorder,
@@ -312,18 +348,21 @@ export default function DeviceControlScreen() {
               onPress={() => setIsActionOn(!isActionOn)}
               activeOpacity={0.8}
             >
-              <Text className="font-semibold" style={{ color: theme.text }}>
+              <Text
+                className="font-semibold text-xs"
+                style={{ color: theme.text }}
+              >
                 Action: {isActionOn ? "Turn ON" : "Turn OFF"}
               </Text>
               <View
-                className="w-11 h-6 rounded-full border justify-center"
+                className="w-9 h-5 rounded-full border justify-center"
                 style={{
                   borderColor: isActionOn ? "#00ff99" : "#555",
                   backgroundColor: isActionOn ? "rgba(0,255,153,0.1)" : "#333",
                 }}
               >
                 <View
-                  className="w-4 h-4 rounded-full absolute"
+                  className="w-3 h-3 rounded-full absolute"
                   style={{
                     backgroundColor: isActionOn ? "#00ff99" : "#fff",
                     right: isActionOn ? 2 : undefined,
@@ -333,16 +372,16 @@ export default function DeviceControlScreen() {
               </View>
             </TouchableOpacity>
 
-            <View className="flex-row gap-2.5 w-full">
+            <View className="flex-row gap-3 w-full">
               <TouchableOpacity
-                className="flex-1 p-3 rounded-lg border items-center"
+                className="flex-1 p-3 rounded-xl border items-center"
                 style={{ borderColor: theme.cardBorder }}
                 onPress={() => setShowSchedule(false)}
               >
                 <Text style={{ color: theme.text }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className="flex-1 p-3 rounded-lg border items-center"
+                className="flex-1 p-3 rounded-xl border items-center"
                 style={{
                   backgroundColor: theme.primary,
                   borderColor: theme.primary,

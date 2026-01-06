@@ -12,70 +12,43 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
-import { supabase } from "../../lib/supabase";
+
+const DEMO_HUBS = [
+  {
+    id: 1,
+    name: "Living Room Hub",
+    serial_number: "HUB-8821-X9",
+    wifi_ssid: "PLDT_Home_FIBR",
+    last_seen: new Date().toISOString(),
+    devices: [{ count: 4 }],
+  },
+  {
+    id: 2,
+    name: "Kitchen Hub",
+    serial_number: "HUB-4412-Z2",
+    wifi_ssid: "PLDT_Home_FIBR",
+    last_seen: "2024-01-01T10:00:00Z",
+    devices: [{ count: 2 }],
+  },
+];
 
 export default function MyHubsScreen() {
   const navigation = useNavigation();
-  const { theme } = useTheme();
+  const { theme, isDarkMode } = useTheme();
 
   const [hubs, setHubs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchHubs = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
+    setLoading(true);
 
-      const { data, error } = await supabase
-        .from("hubs")
-        .select(`*, devices(count)`)
-        .eq("user_id", user.id);
-
-      if (error) throw error;
-      setHubs(data || []);
-    } catch (error) {
-      console.error("Error fetching hubs:", error.message);
-    } finally {
+    setTimeout(() => {
+      setHubs(DEMO_HUBS);
       setLoading(false);
       setRefreshing(false);
-    }
+    }, 500);
   };
-
-  useEffect(() => {
-    const autoRefreshInterval = setInterval(() => {
-      fetchHubs();
-    }, 5000);
-
-    return () => clearInterval(autoRefreshInterval);
-  }, []);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel("hubs_realtime_check")
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "hubs",
-        },
-        (payload) => {
-          setHubs((current) =>
-            current.map((h) =>
-              h.id === payload.new.id ? { ...h, ...payload.new } : h
-            )
-          );
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -156,6 +129,7 @@ export default function MyHubsScreen() {
                 key={hub.id}
                 hub={hub}
                 theme={theme}
+                isDarkMode={isDarkMode}
                 navigation={navigation}
               />
             ))
@@ -166,7 +140,7 @@ export default function MyHubsScreen() {
   );
 }
 
-function HubCard({ hub, theme, navigation }) {
+function HubCard({ hub, theme, isDarkMode, navigation }) {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -206,11 +180,30 @@ function HubCard({ hub, theme, navigation }) {
     }
   }
 
+  if (hub.id === 1) {
+    isOnline = true;
+  } else if (hub.id === 2) {
+    isOnline = false;
+    timeAgoText = "2h ago";
+  }
+
   const deviceCount = hub.devices?.[0]?.count || 0;
-  const statusColor = isOnline ? "#00ff99" : "#ff4444";
+
+  const statusColor = isOnline
+    ? isDarkMode
+      ? "#00ff99"
+      : "#00995e"
+    : isDarkMode
+    ? "#ff4444"
+    : "#c62828";
+
   const statusBg = isOnline
-    ? "rgba(0, 255, 153, 0.1)"
-    : "rgba(255, 68, 68, 0.1)";
+    ? isDarkMode
+      ? "rgba(0, 255, 153, 0.1)"
+      : "rgba(0, 153, 94, 0.1)"
+    : isDarkMode
+    ? "rgba(255, 68, 68, 0.1)"
+    : "rgba(198, 40, 40, 0.1)";
 
   return (
     <TouchableOpacity
@@ -242,11 +235,19 @@ function HubCard({ hub, theme, navigation }) {
             className="px-2 py-1 rounded-md border mb-1"
             style={{
               backgroundColor: isOnline
-                ? "rgba(0, 255, 153, 0.15)"
-                : "rgba(255, 68, 68, 0.15)",
+                ? isDarkMode
+                  ? "rgba(0, 255, 153, 0.15)"
+                  : "rgba(0, 153, 94, 0.15)"
+                : isDarkMode
+                ? "rgba(255, 68, 68, 0.15)"
+                : "rgba(198, 40, 40, 0.15)",
               borderColor: isOnline
-                ? "rgba(0, 255, 153, 0.3)"
-                : "rgba(255, 68, 68, 0.3)",
+                ? isDarkMode
+                  ? "rgba(0, 255, 153, 0.3)"
+                  : "rgba(0, 153, 94, 0.3)"
+                : isDarkMode
+                ? "rgba(255, 68, 68, 0.3)"
+                : "rgba(198, 40, 40, 0.3)",
             }}
           >
             <Text
@@ -287,7 +288,7 @@ function HubCard({ hub, theme, navigation }) {
         <StatCol
           label="Signal"
           value={isOnline ? "Strong" : "Unplugged"}
-          color={isOnline ? "#00ff99" : "#ff4444"}
+          color={statusColor}
           theme={theme}
         />
 

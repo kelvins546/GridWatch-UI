@@ -7,7 +7,6 @@ import {
   TextInput,
   Modal,
   StatusBar,
-  Alert,
   ActivityIndicator,
   Image,
 } from "react-native";
@@ -17,8 +16,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import * as ImagePicker from "expo-image-picker";
-import { decode } from "base64-arraybuffer";
-import { supabase } from "../../lib/supabase";
 
 export default function ProfileSettingsScreen() {
   const navigation = useNavigation();
@@ -42,51 +39,75 @@ export default function ProfileSettingsScreen() {
 
   const [isLoading, setIsLoading] = useState(true);
 
-  const [showSaveModal, setShowSaveModal] = useState(false);
-  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
-  const [showDiscardModal, setShowDiscardModal] = useState(false);
+  const [modalConfig, setModalConfig] = useState({
+    visible: false,
+    type: "success",
+    title: "",
+    message: "",
+    onConfirm: null,
+    onCancel: null,
+    confirmText: "Okay",
+    cancelText: "Cancel",
+  });
 
   useEffect(() => {
     fetchProfile();
   }, []);
 
   const fetchProfile = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { data, error } = await supabase
-          .from("users")
-          .select("full_name, email, unit_location, avatar_url")
-          .eq("id", user.id)
-          .maybeSingle();
+    setIsLoading(true);
 
-        if (data) {
-          setFullName(data.full_name || "");
-          setEmail(data.email || "");
-          setUnitNumber(data.unit_location || "");
-          setAvatarUrl(data.avatar_url || null);
+    setTimeout(() => {
+      const demoData = {
+        full_name: "Kelvin Manalad",
+        email: "kelvin.manalad@example.com",
+        unit_location: "Unit 402, Tower 1",
+        avatar_url: null,
+      };
 
-          setInitialData({
-            fullName: data.full_name || "",
-            unitNumber: data.unit_location || "",
-            avatarUrl: data.avatar_url || null,
-          });
-        }
-      }
-    } catch (err) {
-      console.error("Error fetching profile:", err);
-    } finally {
+      setFullName(demoData.full_name);
+      setEmail(demoData.email);
+      setUnitNumber(demoData.unit_location);
+      setAvatarUrl(demoData.avatar_url);
+
+      setInitialData({
+        fullName: demoData.full_name,
+        unitNumber: demoData.unit_location,
+        avatarUrl: demoData.avatar_url,
+      });
       setIsLoading(false);
-    }
+    }, 500);
+  };
+
+  const showModal = (
+    type,
+    title,
+    message,
+    onConfirm = null,
+    onCancel = null,
+    confirmText = "Okay",
+    cancelText = "Cancel"
+  ) => {
+    setModalConfig({
+      visible: true,
+      type,
+      title,
+      message,
+      onConfirm:
+        onConfirm ||
+        (() => setModalConfig((prev) => ({ ...prev, visible: false }))),
+      onCancel:
+        onCancel ||
+        (() => setModalConfig((prev) => ({ ...prev, visible: false }))),
+      confirmText,
+      cancelText,
+    });
   };
 
   const hasUnsavedChanges = () => {
     const nameChanged = fullName !== initialData.fullName;
     const unitChanged = unitNumber !== initialData.unitNumber;
     const passwordTyped = currentPassword.length > 0 || newPassword.length > 0;
-
     const imageChanged = selectedImage !== null;
 
     return nameChanged || unitChanged || passwordTyped || imageChanged;
@@ -94,15 +115,18 @@ export default function ProfileSettingsScreen() {
 
   const handleBackPress = () => {
     if (hasUnsavedChanges()) {
-      setShowDiscardModal(true);
+      showModal(
+        "confirm",
+        "Unsaved Changes",
+        "You have unsaved changes. Are you sure you want to discard them?",
+        () => navigation.goBack(),
+        null,
+        "Discard",
+        "Keep Editing"
+      );
     } else {
       navigation.goBack();
     }
-  };
-
-  const handleDiscardChanges = () => {
-    setShowDiscardModal(false);
-    navigation.goBack();
   };
 
   const pickImage = async () => {
@@ -120,99 +144,68 @@ export default function ProfileSettingsScreen() {
   };
 
   const handleSave = async () => {
-    setIsLoading(true);
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      let finalAvatarUrl = avatarUrl;
-
-      if (selectedImage) {
-        const fileExt = selectedImage.uri.split(".").pop().toLowerCase();
-        const mimeType =
-          fileExt === "jpg" || fileExt === "jpeg"
-            ? "image/jpeg"
-            : `image/${fileExt}`;
-        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("avatars")
-          .upload(fileName, decode(selectedImage.base64), {
-            contentType: mimeType,
-            upsert: true,
-          });
-
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from("avatars")
-          .getPublicUrl(fileName);
-
-        finalAvatarUrl = urlData.publicUrl;
-      }
-
-      const { error: profileError } = await supabase
-        .from("users")
-        .update({
-          full_name: fullName,
-          unit_location: unitNumber,
-          avatar_url: finalAvatarUrl,
-        })
-        .eq("id", user.id);
-
-      if (profileError) throw profileError;
-
-      if (currentPassword && newPassword) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: user.email,
-          password: currentPassword,
-        });
-
-        if (signInError) throw new Error("Current password is incorrect.");
-
-        const { error: updatePwError } = await supabase.auth.updateUser({
-          password: newPassword,
-        });
-
-        if (updatePwError) throw updatePwError;
-
-        setCurrentPassword("");
-        setNewPassword("");
-      } else if (
-        (currentPassword && !newPassword) ||
-        (!currentPassword && newPassword)
-      ) {
-        throw new Error(
-          "Please fill both Current and New Password fields to change it."
-        );
-      }
-
-      setAvatarUrl(finalAvatarUrl);
-      setSelectedImage(null);
-
-      setInitialData({
-        fullName: fullName,
-        unitNumber: unitNumber,
-        avatarUrl: finalAvatarUrl,
-      });
-
-      setShowSaveModal(true);
-    } catch (err) {
-      Alert.alert("Error", err.message);
-    } finally {
-      setIsLoading(false);
+    if (!fullName.trim() || !unitNumber.trim()) {
+      showModal(
+        "error",
+        "Missing Information",
+        "Full Name and Unit Number cannot be empty."
+      );
+      return;
     }
-  };
 
-  const handleSaveConfirm = () => {
-    setShowSaveModal(false);
-    setTimeout(() => navigation.goBack(), 200);
+    if (
+      (currentPassword && !newPassword) ||
+      (!currentPassword && newPassword)
+    ) {
+      showModal(
+        "error",
+        "Password Error",
+        "Please fill both Current and New Password fields to change it."
+      );
+      return;
+    }
+
+    setIsLoading(true);
+
+    setTimeout(() => {
+      setInitialData({
+        fullName,
+        unitNumber,
+        avatarUrl: selectedImage ? selectedImage.uri : avatarUrl,
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setSelectedImage(null);
+      setIsLoading(false);
+
+      showModal(
+        "success",
+        "Profile Updated",
+        "Your profile has been updated successfully.",
+        () => navigation.goBack()
+      );
+    }, 1500);
   };
 
   const performDeactivate = () => {
-    setShowDeactivateModal(false);
     console.log("Account Deactivated");
+    setModalConfig((prev) => ({ ...prev, visible: false }));
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Landing" }],
+    });
+  };
+
+  const confirmDeactivate = () => {
+    showModal(
+      "delete",
+      "Deactivate Account?",
+      "This will disable your access and disconnect all linked hubs. This action cannot be undone.",
+      performDeactivate,
+      null,
+      "Yes, Deactivate",
+      "Cancel"
+    );
   };
 
   const initials = fullName ? fullName.substring(0, 2).toUpperCase() : "US";
@@ -226,7 +219,7 @@ export default function ProfileSettingsScreen() {
 
   const displayImageUri = selectedImage ? selectedImage.uri : avatarUrl;
 
-  if (isLoading && !showSaveModal) {
+  if (isLoading && !modalConfig.visible) {
     return (
       <View
         style={{
@@ -302,6 +295,8 @@ export default function ProfileSettingsScreen() {
                     isDarkMode ? ["#0055ff", "#00ff99"] : ["#0055ff", "#00995e"]
                   }
                   className="w-full h-full rounded-full justify-center items-center"
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                 >
                   <Text className="text-4xl font-bold text-gray-900">
                     {initials}
@@ -409,7 +404,7 @@ export default function ProfileSettingsScreen() {
             <TouchableOpacity
               className="w-full p-3 border rounded-xl items-center"
               style={{ borderColor: dangerColor }}
-              onPress={() => setShowDeactivateModal(true)}
+              onPress={confirmDeactivate}
             >
               <Text
                 className="font-semibold text-xs"
@@ -422,59 +417,18 @@ export default function ProfileSettingsScreen() {
         </View>
       </ScrollView>
 
+      {}
       <CustomModal
-        visible={showSaveModal}
-        icon="check-circle"
-        iconColor={theme.primary}
-        title="Profile Updated"
-        msg="Your changes have been saved successfully."
-        onClose={() => setShowSaveModal(false)}
+        visible={modalConfig.visible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        msg={modalConfig.message}
+        onConfirm={modalConfig.onConfirm}
+        onCancel={modalConfig.onCancel}
+        confirmText={modalConfig.confirmText}
+        cancelText={modalConfig.cancelText}
         theme={theme}
-        primaryAction={{
-          text: "Okay",
-          onPress: handleSaveConfirm,
-          color: ["#0055ff", isDarkMode ? "#00ff99" : "#00995e"],
-        }}
-      />
-
-      <CustomModal
-        visible={showDiscardModal}
-        icon="edit-off"
-        iconColor="#ffaa00"
-        title="Unsaved Changes"
-        msg="You have unsaved changes. Are you sure you want to discard them and leave?"
-        onClose={() => setShowDiscardModal(false)}
-        theme={theme}
-        secondaryAction={{
-          text: "Keep Editing",
-          onPress: () => setShowDiscardModal(false),
-          textColor: theme.text,
-        }}
-        primaryAction={{
-          text: "Discard",
-          onPress: handleDiscardChanges,
-          solidColor: isDarkMode ? "#333" : "#eee",
-        }}
-      />
-
-      <CustomModal
-        visible={showDeactivateModal}
-        icon="report-problem"
-        iconColor={dangerColor}
-        title="Are you sure?"
-        msg="You are about to permanently deactivate your account. All data will be lost."
-        onClose={() => setShowDeactivateModal(false)}
-        theme={theme}
-        secondaryAction={{
-          text: "Cancel",
-          onPress: () => setShowDeactivateModal(false),
-          textColor: theme.text,
-        }}
-        primaryAction={{
-          text: "Yes, Deactivate",
-          onPress: performDeactivate,
-          solidColor: dangerColor,
-        }}
+        isDarkMode={isDarkMode}
       />
     </SafeAreaView>
   );
@@ -518,21 +472,37 @@ function InputGroup({
 
 function CustomModal({
   visible,
-  icon,
-  iconColor,
+  type,
   title,
   msg,
-  onClose,
+  onConfirm,
+  onCancel,
+  confirmText,
+  cancelText,
   theme,
-  primaryAction,
-  secondaryAction,
+  isDarkMode,
 }) {
+  let icon = "check-circle";
+  let iconColor = theme.primary;
+  let buttonColor = ["#0055ff", isDarkMode ? "#00ff99" : "#00995e"];
+
+  if (type === "error") {
+    icon = "error-outline";
+    iconColor = "#ff4444";
+    buttonColor = ["#ff4444", "#ff8800"];
+  } else if (type === "confirm" || type === "delete") {
+    icon = type === "delete" ? "report-problem" : "help-outline";
+    iconColor = type === "delete" ? "#ff4444" : "#ffaa00";
+    buttonColor =
+      type === "delete" ? ["#ff4444", "#cc0000"] : ["#0055ff", "#00ff99"];
+  }
+
   return (
     <Modal
       transparent={true}
       visible={visible}
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={onCancel || onConfirm}
     >
       <View className="flex-1 bg-black/80 justify-center items-center z-50">
         <View
@@ -549,7 +519,7 @@ function CustomModal({
             style={{ marginBottom: 15 }}
           />
           <Text
-            className="text-lg font-bold mb-2.5"
+            className="text-lg font-bold mb-2.5 text-center"
             style={{ color: theme.text }}
           >
             {title}
@@ -560,58 +530,38 @@ function CustomModal({
           >
             {msg}
           </Text>
-          <View className="flex-row w-full justify-center">
-            {secondaryAction && (
+
+          <View className="flex-row w-full justify-center gap-2.5">
+            {onCancel && (
               <TouchableOpacity
-                className="flex-1 border mr-2.5 h-10 justify-center items-center rounded-lg"
+                className="flex-1 border h-10 justify-center items-center rounded-lg"
                 style={{ borderColor: theme.textSecondary }}
-                onPress={secondaryAction.onPress}
+                onPress={onCancel}
               >
                 <Text
                   className="font-bold text-xs"
-                  style={{ color: secondaryAction.textColor }}
+                  style={{ color: theme.text }}
                 >
-                  {secondaryAction.text}
+                  {cancelText}
                 </Text>
               </TouchableOpacity>
             )}
-            {primaryAction && (
-              <TouchableOpacity
-                className="flex-1 rounded-lg h-10 justify-center items-center overflow-hidden"
-                style={{
-                  backgroundColor: primaryAction.solidColor || "transparent",
-                }}
-                onPress={primaryAction.onPress}
+
+            <TouchableOpacity
+              className="flex-1 rounded-lg h-10 justify-center items-center overflow-hidden"
+              onPress={onConfirm}
+            >
+              <LinearGradient
+                colors={buttonColor}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                className="w-full h-full justify-center items-center"
               >
-                {primaryAction.color ? (
-                  <LinearGradient
-                    colors={primaryAction.color}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    className="w-full h-full justify-center items-center"
-                  >
-                    <Text className="text-black font-bold">
-                      {primaryAction.text}
-                    </Text>
-                  </LinearGradient>
-                ) : (
-                  <View className="w-full h-full justify-center items-center">
-                    <Text
-                      className={`font-bold ${
-                        primaryAction.solidColor === "#eee" ||
-                        primaryAction.solidColor === "#333"
-                          ? primaryAction.solidColor === "#eee"
-                            ? "text-black"
-                            : "text-white"
-                          : "text-white"
-                      }`}
-                    >
-                      {primaryAction.text}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            )}
+                <Text className="text-black font-bold text-xs">
+                  {confirmText}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
         </View>
       </View>

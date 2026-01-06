@@ -27,7 +27,6 @@ import { supabase } from "../../lib/supabase";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// --- TOUR STEPS CONFIGURATION ---
 const TOUR_STEPS = [
   {
     id: "welcome",
@@ -42,9 +41,9 @@ const TOUR_STEPS = [
     type: "highlight",
     title: "Monitor Spending",
     description:
-      "This card shows your real-time costs. Tap it to set monthly limits and view detailed logs.",
+      "This card shows your real-time costs. View your total spending and daily average here.",
     target: "budgetRef",
-    shape: "card", // Special shape for card
+    shape: "card",
   },
   {
     id: "limit",
@@ -80,7 +79,7 @@ const TOUR_STEPS = [
     description:
       "Check here for alerts on budget limits, device faults, and energy tips.",
     target: "notifRef",
-    shape: "circle", // Special shape for icons
+    shape: "circle",
   },
   {
     id: "menu",
@@ -171,19 +170,14 @@ export default function HomeScreen() {
   const navigation = useNavigation();
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  const [userName, setUserName] = useState("User");
+  const [userName, setUserName] = useState("Kelvin");
   const [isLoading, setIsLoading] = useState(true);
-
-  // --- TOUR STATE ---
   const [tourStepIndex, setTourStepIndex] = useState(-1);
   const [activeLayout, setActiveLayout] = useState(null);
 
-  // --- REFS ---
   const notifRef = useRef(null);
   const budgetRef = useRef(null);
   const menuRef = useRef(null);
-
-  // Device Refs
   const deviceRef = useRef(null);
   const limitDeviceRef = useRef(null);
   const errorDeviceRef = useRef(null);
@@ -199,15 +193,13 @@ export default function HomeScreen() {
 
   useEffect(() => {
     checkTourStatus();
-    fetchUserFullName();
+    setTimeout(() => setIsLoading(false), 500);
   }, []);
 
   const checkTourStatus = async () => {
     try {
       const hasSeenTour = await AsyncStorage.getItem("hasSeenHomeTour");
-      if (hasSeenTour !== "true") {
-        setTimeout(() => setTourStepIndex(0), 1000);
-      }
+      if (hasSeenTour !== "true") setTimeout(() => setTourStepIndex(0), 1000);
     } catch (e) {
       console.log(e);
     }
@@ -222,81 +214,33 @@ export default function HomeScreen() {
     }, 500);
   };
 
+  const handleResetTour = async () => {
+    await AsyncStorage.removeItem("hasSeenHomeTour");
+    setTourStepIndex(0);
+  };
+
   const handleNextStep = () => {
     const nextIndex = tourStepIndex + 1;
     if (nextIndex >= TOUR_STEPS.length) {
       endTour();
       return;
     }
-
     const nextStepData = TOUR_STEPS[nextIndex];
-
     if (nextStepData.type === "highlight" && nextStepData.target) {
       const targetRef = refMap[nextStepData.target];
       if (targetRef?.current) {
         targetRef.current.measureInWindow((x, y, width, height) => {
-          if (width === 0 && height === 0) {
-            endTour();
-          } else {
+          if (width === 0 && height === 0) endTour();
+          else {
             setActiveLayout({ x, y, width, height });
             setTourStepIndex(nextIndex);
           }
         });
-      } else {
-        endTour();
-      }
+      } else endTour();
     } else {
       setActiveLayout(null);
       setTourStepIndex(nextIndex);
     }
-  };
-
-  const fetchUserFullName = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase
-          .from("users")
-          .select("full_name")
-          .eq("id", user.id)
-          .maybeSingle();
-        if (data && data.full_name) {
-          const firstName = data.full_name.split(" ")[0];
-          setUserName(firstName.charAt(0).toUpperCase() + firstName.slice(1));
-        } else {
-          const emailName = user.email.split("@")[0];
-          setUserName(emailName.charAt(0).toUpperCase() + emailName.slice(1));
-        }
-      }
-    } catch (err) {
-      console.error("Home fetch error:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchUserFullName();
-    }, [])
-  );
-
-  const getGreeting = () => {
-    const hours = new Date().getHours();
-    if (hours < 12) return "Good Morning";
-    if (hours < 17) return "Good Afternoon";
-    return "Good Evening";
-  };
-
-  const animateButton = (toValue) => {
-    Animated.spring(scaleAnim, {
-      toValue,
-      friction: 3,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
   };
 
   if (isLoading) {
@@ -329,54 +273,24 @@ export default function HomeScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* DEBUG BUTTON */}
-      <TouchableOpacity
-        onPress={() => {
-          AsyncStorage.removeItem("hasSeenHomeTour");
-          setTourStepIndex(0);
-        }}
-        style={{
-          position: "absolute",
-          top: 50,
-          left: 0,
-          right: 0,
-          zIndex: 9999,
-          alignItems: "center",
-        }}
-      >
-        <Text
-          style={{
-            color: "red",
-            backgroundColor: "rgba(0,0,0,0.5)",
-            padding: 5,
-            fontSize: 10,
-          }}
-        >
-          RESET TOUR
-        </Text>
-      </TouchableOpacity>
-
-      {/* HEADER */}
       <View
         className="flex-row justify-between items-center px-6 py-5"
         style={{ backgroundColor: theme.background }}
       >
-        {/* MENU REF ATTACHED DIRECTLY TO TOUCHABLE */}
         <TouchableOpacity
           ref={menuRef}
           onPress={() => navigation.navigate("Menu")}
-          style={{ padding: 4 }} // Padding ensures the highlight circle isn't too tight
+          style={{ padding: 4 }}
         >
           <MaterialIcons name="menu" size={28} color={theme.textSecondary} />
         </TouchableOpacity>
-
-        <Image
-          source={require("../../../assets/GridWatch-logo.png")}
-          className="w-8 h-8"
-          resizeMode="contain"
-        />
-
-        {/* NOTIF REF ATTACHED DIRECTLY TO TOUCHABLE */}
+        <TouchableOpacity onPress={handleResetTour}>
+          <Image
+            source={require("../../../assets/GridWatch-logo.png")}
+            className="w-8 h-8"
+            resizeMode="contain"
+          />
+        </TouchableOpacity>
         <TouchableOpacity
           ref={notifRef}
           onPress={() => navigation.navigate("Notifications")}
@@ -405,70 +319,90 @@ export default function HomeScreen() {
             className="text-sm font-medium mb-1"
             style={{ color: theme.textSecondary }}
           >
-            {getGreeting()}, {userName}
+            Good Afternoon, Kelvin
           </Text>
           <View className="flex-row items-center">
             <View
               className="w-2 h-2 rounded-full mr-2"
-              style={{ backgroundColor: theme.primary }}
+              style={{ backgroundColor: "#ff4444" }}
             />
             <Text
               className="text-xs font-semibold"
               style={{ color: theme.text }}
             >
-              All Systems Normal
+              One has shorted
             </Text>
           </View>
         </View>
 
-        {/* BUDGET CARD */}
-        {/* We move margins to the Touchable so the Ref measures the exact card size */}
-        <TouchableOpacity
+        <Animated.View
           ref={budgetRef}
-          activeOpacity={1}
-          style={{ marginHorizontal: 24, marginBottom: 32 }} // Margins moved here!
-          onPress={() => navigation.navigate("MonthlyBudget")}
-          onPressIn={() => animateButton(0.96)}
-          onPressOut={() => animateButton(1)}
+          style={{
+            marginHorizontal: 24,
+            marginBottom: 32,
+            transform: [{ scale: scaleAnim }],
+          }}
         >
-          <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-            <LinearGradient
-              colors={
-                isDarkMode ? ["#252525", "#1e1e1e"] : ["#ffffff", "#f2f2f7"]
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              className="rounded-3xl p-6 border" // Removed mx and mb from here
-              style={{ borderColor: theme.cardBorder }}
-            >
-              <View className="flex-row justify-between items-center">
-                <Text className="text-[11px] text-[#888] uppercase font-semibold tracking-widest mb-2">
-                  Current Spending (MTD)
+          <View
+            className="p-5 rounded-2xl border"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.1,
+              shadowRadius: 12,
+              elevation: 5,
+            }}
+          >
+            <View className="flex-row justify-between items-start mb-2">
+              <View>
+                <Text
+                  className="text-xs font-bold uppercase tracking-widest mb-1"
+                  style={{ color: theme.textSecondary }}
+                >
+                  Total Spending
                 </Text>
-                <MaterialIcons
-                  name="edit"
-                  size={16}
-                  color={theme.textSecondary}
-                />
+                <Text
+                  className="text-3xl font-extrabold"
+                  style={{ color: theme.text }}
+                >
+                  ₱ 1,450.75
+                </Text>
               </View>
-              <Text
-                className="text-4xl font-bold mb-1"
-                style={{ color: theme.text }}
-              >
-                ₱ 1,450.75
-              </Text>
-              <Text
-                className="text-[13px] mb-5"
-                style={{ color: theme.textSecondary }}
-              >
-                Total Load:{" "}
-                <Text className="font-bold" style={{ color: theme.text }}>
-                  1.46 kWh
+              <View className="items-end">
+                <Text
+                  className="text-[10px] uppercase font-bold"
+                  style={{ color: theme.textSecondary }}
+                >
+                  Budget Limit
                 </Text>
-              </Text>
+                <Text
+                  className="text-sm font-semibold"
+                  style={{ color: theme.textSecondary }}
+                >
+                  ₱ 3,000.00
+                </Text>
+              </View>
+            </View>
+            <View className="mb-4">
+              <View className="flex-row justify-between mb-1.5">
+                <Text
+                  className="text-xs font-medium"
+                  style={{ color: theme.primary }}
+                >
+                  48% Used
+                </Text>
+                <Text
+                  className="text-xs font-medium"
+                  style={{ color: theme.textSecondary }}
+                >
+                  ₱ 1,549.25 Remaining
+                </Text>
+              </View>
               <View
-                className="h-2 rounded-full w-full mb-2 overflow-hidden"
-                style={{ backgroundColor: isDarkMode ? "#333" : "#e5e5ea" }}
+                className="h-3 rounded-full w-full overflow-hidden"
+                style={{ backgroundColor: isDarkMode ? "#333" : "#f0f0f0" }}
               >
                 <LinearGradient
                   colors={
@@ -476,18 +410,35 @@ export default function HomeScreen() {
                   }
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  className="h-full rounded-full w-[52%]"
+                  className="h-full rounded-full w-[48%]"
                 />
               </View>
-              <Text
-                className="text-right text-[11px] font-semibold"
-                style={{ color: theme.primary }}
-              >
-                52% of Budget
-              </Text>
-            </LinearGradient>
-          </Animated.View>
-        </TouchableOpacity>
+            </View>
+            <View
+              className="flex-row border-t pt-4"
+              style={{ borderColor: theme.cardBorder }}
+            >
+              <StatItem
+                label="Daily Avg"
+                value="₱ 120.50"
+                icon="trending-up"
+                theme={theme}
+                isDarkMode={isDarkMode}
+              />
+              <View
+                className="w-[1px] h-8 mx-4"
+                style={{ backgroundColor: theme.cardBorder }}
+              />
+              <StatItem
+                label="Reset Date"
+                value="Every 15th"
+                icon="event-repeat"
+                theme={theme}
+                isDarkMode={isDarkMode}
+              />
+            </View>
+          </View>
+        </Animated.View>
 
         {HUBS_DATA.map((hub) => (
           <View key={hub.id} className="mb-5">
@@ -527,8 +478,24 @@ export default function HomeScreen() {
             </View>
           </View>
         ))}
+
+        {}
+        <TouchableOpacity
+          onPress={() => navigation.navigate("SetupHub")}
+          className="mx-6 mb-8 mt-2 py-4 rounded-xl border border-dashed flex-row justify-center items-center"
+          style={{ borderColor: theme.textSecondary }}
+        >
+          <MaterialIcons name="add" size={20} color={theme.textSecondary} />
+          <Text
+            className="ml-2 font-bold text-xs uppercase tracking-wider"
+            style={{ color: theme.textSecondary }}
+          >
+            Add New Device
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
 
+      {}
       {tourStepIndex >= 0 && (
         <TourOverlay
           step={TOUR_STEPS[tourStepIndex]}
@@ -543,7 +510,33 @@ export default function HomeScreen() {
   );
 }
 
-// --- TOUR OVERLAY ---
+function StatItem({ label, value, icon, color, theme, isDarkMode }) {
+  const iconBg = isDarkMode
+    ? "rgba(255, 255, 255, 0.1)"
+    : "rgba(0, 0, 0, 0.05)";
+  return (
+    <View className="flex-1 flex-row items-center gap-3">
+      <View
+        className="w-8 h-8 rounded-full items-center justify-center"
+        style={{ backgroundColor: iconBg }}
+      >
+        <MaterialIcons name={icon} size={16} color={color || theme.text} />
+      </View>
+      <View>
+        <Text
+          className="text-[10px] font-medium uppercase"
+          style={{ color: theme.textSecondary }}
+        >
+          {label}
+        </Text>
+        <Text className="text-sm font-bold" style={{ color: theme.text }}>
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 const TourOverlay = ({ step, layout, theme, isDarkMode, onNext, onSkip }) => {
   if (step.type === "modal") {
     return (
@@ -612,8 +605,6 @@ const TourOverlay = ({ step, layout, theme, isDarkMode, onNext, onSkip }) => {
   const maskRight = SCREEN_WIDTH - layout.x - layout.width;
   const maskBottom = SCREEN_HEIGHT - layout.y - layout.height;
   const showTooltipBelow = layout.y < SCREEN_HEIGHT / 2;
-
-  // Tooltip Calcs
   const tooltipWidth = Math.min(SCREEN_WIDTH * 0.7, 280);
   const tooltipLeft = (SCREEN_WIDTH - tooltipWidth) / 2;
   const targetCenterX = layout.x + layout.width / 2;
@@ -621,11 +612,9 @@ const TourOverlay = ({ step, layout, theme, isDarkMode, onNext, onSkip }) => {
     Math.max(targetCenterX - tooltipLeft - 8, 10),
     tooltipWidth - 20
   );
-
-  // Border Radius Logic based on 'shape'
   const highlightRadius =
     step.shape === "circle" ? 9999 : step.shape === "card" ? 24 : 16;
-  const padding = step.shape === "circle" ? 8 : 4; // Extra padding for icons
+  const padding = step.shape === "circle" ? 8 : 4;
 
   return (
     <Modal
@@ -651,8 +640,6 @@ const TourOverlay = ({ step, layout, theme, isDarkMode, onNext, onSkip }) => {
           className="absolute bg-black/80 right-0"
           style={{ top: layout.y, height: layout.height, width: maskRight }}
         />
-
-        {/* Highlight Border */}
         <View
           className="absolute border-2"
           style={{
@@ -664,7 +651,6 @@ const TourOverlay = ({ step, layout, theme, isDarkMode, onNext, onSkip }) => {
             borderRadius: highlightRadius,
           }}
         />
-
         <View
           className="absolute p-4 rounded-xl border shadow-xl"
           style={{

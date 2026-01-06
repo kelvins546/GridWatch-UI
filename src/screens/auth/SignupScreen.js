@@ -9,269 +9,342 @@ import {
   Modal,
   ActivityIndicator,
   Image,
-  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Dimensions,
+  Animated,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
-import { supabase } from "../../lib/supabase";
+import MaskedView from "@react-native-masked-view/masked-view";
 
-const EMAILJS_SERVICE_ID = "service_ah3k0xc";
-const EMAILJS_TEMPLATE_ID = "template_xz7agxi";
-const EMAILJS_PUBLIC_KEY = "pdso3GRtCqLn7fVTs";
+const { height } = Dimensions.get("window");
 
-// Strict Email Regex: Only allows specific providers
 const ALLOWED_EMAIL_REGEX =
   /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
+const NAME_REGEX = /^[a-zA-Z\s]+$/;
+const ZIP_REGEX = /^[0-9]{4}$/;
 
-// --- CHARACTER LIMITS ---
-const MAX_NAME_LENGTH = 50;
-const MAX_UNIT_LENGTH = 60;
+const MAX_NAME_LENGTH = 20;
+const MAX_ADDRESS_LENGTH = 40;
+
+const checkPasswordStrength = (str) => {
+  const hasLength = str.length >= 8;
+  const hasNumber = /\d/.test(str);
+  const hasUpper = /[A-Z]/.test(str);
+  const hasLower = /[a-z]/.test(str);
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(str);
+  const isValid = hasLength && hasNumber && hasUpper && hasLower && hasSpecial;
+  return { hasLength, hasNumber, hasUpper, hasLower, hasSpecial, isValid };
+};
 
 export default function SignupScreen() {
   const navigation = useNavigation();
+  const floatAnim = useRef(new Animated.Value(0)).current;
 
-  const [fullName, setFullName] = useState("");
-  const [unitLocation, setUnitLocation] = useState("");
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: -10,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  const [currentStep, setCurrentStep] = useState(0);
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+
+  const [houseNo, setHouseNo] = useState("");
+  const [street, setStreet] = useState("");
+  const [subdivision, setSubdivision] = useState("");
+  const [barangay, setBarangay] = useState("");
+  const [city, setCity] = useState("");
+  const [zipCode, setZipCode] = useState("");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // Validation State
   const [touched, setTouched] = useState({});
   const [errors, setErrors] = useState({});
   const [otpModalVisible, setOtpModalVisible] = useState(false);
-
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsVisible, setTermsVisible] = useState(false);
-
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [generatedOtp, setGeneratedOtp] = useState(null);
   const [timer, setTimer] = useState(120);
   const [canResend, setCanResend] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [successModalVisible, setSuccessModalVisible] = useState(false);
+
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalConfig, setModalConfig] = useState({
+    type: "success",
+    title: "",
+    message: "",
+    onPress: null,
+  });
 
   const inputRefs = useRef([]);
-
-  // --- PASSWORD LOGIC ---
-  const hasLength = password.length >= 8;
-  const hasNumber = /\d/.test(password);
-  const hasUpper = /[A-Z]/.test(password);
-  const hasLower = /[a-z]/.test(password);
-  const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-
-  const isPasswordValid =
-    hasLength && hasNumber && hasUpper && hasLower && hasSpecial;
+  const passAnalysis = checkPasswordStrength(password);
   const isMatch = password === confirmPassword && password.length > 0;
 
   useEffect(() => {
     let interval;
     if (otpModalVisible && timer > 0) {
-      interval = setInterval(() => {
-        setTimer((prev) => prev - 1);
-      }, 1000);
+      interval = setInterval(() => setTimer((prev) => prev - 1), 1000);
     } else if (timer === 0) {
       setCanResend(true);
     }
     return () => clearInterval(interval);
   }, [otpModalVisible, timer]);
 
-  // --- REAL-TIME VALIDATION HANDLER ---
+  const showModal = (type, title, message, onPress = null) => {
+    setModalConfig({ type, title, message, onPress });
+    setModalVisible(true);
+  };
+
   const validateField = (field, value) => {
     let error = null;
-
     switch (field) {
-      case "fullName":
-        if (!value) error = "Full Name is required";
-        else if (!/^[a-zA-Z\s]*$/.test(value))
-          error = "Name must contain only letters";
+      case "firstName":
+      case "lastName":
+        if (!value) error = "Required";
+        else if (!NAME_REGEX.test(value)) error = "Letters only";
         break;
-      case "unitLocation":
-        if (!value) error = "Unit/House No. is required";
+      case "houseNo":
+      case "street":
+      case "barangay":
+      case "city":
+        if (!value) error = "Required";
+        break;
+      case "zipCode":
+        if (!value) error = "Required";
+        else if (!ZIP_REGEX.test(value)) error = "4 digits req.";
         break;
       case "email":
-        if (!value) error = "Email is required";
-        else if (!ALLOWED_EMAIL_REGEX.test(value))
-          error = "Use a valid provider (Gmail, Yahoo, Outlook)";
+        if (!value) error = "Required";
+        else if (!ALLOWED_EMAIL_REGEX.test(value)) error = "Invalid provider";
         break;
       case "password":
-        if (!value) error = "Password is required";
-        else if (!isPasswordValid)
-          error = "Password does not meet requirements";
+        const strength = checkPasswordStrength(value);
+        if (!value) error = "Required";
+        else if (!strength.isValid) error = "Weak password";
         break;
       case "confirmPassword":
-        if (!value) error = "Confirm Password is required";
-        else if (value !== password) error = "Passwords do not match";
+        if (!value) error = "Required";
+        else if (value !== password) error = "Mismatch";
         break;
     }
-
     setErrors((prev) => ({ ...prev, [field]: error }));
+    return error === null;
   };
 
   const handleChange = (field, value) => {
-    // 1. Update Value
-    if (field === "fullName") setFullName(value);
-    if (field === "unitLocation") setUnitLocation(value);
-    if (field === "email") setEmail(value);
-    if (field === "password") setPassword(value);
-    if (field === "confirmPassword") setConfirmPassword(value);
+    if (
+      (field === "firstName" || field === "lastName") &&
+      !/^[a-zA-Z\s]*$/.test(value)
+    )
+      return;
+    if (field === "zipCode" && !/^[0-9]*$/.test(value)) return;
 
-    // 2. Mark as touched so validation shows
+    switch (field) {
+      case "firstName":
+        setFirstName(value);
+        break;
+      case "lastName":
+        setLastName(value);
+        break;
+      case "houseNo":
+        setHouseNo(value);
+        break;
+      case "street":
+        setStreet(value);
+        break;
+      case "subdivision":
+        setSubdivision(value);
+        break;
+      case "barangay":
+        setBarangay(value);
+        break;
+      case "city":
+        setCity(value);
+        break;
+      case "zipCode":
+        setZipCode(value);
+        break;
+      case "email":
+        setEmail(value);
+        break;
+      case "password":
+        setPassword(value);
+        break;
+      case "confirmPassword":
+        setConfirmPassword(value);
+        break;
+    }
+
     setTouched((prev) => ({ ...prev, [field]: true }));
 
-    // 3. Trigger Real-time Validation
-    validateField(field, value);
-
     if (field === "password" && touched.confirmPassword) {
-      if (confirmPassword !== value) {
-        setErrors((prev) => ({
-          ...prev,
-          confirmPassword: "Passwords do not match",
-        }));
-      } else {
-        setErrors((prev) => ({ ...prev, confirmPassword: null }));
-      }
+      if (confirmPassword !== value)
+        setErrors((p) => ({ ...p, confirmPassword: "Mismatch" }));
+      else setErrors((p) => ({ ...p, confirmPassword: null }));
+    }
+    if (field === "confirmPassword") {
+      if (value !== password)
+        setErrors((p) => ({ ...p, confirmPassword: "Mismatch" }));
+      else setErrors((p) => ({ ...p, confirmPassword: null }));
+    } else {
+      validateField(field, value);
     }
   };
 
-  const handleSignUpPress = async () => {
-    const formValues = {
-      fullName,
-      unitLocation,
-      email,
-      password,
-      confirmPassword,
-    };
-    let isValid = true;
+  const handleStartEmailSignup = () => setCurrentStep(1);
 
-    Object.keys(formValues).forEach((key) => {
-      validateField(key, formValues[key]);
-      if (!formValues[key] || errors[key]) isValid = false;
+  const handleNextToCredentials = () => {
+    const fields = [
+      "firstName",
+      "lastName",
+      "houseNo",
+      "street",
+      "barangay",
+      "city",
+      "zipCode",
+    ];
+    const values = {
+      firstName,
+      lastName,
+      houseNo,
+      street,
+      barangay,
+      city,
+      zipCode,
+    };
+
+    let isAllValid = true;
+    fields.forEach((key) => {
+      const isValid = validateField(key, values[key]);
+      if (!isValid) isAllValid = false;
+      setTouched((prev) => ({ ...prev, [key]: true }));
     });
 
-    if (!isPasswordValid || !isMatch || !ALLOWED_EMAIL_REGEX.test(email)) {
-      Alert.alert(
-        "Validation Error",
-        "Please fix the red fields before continuing."
+    if (isAllValid) {
+      setCurrentStep(2);
+    } else {
+      showModal(
+        "error",
+        "Address Incomplete",
+        "Please fill in all address details."
+      );
+    }
+  };
+
+  const handleBackStep = () => {
+    if (currentStep > 0) setCurrentStep((prev) => prev - 1);
+    else navigation.goBack();
+  };
+
+  const handleSignUpPress = async () => {
+    const fields = ["email", "password", "confirmPassword"];
+    const values = { email, password, confirmPassword };
+
+    let isAllValid = true;
+    fields.forEach((key) => {
+      const isValid = validateField(key, values[key]);
+      if (!isValid) isAllValid = false;
+      setTouched((prev) => ({ ...prev, [key]: true }));
+    });
+
+    if (!isAllValid || !passAnalysis.isValid) {
+      showModal(
+        "error",
+        "Credential Errors",
+        "Please fix the highlighted errors."
       );
       return;
     }
 
     if (!termsAccepted) {
-      Alert.alert("Required", "Please accept the Terms & Conditions.");
+      showModal(
+        "error",
+        "Terms Required",
+        "You must accept the Terms & Conditions."
+      );
       return;
     }
 
     setIsLoading(true);
-
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedOtp(code);
-
-    const emailData = {
-      service_id: EMAILJS_SERVICE_ID,
-      template_id: EMAILJS_TEMPLATE_ID,
-      user_id: EMAILJS_PUBLIC_KEY,
-      template_params: {
-        to_name: fullName,
-        to_email: email,
-        d1: code[0],
-        d2: code[1],
-        d3: code[2],
-        d4: code[3],
-        d5: code[4],
-        d6: code[5],
-      },
-    };
-
-    try {
-      const response = await fetch(
-        "https://api.emailjs.com/api/v1.0/email/send",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(emailData),
-        }
-      );
-
-      if (response.ok) {
-        setIsLoading(false);
-        setOtpModalVisible(true);
-        setTimer(120);
-        setCanResend(false);
-        setOtp(["", "", "", "", "", ""]);
-      } else {
-        throw new Error("Failed to send email.");
-      }
-    } catch (error) {
+    setTimeout(() => {
       setIsLoading(false);
-      Alert.alert("Error", "Could not send verification code.");
-    }
+      setGeneratedOtp("123456");
+      setOtpModalVisible(true);
+      setTimer(120);
+      setCanResend(false);
+      setOtp(["", "", "", "", "", ""]);
+    }, 1500);
   };
 
   const handleVerifyOtp = () => {
-    const enteredCode = otp.join("");
-    if (enteredCode !== generatedOtp) {
-      Alert.alert("Error", "Invalid Code. Please try again.");
+    if (otp.join("") !== generatedOtp) {
+      showModal("error", "Invalid Code", "The code you entered is incorrect.");
       return;
     }
     setOtpModalVisible(false);
     setTimeout(() => {
-      setSuccessModalVisible(true);
+      showModal(
+        "success",
+        "Success!",
+        "Email verified. Account created successfully.",
+        handleFinalSignup
+      );
     }, 500);
   };
 
-  const handleFinalSignup = async () => {
-    setSuccessModalVisible(false);
+  const handleFinalSignup = () => {
+    setModalVisible(false);
     setIsLoading(true);
-
-    try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: email,
-        password: password,
-      });
-
-      if (authError) throw authError;
-
-      if (authData?.user) {
-        const { error: dbError } = await supabase.from("users").insert([
-          {
-            id: authData.user.id,
-            email: email,
-            full_name: fullName,
-            unit_location: unitLocation,
-            role: "resident",
-            status: "active",
-          },
-        ]);
-
-        if (dbError) throw dbError;
-      }
-    } catch (error) {
+    setTimeout(() => {
       setIsLoading(false);
-      Alert.alert("Signup Failed", error.message);
-    }
+      navigation.navigate("SetupHub");
+    }, 1500);
   };
 
-  // ... (handleGoogleSignIn, handleResend, handleOtpChange, etc. remain the same)
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = () => {
     setIsLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-      });
-      if (error) throw error;
+    setTimeout(() => {
       setIsLoading(false);
-    } catch (error) {
-      setIsLoading(false);
-      Alert.alert("Google Sign-In Error", error.message);
-    }
+      showModal(
+        "success",
+        "Welcome!",
+        "Successfully authenticated with Google.",
+        () => navigation.navigate("SetupHub")
+      );
+    }, 1500);
   };
 
-  const handleResend = () => handleSignUpPress();
+  const handleResend = () => {
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+      setTimer(120);
+      setCanResend(false);
+    }, 1000);
+  };
 
   const handleOtpChange = (text, index) => {
     const newOtp = [...otp];
@@ -303,192 +376,408 @@ export default function SignupScreen() {
         </View>
       )}
 
-      <View className="p-6">
-        <TouchableOpacity
-          className="flex-row items-center"
-          onPress={() => navigation.goBack()}
-        >
-          <MaterialIcons name="arrow-back" size={18} color="#888" />
-          <Text className="text-[#888] ml-[5px]">Back</Text>
-        </TouchableOpacity>
+      {}
+      <View className="px-6 py-4 absolute top-12 w-full z-10">
+        {currentStep > 0 && (
+          <TouchableOpacity
+            className="flex-row items-center"
+            onPress={handleBackStep}
+          >
+            <MaterialIcons name="arrow-back" size={20} color="#888" />
+            <Text className="text-[#888] ml-2 font-medium">Back</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-        <View className="px-[30px]">
-          <View className="mb-[25px]">
-            <Text className="text-[26px] font-extrabold text-white mb-1.5">
-              Create Account
-            </Text>
-            <Text className="text-sm text-[#888]">
-              Join GridWatch to monitor your energy.
-            </Text>
-          </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            paddingHorizontal: 32,
+            paddingBottom: 40,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          {}
+          <View className="mt-12">
+            {}
+            {currentStep === 0 && (
+              <View className="items-center mb-10">
+                <Animated.View
+                  style={{ transform: [{ translateY: floatAnim }] }}
+                  className="w-[110px] h-[110px] rounded-full items-center justify-center mb-6 bg-[#1a1a1a] shadow-lg shadow-[#00ff99]/30 elevation-10"
+                >
+                  <Image
+                    source={require("../../../assets/GridWatch-logo.png")}
+                    className="w-[100px] h-[100px]"
+                    resizeMode="contain"
+                  />
+                </Animated.View>
 
-          <InputGroup
-            label="Name"
-            icon="person"
-            placeholder="Kelvin Manalad"
-            value={fullName}
-            onChangeText={(text) => handleChange("fullName", text)}
-            error={touched.fullName && errors.fullName}
-            maxLength={MAX_NAME_LENGTH} // ADDED MAX LENGTH
-          />
-          <InputGroup
-            label="Unit / Address"
-            icon="home"
-            placeholder="Unit 402"
-            value={unitLocation}
-            onChangeText={(text) => handleChange("unitLocation", text)}
-            error={touched.unitLocation && errors.unitLocation}
-            maxLength={MAX_UNIT_LENGTH} // ADDED MAX LENGTH
-          />
-          <InputGroup
-            label="Email Address"
-            icon="email"
-            placeholder="name@email.com"
-            value={email}
-            onChangeText={(text) => handleChange("email", text)}
-            error={touched.email && errors.email}
-          />
-          <InputGroup
-            label="Password"
-            icon="lock"
-            placeholder="Create a password"
-            isPassword
-            showPassword={showPassword}
-            togglePassword={() => setShowPassword(!showPassword)}
-            value={password}
-            onChangeText={(text) => handleChange("password", text)}
-            error={touched.password && errors.password}
-          />
-          <InputGroup
-            label="Confirm Password"
-            icon="lock-outline"
-            placeholder="Re-enter password"
-            isPassword
-            showPassword={showConfirm}
-            togglePassword={() => setShowConfirm(!showConfirm)}
-            value={confirmPassword}
-            onChangeText={(text) => handleChange("confirmPassword", text)}
-            error={touched.confirmPassword && errors.confirmPassword}
-          />
+                <View className="h-[40px] justify-center mb-1">
+                  <MaskedView
+                    style={{ width: 220, height: 40 }}
+                    maskElement={
+                      <View className="items-center justify-center flex-1">
+                        <Text className="text-[28px] font-black text-center tracking-[4px] uppercase">
+                          GridWatch
+                        </Text>
+                      </View>
+                    }
+                  >
+                    <LinearGradient
+                      colors={["#0055ff", "#00ff99"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={{ flex: 1 }}
+                    />
+                  </MaskedView>
+                </View>
 
-          {/* DYNAMIC PASSWORD REQUIREMENTS */}
-          {password.length > 0 && (
-            <View
-              className={`mb-5 bg-[#1a1a1a] p-4 rounded-xl border ${
-                !isPasswordValid || (confirmPassword.length > 0 && !isMatch)
-                  ? "border-red-500"
-                  : "border-[#333]"
-              }`}
-            >
-              <Text className="text-[11px] text-[#888] font-bold uppercase mb-3">
-                Password Requirements
-              </Text>
-              <RequirementRow met={hasLength} text="At least 8 characters" />
-              <RequirementRow met={hasNumber} text="At least 1 number" />
-              <RequirementRow
-                met={hasUpper}
-                text="At least 1 uppercase letter"
-              />
-              <RequirementRow
-                met={hasLower}
-                text="At least 1 lowercase letter"
-              />
-              <RequirementRow
-                met={hasSpecial}
-                text="At least 1 special char (!@#$)"
-              />
-              <View className="h-[1px] bg-[#333] my-2" />
-              <RequirementRow met={isMatch} text="Passwords match" />
-            </View>
-          )}
-
-          {/* ... (Checkbox, Sign Up Button, Google Button, Login Link - Same as before) ... */}
-          <View className="flex-row items-center mb-6">
-            <TouchableOpacity onPress={() => setTermsAccepted(!termsAccepted)}>
-              <MaterialIcons
-                name={termsAccepted ? "check-box" : "check-box-outline-blank"}
-                size={24}
-                color={termsAccepted ? "#00ff99" : "#666"}
-                style={{ marginRight: 10 }}
-              />
-            </TouchableOpacity>
-            <View className="flex-1 flex-row flex-wrap">
-              <Text className="text-[#888] text-xs">I agree to the </Text>
-              <TouchableOpacity onPress={() => setTermsVisible(true)}>
-                <Text className="text-[#00ff99] text-xs font-bold underline">
-                  Terms & Conditions
+                <Text className="text-[13px] text-[#888] tracking-[0.5px]">
+                  Smart Energy Monitoring
                 </Text>
-              </TouchableOpacity>
-              <Text className="text-[#888] text-xs"> and </Text>
-              <TouchableOpacity onPress={() => setTermsVisible(true)}>
-                <Text className="text-[#00ff99] text-xs font-bold underline">
-                  Privacy Policy
+              </View>
+            )}
+
+            {}
+            {currentStep > 0 && (
+              <View className="mb-6 mt-6">
+                <Text className="text-[28px] font-extrabold text-white mb-1">
+                  Create Account
                 </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+                <Text className="text-sm text-[#888]">
+                  {currentStep === 1
+                    ? "Step 1: Profile & Address"
+                    : "Step 2: Credentials"}
+                </Text>
 
-          <TouchableOpacity
-            onPress={handleSignUpPress}
-            disabled={!termsAccepted}
-            style={{ opacity: termsAccepted ? 1 : 0.5 }}
-          >
-            <LinearGradient
-              colors={termsAccepted ? ["#0055ff", "#00ff99"] : ["#333", "#444"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              className="p-4 rounded-2xl items-center"
-            >
-              <Text
-                className={`font-bold text-[15px] ${
-                  termsAccepted ? "text-[#0f0f0f]" : "text-[#888]"
-                }`}
-              >
-                SIGN UP
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
+                <View className="h-1 bg-[#333] w-full mt-4 rounded-full overflow-hidden">
+                  <View
+                    className={`h-full bg-[#00ff99] ${
+                      currentStep === 1 ? "w-1/2" : "w-full"
+                    }`}
+                  />
+                </View>
+              </View>
+            )}
 
-          <View className="flex-row items-center mt-6 mb-4">
-            <View className="flex-1 h-[1px] bg-[#333]" />
-            <Text className="mx-4 text-[#666] text-xs">Or continue with</Text>
-            <View className="flex-1 h-[1px] bg-[#333]" />
-          </View>
+            {}
+            {currentStep === 0 && (
+              <View>
+                <TouchableOpacity
+                  onPress={handleStartEmailSignup}
+                  activeOpacity={0.8}
+                  className="mb-3"
+                >
+                  <LinearGradient
+                    colors={["#0055ff", "#00ff99"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    className="p-4 rounded-2xl items-center"
+                  >
+                    <Text className="font-bold text-[15px] text-[#0f0f0f]">
+                      Continue with Email
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={handleGoogleSignIn}
-            className="flex-row items-center justify-center bg-[#222] border border-[#333] p-4 rounded-2xl mb-6"
-          >
-            <Image
-              source={{
-                uri: "https://cdn-icons-png.flaticon.com/512/300/300221.png",
-              }}
-              className="w-5 h-5 mr-3"
-              resizeMode="contain"
-            />
-            <Text className="font-bold text-[15px] text-white">
-              Continue with Google
+                <View className="flex-row items-center my-3">
+                  <View className="flex-1 h-[1px] bg-[#333]" />
+                  <Text className="mx-3 text-[#666] text-xs font-bold uppercase">
+                    Or
+                  </Text>
+                  <View className="flex-1 h-[1px] bg-[#333]" />
+                </View>
+
+                <TouchableOpacity
+                  onPress={handleGoogleSignIn}
+                  className="flex-row items-center justify-center bg-[#1a1a1a] border border-[#333] p-4 rounded-2xl mb-6"
+                  activeOpacity={0.8}
+                >
+                  <Image
+                    source={{
+                      uri: "https://cdn-icons-png.flaticon.com/512/300/300221.png",
+                    }}
+                    className="w-5 h-5 mr-3"
+                    resizeMode="contain"
+                  />
+                  <Text className="font-bold text-[15px] text-white">
+                    Continue with Google
+                  </Text>
+                </TouchableOpacity>
+
+                <View className="flex-row justify-center">
+                  <Text className="text-[#888]">Already have an account? </Text>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate("Login")}
+                  >
+                    <Text className="text-[#00ff99] font-bold">Log In</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {}
+            {currentStep === 1 && (
+              <View>
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <InputGroup
+                      label="First Name"
+                      icon="person"
+                      placeholder="Kelvin"
+                      value={firstName}
+                      onChangeText={(t) => handleChange("firstName", t)}
+                      error={touched.firstName && errors.firstName}
+                      maxLength={MAX_NAME_LENGTH}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <InputGroup
+                      label="Last Name"
+                      icon="person-outline"
+                      placeholder="Manalad"
+                      value={lastName}
+                      onChangeText={(t) => handleChange("lastName", t)}
+                      error={touched.lastName && errors.lastName}
+                      maxLength={MAX_NAME_LENGTH}
+                    />
+                  </View>
+                </View>
+
+                <Text className="text-[#00ff99] text-xs font-bold uppercase tracking-widest mt-2 mb-4">
+                  Address
+                </Text>
+
+                <View className="flex-row gap-3">
+                  <View className="flex-[0.6]">
+                    <InputGroup
+                      label="House No."
+                      icon="home"
+                      placeholder="173"
+                      value={houseNo}
+                      onChangeText={(t) => handleChange("houseNo", t)}
+                      error={touched.houseNo && errors.houseNo}
+                      maxLength={10}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <InputGroup
+                      label="Street"
+                      icon="add-road"
+                      placeholder="Congressional Rd"
+                      value={street}
+                      onChangeText={(t) => handleChange("street", t)}
+                      error={touched.street && errors.street}
+                      maxLength={MAX_ADDRESS_LENGTH}
+                    />
+                  </View>
+                </View>
+
+                <InputGroup
+                  label="Subdivision / Village"
+                  icon="holiday-village"
+                  placeholder="Rainbow Village 5"
+                  value={subdivision}
+                  onChangeText={(t) => handleChange("subdivision", t)}
+                  maxLength={MAX_ADDRESS_LENGTH}
+                />
+
+                <InputGroup
+                  label="Barangay"
+                  icon="location-city"
+                  placeholder="Barangay 173"
+                  value={barangay}
+                  onChangeText={(t) => handleChange("barangay", t)}
+                  error={touched.barangay && errors.barangay}
+                  maxLength={MAX_ADDRESS_LENGTH}
+                />
+
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <InputGroup
+                      label="City"
+                      icon="location-on"
+                      placeholder="Caloocan"
+                      value={city}
+                      onChangeText={(t) => handleChange("city", t)}
+                      error={touched.city && errors.city}
+                      maxLength={MAX_ADDRESS_LENGTH}
+                    />
+                  </View>
+                  <View className="flex-[0.6]">
+                    <InputGroup
+                      label="Zip"
+                      icon="map"
+                      placeholder="1421"
+                      value={zipCode}
+                      onChangeText={(t) => handleChange("zipCode", t)}
+                      error={touched.zipCode && errors.zipCode}
+                      maxLength={4}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={handleNextToCredentials}
+                  className="mt-4"
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={["#0055ff", "#00ff99"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    className="p-4 rounded-2xl items-center"
+                  >
+                    <Text className="font-bold text-[15px] text-[#0f0f0f]">
+                      NEXT STEP
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {}
+            {currentStep === 2 && (
+              <View>
+                <InputGroup
+                  label="Email Address"
+                  icon="email"
+                  placeholder="name@email.com"
+                  value={email}
+                  onChangeText={(t) => handleChange("email", t)}
+                  error={touched.email && errors.email}
+                />
+                <InputGroup
+                  label="Password"
+                  icon="lock"
+                  placeholder="Create password"
+                  isPassword
+                  showPassword={showPassword}
+                  togglePassword={() => setShowPassword(!showPassword)}
+                  value={password}
+                  onChangeText={(t) => handleChange("password", t)}
+                  error={touched.password && errors.password}
+                />
+                <InputGroup
+                  label="Confirm Password"
+                  icon="lock-outline"
+                  placeholder="Confirm password"
+                  isPassword
+                  showPassword={showConfirm}
+                  togglePassword={() => setShowConfirm(!showConfirm)}
+                  value={confirmPassword}
+                  onChangeText={(t) => handleChange("confirmPassword", t)}
+                  error={touched.confirmPassword && errors.confirmPassword}
+                />
+
+                {password.length > 0 && (
+                  <View
+                    className={`mb-5 bg-[#1a1a1a] p-4 rounded-xl border ${
+                      !passAnalysis.isValid ||
+                      (confirmPassword.length > 0 && !isMatch)
+                        ? "border-red-500"
+                        : "border-[#333]"
+                    }`}
+                  >
+                    <Text className="text-[10px] text-[#888] font-bold uppercase mb-2">
+                      Password Strength
+                    </Text>
+                    <RequirementRow
+                      met={passAnalysis.hasLength}
+                      text="8+ characters"
+                    />
+                    <RequirementRow
+                      met={passAnalysis.hasNumber}
+                      text="At least 1 number"
+                    />
+                    <RequirementRow
+                      met={passAnalysis.hasUpper}
+                      text="Uppercase letter"
+                    />
+                    <RequirementRow
+                      met={passAnalysis.hasLower}
+                      text="Lowercase letter"
+                    />
+                    <RequirementRow
+                      met={passAnalysis.hasSpecial}
+                      text="Special char (!@#$)"
+                    />
+                    <View className="h-[1px] bg-[#333] my-2" />
+                    <RequirementRow met={isMatch} text="Passwords match" />
+                  </View>
+                )}
+
+                <View className="flex-row items-center mb-6">
+                  <TouchableOpacity
+                    onPress={() => setTermsAccepted(!termsAccepted)}
+                  >
+                    <MaterialIcons
+                      name={
+                        termsAccepted ? "check-box" : "check-box-outline-blank"
+                      }
+                      size={24}
+                      color={termsAccepted ? "#00ff99" : "#666"}
+                      style={{ marginRight: 10 }}
+                    />
+                  </TouchableOpacity>
+                  <View className="flex-1 flex-row flex-wrap">
+                    <Text className="text-[#888] text-xs">I agree to the </Text>
+                    <TouchableOpacity onPress={() => setTermsVisible(true)}>
+                      <Text className="text-[#00ff99] text-xs font-bold underline">
+                        Terms & Conditions
+                      </Text>
+                    </TouchableOpacity>
+                    <Text className="text-[#888] text-xs"> and </Text>
+                    <TouchableOpacity onPress={() => setTermsVisible(true)}>
+                      <Text className="text-[#00ff99] text-xs font-bold underline">
+                        Privacy Policy
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={handleSignUpPress}
+                  disabled={!termsAccepted}
+                  style={{ opacity: termsAccepted ? 1 : 0.5 }}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={
+                      termsAccepted ? ["#0055ff", "#00ff99"] : ["#333", "#444"]
+                    }
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    className="p-4 rounded-2xl items-center"
+                  >
+                    <Text
+                      className={`font-bold text-[15px] ${
+                        termsAccepted ? "text-[#0f0f0f]" : "text-[#888]"
+                      }`}
+                    >
+                      COMPLETE SIGNUP
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {}
+            <Text className="text-center text-xs text-[#00ff99] italic opacity-80 mt-12">
+              "Smart protection for the modern Filipino home."
             </Text>
-          </TouchableOpacity>
-
-          <View className="flex-row justify-center mb-[30px]">
-            <Text className="text-[#888]">Already have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate("Login")}>
-              <Text className="text-[#00ff99] font-bold">Log In</Text>
-            </TouchableOpacity>
           </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-          <Text className="text-center text-xs text-[#00ff99] italic opacity-80 mb-10">
-            "Smart protection for the modern Filipino home."
-          </Text>
-        </View>
-      </ScrollView>
-
-      {/* ... (Terms Modal, OTP Modal, Success Modal - SAME AS BEFORE) ... */}
-
-      {/* Terms Modal */}
+      {}
       <Modal
         animationType="slide"
         transparent={true}
@@ -496,7 +785,7 @@ export default function SignupScreen() {
         onRequestClose={() => setTermsVisible(false)}
       >
         <View className="flex-1 bg-black/90 justify-center items-center">
-          <View className="w-[90%] h-[80%] bg-[#1a1a1a] border border-[#333] rounded-2xl overflow-hidden">
+          <View className="w-[85%] h-[60%] bg-[#1a1a1a] border border-[#333] rounded-2xl overflow-hidden">
             <View className="p-5 border-b border-[#333] flex-row items-center justify-between">
               <Text className="text-lg font-bold text-white">
                 Terms & Consent
@@ -509,11 +798,42 @@ export default function SignupScreen() {
               <Text className="text-[#00ff99] font-bold mb-4 uppercase text-xs">
                 GridWatch Data Privacy Agreement
               </Text>
+
+              <Text className="text-white font-bold mb-2">
+                1. Data Collection
+              </Text>
               <Text className="text-[#888] text-sm mb-4 leading-5">
                 By creating an account, you consent to GridWatch collecting and
-                processing real-time energy usage data.
+                processing real-time energy usage data, appliance status, and
+                cost estimates. This data is used solely to provide analytics
+                and alerting services.
               </Text>
-              {/* ... more terms */}
+
+              <Text className="text-white font-bold mb-2">2. User Privacy</Text>
+              <Text className="text-[#888] text-sm mb-4 leading-5">
+                Your personal information (Name, Email, Address) is encrypted.
+                We do not sell your data to third-party advertisers. Location
+                data is only used to determine local energy rates.
+              </Text>
+
+              <Text className="text-white font-bold mb-2">
+                3. Hardware Liability
+              </Text>
+              <Text className="text-[#888] text-sm mb-4 leading-5">
+                GridWatch provides monitoring and control capabilities. However,
+                users are responsible for ensuring their appliances are safe to
+                operate remotely. GridWatch is not liable for damages caused by
+                misuse of remote switching features.
+              </Text>
+
+              <Text className="text-white font-bold mb-2">
+                4. Account Security
+              </Text>
+              <Text className="text-[#888] text-sm mb-4 leading-5">
+                You are responsible for maintaining the confidentiality of your
+                account credentials. GridWatch recommends enabling two-factor
+                authentication where available.
+              </Text>
             </ScrollView>
             <View className="p-5 border-t border-[#333] bg-[#111]">
               <TouchableOpacity onPress={acceptTermsFromModal}>
@@ -533,24 +853,28 @@ export default function SignupScreen() {
         </View>
       </Modal>
 
-      {/* OTP Modal */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
         visible={otpModalVisible}
         onRequestClose={() => setOtpModalVisible(false)}
       >
-        <View className="flex-1 justify-center items-center bg-black/80">
-          <View className="w-[85%] max-w-[340px] bg-[#1a1a1a] border border-[#333] p-6 rounded-2xl items-center">
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              { width: "85%", maxWidth: 300, paddingVertical: 20 },
+            ]}
+          >
             <View className="w-12 h-12 rounded-full bg-[#00ff99]/10 items-center justify-center mb-4">
               <MaterialIcons name="mark-email-read" size={24} color="#00ff99" />
             </View>
-            <Text className="text-xl font-bold text-white mb-2">
-              Verify Email
+            <Text style={styles.modalTitleSmall}>Verify Email</Text>
+            <Text style={styles.modalDescSmall}>
+              Enter the code sent to your email.
             </Text>
-            <Text className="text-sm text-[#888] text-center mb-6 leading-5">
-              Enter the 6-digit code sent to your email.
-            </Text>
+
             <View className="flex-row gap-2 mb-6">
               {otp.map((digit, index) => (
                 <TextInput
@@ -571,9 +895,9 @@ export default function SignupScreen() {
                 colors={["#0055ff", "#00ff99"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                className="p-3.5 rounded-xl items-center"
+                style={styles.modalBtnSmall}
               >
-                <Text className="font-bold text-sm text-[#0f0f0f]">VERIFY</Text>
+                <Text style={styles.btnTextBlack}>VERIFY</Text>
               </LinearGradient>
             </TouchableOpacity>
             <View className="flex-row items-center mb-4">
@@ -595,34 +919,48 @@ export default function SignupScreen() {
         </View>
       </Modal>
 
-      {/* Success Modal */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
-        visible={successModalVisible}
-        onRequestClose={() => {}}
+        visible={modalVisible}
+        onRequestClose={() => {
+          if (modalConfig.type === "error") setModalVisible(false);
+        }}
       >
-        <View className="flex-1 justify-center items-center bg-black/80">
-          <View className="w-[80%] max-w-[320px] bg-[#1a1a1a] border border-[#333] p-10 rounded-2xl items-center">
-            <View className="mb-4">
-              <MaterialIcons name="check-circle" size={60} color="#00ff99" />
-            </View>
-            <Text className="text-lg font-bold text-white mb-2 text-center">
-              Verification Success!
-            </Text>
-            <Text className="text-xs text-[#888] text-center mb-6 leading-5">
-              Email verified. Click continue to create your account and setup
-              your Hub.
-            </Text>
-            <TouchableOpacity className="w-full" onPress={handleFinalSignup}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <MaterialIcons
+              name={
+                modalConfig.type === "success"
+                  ? "check-circle"
+                  : "error-outline"
+              }
+              size={40}
+              color={modalConfig.type === "success" ? "#00ff99" : "#ff4444"}
+              style={{ marginBottom: 15 }}
+            />
+            <Text style={styles.modalTitleSmall}>{modalConfig.title}</Text>
+            <Text style={styles.modalDescSmall}>{modalConfig.message}</Text>
+            <TouchableOpacity
+              style={{ width: "100%" }}
+              onPress={() => {
+                setModalVisible(false);
+                if (modalConfig.onPress) modalConfig.onPress();
+              }}
+            >
               <LinearGradient
-                colors={["#0055ff", "#00ff99"]}
+                colors={
+                  modalConfig.type === "success"
+                    ? ["#0055ff", "#00ff99"]
+                    : ["#ff4444", "#ff8800"]
+                }
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                className="p-3 rounded-xl items-center"
+                style={styles.modalBtnSmall}
               >
-                <Text className="font-bold text-xs text-black uppercase tracking-wider">
-                  CONTINUE TO SETUP
+                <Text style={styles.btnTextBlack}>
+                  {modalConfig.type === "success" ? "CONTINUE" : "TRY AGAIN"}
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
@@ -633,7 +971,6 @@ export default function SignupScreen() {
   );
 }
 
-// --- UPDATED INPUT GROUP WITH CHARACTER LIMIT ---
 function InputGroup({
   label,
   icon,
@@ -644,64 +981,57 @@ function InputGroup({
   value,
   onChangeText,
   error,
-  maxLength, // NEW PROP
+  maxLength,
+  keyboardType,
 }) {
   return (
-    <View className="mb-[15px]">
-      <View className="flex-row justify-between items-end mb-2 ml-1">
-        <Text
-          className={`text-[10px] font-bold uppercase ${
-            error ? "text-red-500" : "text-[#888]"
-          }`}
-        >
-          {label}
-        </Text>
-        {/* CHARACTER COUNTER */}
-        {maxLength && (
-          <Text className="text-[10px] text-[#555] font-semibold">
-            {value.length} / {maxLength}
-          </Text>
-        )}
-        {!maxLength && error && (
-          <Text className="text-[10px] text-red-500 italic mr-1">{error}</Text>
-        )}
-      </View>
-
-      {/* Show error inside if no maxLength, or below if space allows. 
-          To keep it clean, I put error in border color and possibly text below if needed.
-      */}
-
+    <View className="mb-3">
+      <Text
+        className={`text-[10px] font-bold uppercase mb-1.5 ml-1 ${
+          error ? "text-red-500" : "text-[#888]"
+        }`}
+      >
+        {label}
+      </Text>
       <View
-        className={`flex-row items-center bg-[#222] rounded-xl px-4 py-2.5 border ${
+        className={`flex-row items-center bg-[#222] rounded-xl px-4 h-12 border ${
           error ? "border-red-500" : "border-[#333]"
         }`}
       >
         <MaterialIcons
           name={icon}
-          size={20}
+          size={18}
           color={error ? "#ef4444" : "#666"}
-          style={{ marginRight: 12 }}
+          style={{ marginRight: 10 }}
         />
         <TextInput
-          className="flex-1 text-white text-base"
+          className="flex-1 text-white text-sm h-full"
           placeholder={placeholder}
-          placeholderTextColor="#666"
+          placeholderTextColor="#555"
           secureTextEntry={isPassword && !showPassword}
           value={value}
           onChangeText={onChangeText}
-          maxLength={maxLength} // ENFORCE LIMIT
+          maxLength={maxLength}
+          keyboardType={keyboardType}
         />
+
+        {}
+        {maxLength && !isPassword && (
+          <Text className="text-[10px] text-[#444] ml-2 font-bold">
+            {value.length}/{maxLength}
+          </Text>
+        )}
+
         {isPassword && (
           <TouchableOpacity onPress={togglePassword}>
             <MaterialIcons
               name={showPassword ? "visibility" : "visibility-off"}
-              size={20}
+              size={18}
               color="#666"
             />
           </TouchableOpacity>
         )}
       </View>
-      {/* Explicit error message below input for clarity */}
       {error && (
         <Text className="text-[10px] text-red-500 italic mt-1 ml-1">
           {error}
@@ -713,16 +1043,63 @@ function InputGroup({
 
 function RequirementRow({ met, text }) {
   return (
-    <View className="flex-row items-center mb-1.5">
+    <View className="flex-row items-center mb-1">
       <MaterialIcons
         name={met ? "check-circle" : "radio-button-unchecked"}
-        size={14}
+        size={12}
         color={met ? "#00ff99" : "#555"}
-        style={{ marginRight: 8 }}
+        style={{ marginRight: 6 }}
       />
-      <Text className={`text-xs ${met ? "text-[#00ff99]" : "text-[#555]"}`}>
+      <Text className={`text-[10px] ${met ? "text-[#00ff99]" : "text-[#555]"}`}>
         {text}
       </Text>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.85)",
+  },
+  modalCard: {
+    width: "75%",
+    maxWidth: 280,
+    backgroundColor: "#1a1a1a",
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    borderRadius: 18,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  modalTitleSmall: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#fff",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  modalDescSmall: {
+    fontSize: 13,
+    color: "#999",
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+  modalBtnSmall: {
+    padding: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    width: "100%",
+  },
+  btnTextBlack: {
+    fontWeight: "700",
+    fontSize: 13,
+    color: "#000",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+});
