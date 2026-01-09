@@ -14,11 +14,9 @@ import {
   StyleSheet,
   LogBox,
   Dimensions,
-  IntentLauncherAndroid,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
@@ -26,7 +24,9 @@ const { width } = Dimensions.get("window");
 
 export default function SetupHubScreen() {
   const navigation = useNavigation();
-  const { theme } = useTheme();
+  const { theme, fontScale } = useTheme();
+
+  const scaledSize = (size) => size * fontScale;
 
   useEffect(() => {
     LogBox.ignoreLogs([
@@ -80,7 +80,6 @@ export default function SetupHubScreen() {
       console.log(
         "Failed to open specific settings, fallback to general settings"
       );
-
       await Linking.openSettings();
     }
   };
@@ -92,8 +91,8 @@ export default function SetupHubScreen() {
     }
 
     setIsPairing(true);
-
     setStatusStep(`Connecting to Hub...`);
+
     setTimeout(() => {
       setStatusStep("Sending credentials...");
       setTimeout(() => {
@@ -102,7 +101,6 @@ export default function SetupHubScreen() {
           setStatusStep("Success! Connected.");
           setTimeout(() => {
             setIsPairing(false);
-
             navigation.navigate("HubConfig", { hubId: "demo_hub_123" });
           }, 1000);
         }, 2000);
@@ -112,7 +110,6 @@ export default function SetupHubScreen() {
 
   const handleSimulateScan = () => {
     setIsScanning(true);
-
     setTimeout(() => {
       setIsScanning(false);
       setWifiSSID("PLDT_Home_FIBR");
@@ -131,6 +128,7 @@ export default function SetupHubScreen() {
         backgroundColor={theme.background}
       />
 
+      {}
       <View
         className="flex-row items-center justify-between px-6 py-5 border-b"
         style={{
@@ -144,20 +142,23 @@ export default function SetupHubScreen() {
         >
           <MaterialIcons
             name="arrow-back"
-            size={18}
+            size={scaledSize(18)}
             color={theme.textSecondary}
           />
           <Text
-            className="text-sm font-medium ml-1"
-            style={{ color: theme.textSecondary }}
+            className="font-medium ml-1"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
           >
             Back
           </Text>
         </TouchableOpacity>
-        <Text className="text-base font-bold" style={{ color: theme.text }}>
+        <Text
+          className="font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(16) }}
+        >
           Connect Hub
         </Text>
-        <View className="w-[50px]" />
+        <View style={{ width: 50 }} />
       </View>
 
       <KeyboardAvoidingView
@@ -171,8 +172,8 @@ export default function SetupHubScreen() {
         >
           <View className="px-6 py-6">
             <Text
-              className="text-[11px] font-bold uppercase tracking-widest mb-3"
-              style={{ color: theme.textSecondary }}
+              className="font-bold uppercase tracking-widest mb-3"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
             >
               Step 1: Connect to Device
             </Text>
@@ -180,24 +181,34 @@ export default function SetupHubScreen() {
             <View
               className="p-5 rounded-2xl border mb-5"
               style={{
-                backgroundColor: "rgba(0, 85, 255, 0.08)",
-                borderColor: "rgba(0, 85, 255, 0.3)",
+                backgroundColor: `${theme.buttonPrimary}10`,
+                borderColor: `${theme.buttonPrimary}30`,
               }}
             >
               <View className="flex-row gap-3 mb-2.5">
-                <View className="w-9 h-9 rounded-full bg-[#0055ff] justify-center items-center">
-                  <MaterialIcons name="wifi-tethering" size={20} color="#fff" />
+                <View
+                  className="w-9 h-9 rounded-full justify-center items-center"
+                  style={{ backgroundColor: theme.buttonPrimary }}
+                >
+                  <MaterialIcons
+                    name="wifi-tethering"
+                    size={scaledSize(20)}
+                    color="#fff"
+                  />
                 </View>
                 <View className="flex-1">
                   <Text
-                    className="font-bold mb-1 text-base"
-                    style={{ color: theme.text }}
+                    className="font-bold mb-1"
+                    style={{ color: theme.text, fontSize: scaledSize(16) }}
                   >
                     Connect Phone to Hub
                   </Text>
                   <Text
-                    className="text-xs leading-5"
-                    style={{ color: theme.textSecondary }}
+                    className="leading-5"
+                    style={{
+                      color: theme.textSecondary,
+                      fontSize: scaledSize(12),
+                    }}
                   >
                     Your phone needs to talk directly to the Hub to configure
                     it.
@@ -207,27 +218,39 @@ export default function SetupHubScreen() {
 
               <View
                 className="p-4 rounded-xl my-4"
-                style={{ backgroundColor: theme.card }}
+                style={{ backgroundColor: theme.background }}
               >
                 <Text
-                  className="text-xs mb-2 leading-5"
-                  style={{ color: theme.textSecondary }}
+                  className="mb-2 leading-5"
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(12),
+                  }}
                 >
                   1. Tap the button below to open Settings.
                 </Text>
                 <Text
-                  className="text-xs mb-2 leading-5"
-                  style={{ color: theme.textSecondary }}
+                  className="mb-2 leading-5"
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(12),
+                  }}
                 >
                   2. Connect to{" "}
-                  <Text className="font-bold text-[#0055ff]">
+                  <Text
+                    className="font-bold"
+                    style={{ color: theme.buttonPrimary }}
+                  >
                     GridWatch-Setup
                   </Text>
                   .
                 </Text>
                 <Text
-                  className="text-xs leading-5"
-                  style={{ color: theme.textSecondary }}
+                  className="leading-5"
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(12),
+                  }}
                 >
                   3. Return to this app.
                 </Text>
@@ -235,32 +258,40 @@ export default function SetupHubScreen() {
 
               <TouchableOpacity
                 onPress={openWifiSettings}
-                className="border border-[#0055ff] rounded-xl py-3 items-center"
+                className="border rounded-xl py-3 items-center"
+                style={{ borderColor: theme.buttonPrimary }}
               >
-                <Text className="text-[#0055ff] font-semibold text-sm">
+                <Text
+                  className="font-semibold"
+                  style={{
+                    color: theme.buttonPrimary,
+                    fontSize: scaledSize(14),
+                  }}
+                >
                   Open Wi-Fi Settings
                 </Text>
               </TouchableOpacity>
             </View>
 
             <Text
-              className="text-[11px] font-bold uppercase tracking-widest mt-5 mb-3"
-              style={{ color: theme.textSecondary }}
+              className="font-bold uppercase tracking-widest mt-5 mb-3"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
             >
               Step 2: Configure Network
             </Text>
             <Text
-              className="text-xs mb-5 leading-5"
-              style={{ color: theme.textSecondary }}
+              className="mb-5 leading-5"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
             >
               Enter the details of your **Home Wi-Fi**. We will send this to the
               Hub so it can get online.
             </Text>
 
+            {}
             <View className="mb-5">
               <Text
-                className="text-xs font-semibold mb-2"
-                style={{ color: theme.text }}
+                className="font-semibold mb-2"
+                style={{ color: theme.text, fontSize: scaledSize(12) }}
               >
                 Home Wi-Fi Name (SSID)
               </Text>
@@ -269,11 +300,12 @@ export default function SetupHubScreen() {
                 style={{
                   borderColor: theme.cardBorder,
                   backgroundColor: theme.card,
+                  height: scaledSize(50),
                 }}
               >
                 <TextInput
-                  className="flex-1 p-4 text-base h-full border-0"
-                  style={{ color: theme.text }}
+                  className="flex-1 p-4 h-full"
+                  style={{ color: theme.text, fontSize: scaledSize(16) }}
                   placeholder="e.g. PLDT_Home_FIBR"
                   placeholderTextColor={theme.textSecondary}
                   value={wifiSSID}
@@ -285,17 +317,18 @@ export default function SetupHubScreen() {
                 >
                   <MaterialIcons
                     name="qr-code-scanner"
-                    size={22}
-                    color="#0055ff"
+                    size={scaledSize(22)}
+                    color={theme.buttonPrimary}
                   />
                 </TouchableOpacity>
               </View>
             </View>
 
+            {}
             <View className="mb-5">
               <Text
-                className="text-xs font-semibold mb-2"
-                style={{ color: theme.text }}
+                className="font-semibold mb-2"
+                style={{ color: theme.text, fontSize: scaledSize(12) }}
               >
                 Home Wi-Fi Password
               </Text>
@@ -304,11 +337,12 @@ export default function SetupHubScreen() {
                 style={{
                   borderColor: theme.cardBorder,
                   backgroundColor: theme.card,
+                  height: scaledSize(50),
                 }}
               >
                 <TextInput
-                  className="flex-1 p-4 text-base h-full border-0"
-                  style={{ color: theme.text }}
+                  className="flex-1 p-4 h-full"
+                  style={{ color: theme.text, fontSize: scaledSize(16) }}
                   placeholder="Enter Password"
                   placeholderTextColor={theme.textSecondary}
                   secureTextEntry={!showPass}
@@ -321,7 +355,7 @@ export default function SetupHubScreen() {
                 >
                   <MaterialIcons
                     name={showPass ? "visibility" : "visibility-off"}
-                    size={20}
+                    size={scaledSize(20)}
                     color={theme.textSecondary}
                   />
                 </TouchableOpacity>
@@ -333,17 +367,17 @@ export default function SetupHubScreen() {
         </ScrollView>
 
         <View className="p-6">
-          <TouchableOpacity onPress={() => handleStartPairing()}>
-            <LinearGradient
-              colors={["#0055ff", "#00ff99"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              className="p-4 rounded-xl items-center"
+          <TouchableOpacity
+            onPress={() => handleStartPairing()}
+            className="rounded-xl items-center justify-center py-4"
+            style={{ backgroundColor: theme.buttonPrimary }}
+          >
+            <Text
+              className="font-bold"
+              style={{ color: "#fff", fontSize: scaledSize(16) }}
             >
-              <Text className="font-bold text-base text-black">
-                Send Configuration to Hub
-              </Text>
-            </LinearGradient>
+              Send Configuration to Hub
+            </Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -351,58 +385,77 @@ export default function SetupHubScreen() {
       {}
       <Modal visible={isScanning} animationType="slide">
         <View className="flex-1 bg-black">
-          {}
           <SafeAreaView edges={["top"]} className="bg-black z-20">
             <View className="flex-row justify-between items-center px-5 py-4">
               <TouchableOpacity onPress={() => setIsScanning(false)}>
-                <MaterialIcons name="close" size={28} color="white" />
+                <MaterialIcons
+                  name="close"
+                  size={scaledSize(28)}
+                  color="white"
+                />
               </TouchableOpacity>
-              <Text className="text-white font-bold text-base">
+              <Text
+                className="font-bold"
+                style={{ color: "white", fontSize: scaledSize(16) }}
+              >
                 Scan QR Code
               </Text>
               <View style={{ width: 28 }} />
             </View>
           </SafeAreaView>
 
-          {}
           <View className="flex-1 justify-center items-center relative">
-            {}
             <View style={StyleSheet.absoluteFill} className="bg-gray-800" />
-
-            {}
             <View
               style={StyleSheet.absoluteFill}
               className="justify-center items-center"
             >
               <View className="w-full h-full bg-black/60 absolute" />
-
-              {}
               <View className="w-64 h-64 bg-transparent justify-center items-center relative">
-                {}
-                <View className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#00ff99]" />
-                <View className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#00ff99]" />
-                <View className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[#00ff99]" />
-                <View className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[#00ff99]" />
-
-                {}
-                <View className="w-[90%] h-[2px] bg-[#00ff99] opacity-70 shadow-lg shadow-[#00ff99]" />
+                <View
+                  className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4"
+                  style={{ borderColor: theme.buttonPrimary }}
+                />
+                <View
+                  className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4"
+                  style={{ borderColor: theme.buttonPrimary }}
+                />
+                <View
+                  className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4"
+                  style={{ borderColor: theme.buttonPrimary }}
+                />
+                <View
+                  className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4"
+                  style={{ borderColor: theme.buttonPrimary }}
+                />
+                <View
+                  className="w-[90%] h-[2px] opacity-70 shadow-lg"
+                  style={{
+                    backgroundColor: theme.buttonPrimary,
+                    shadowColor: theme.buttonPrimary,
+                  }}
+                />
               </View>
-
-              <Text className="text-white text-sm mt-8 opacity-80">
+              <Text
+                className="mt-8 opacity-80"
+                style={{ color: "white", fontSize: scaledSize(14) }}
+              >
                 Align QR code within the frame
               </Text>
             </View>
           </View>
 
-          {}
           <SafeAreaView
             edges={["bottom"]}
             className="bg-black p-8 items-center"
           >
-            <Text className="text-[#888] text-xs mb-4">
+            <Text
+              className="mb-4"
+              style={{ color: "#888", fontSize: scaledSize(12) }}
+            >
               Searching for code...
             </Text>
-            <ActivityIndicator size="small" color="#00ff99" />
+            <ActivityIndicator size="small" color={theme.buttonPrimary} />
           </SafeAreaView>
         </View>
       </Modal>
@@ -414,10 +467,10 @@ export default function SetupHubScreen() {
             className="p-8 rounded-2xl items-center w-4/5"
             style={{ backgroundColor: theme.card }}
           >
-            <ActivityIndicator size="large" color="#00ff99" />
+            <ActivityIndicator size="large" color={theme.buttonPrimary} />
             <Text
-              className="mt-5 text-base font-semibold"
-              style={{ color: theme.text }}
+              className="mt-5 font-semibold"
+              style={{ color: theme.text, fontSize: scaledSize(16) }}
             >
               {statusStep}
             </Text>
@@ -440,7 +493,7 @@ export default function SetupHubScreen() {
               style={{
                 backgroundColor:
                   alertConfig.type === "success"
-                    ? "rgba(0, 255, 153, 0.1)"
+                    ? `${theme.buttonPrimary}1A`
                     : alertConfig.type === "warning"
                     ? "rgba(255, 165, 0, 0.1)"
                     : "rgba(255, 68, 68, 0.1)",
@@ -454,10 +507,10 @@ export default function SetupHubScreen() {
                     ? "wifi-off"
                     : "priority-high"
                 }
-                size={28}
+                size={scaledSize(28)}
                 color={
                   alertConfig.type === "success"
-                    ? "#00ff99"
+                    ? theme.buttonPrimary
                     : alertConfig.type === "warning"
                     ? "#FFA500"
                     : "#ff4444"
@@ -466,39 +519,35 @@ export default function SetupHubScreen() {
             </View>
 
             <Text
-              className="text-lg font-bold mb-2 text-center"
-              style={{ color: theme.text }}
+              className="font-bold mb-2 text-center"
+              style={{ color: theme.text, fontSize: scaledSize(18) }}
             >
               {alertConfig.title}
             </Text>
 
             <Text
-              className="text-[13px] text-center mb-6 leading-5"
-              style={{ color: theme.textSecondary }}
+              className="text-center mb-6 leading-5"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(13) }}
             >
               {alertConfig.message}
             </Text>
 
-            <TouchableOpacity onPress={closeAlert} className="w-full">
-              <LinearGradient
-                colors={
-                  alertConfig.type === "success"
-                    ? ["#0055ff", "#00ff99"]
-                    : ["#333", "#444"]
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                className="py-3 rounded-xl w-full items-center"
+            <TouchableOpacity
+              onPress={closeAlert}
+              className="w-full py-3 rounded-xl items-center"
+              style={{
+                backgroundColor: theme.buttonPrimary,
+              }}
+            >
+              <Text
+                className="font-bold tracking-widest uppercase"
+                style={{
+                  color: "#fff",
+                  fontSize: scaledSize(12),
+                }}
               >
-                <Text
-                  className="font-bold text-xs tracking-widest uppercase"
-                  style={{
-                    color: alertConfig.type === "success" ? "#000" : "#fff",
-                  }}
-                >
-                  {alertConfig.type === "success" ? "CONTINUE" : "OKAY"}
-                </Text>
-              </LinearGradient>
+                {alertConfig.type === "success" ? "CONTINUE" : "OKAY"}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

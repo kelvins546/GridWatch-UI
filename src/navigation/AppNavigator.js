@@ -1,17 +1,13 @@
 import React, { useRef } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  Animated,
-  TouchableOpacity,
-  ActivityIndicator,
-  View,
-} from "react-native";
+import { Animated, TouchableOpacity, View, Platform } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 
 import LandingScreen from "../screens/auth/LandingScreen";
+import AuthSelectionScreen from "../screens/auth/AuthSelectionScreen";
 import LoginScreen from "../screens/auth/LoginScreen";
 import SignupScreen from "../screens/auth/SignupScreen";
 import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
@@ -25,6 +21,7 @@ import SettingsScreen from "../screens/settings/SettingsScreen";
 import ProfileSettingsScreen from "../screens/settings/ProfileSettingsScreen";
 import DeviceConfigScreen from "../screens/settings/DeviceConfigScreen";
 import HelpSupportScreen from "../screens/settings/HelpSupportScreen";
+import AboutUsScreen from "../screens/settings/AboutUsScreen";
 import NotificationsScreen from "../screens/settings/NotificationsScreen";
 import NotificationSettingsScreen from "../screens/settings/NotificationSettingsScreen";
 import ProviderSetupScreen from "../screens/settings/ProviderSetupScreen";
@@ -39,6 +36,8 @@ import MenuScreen from "../screens/menu/MenuScreen";
 import MyHubsScreen from "../screens/menu/MyHubsScreen";
 import SetupHubScreen from "../screens/menu/SetupHubScreen";
 import HubConfigScreen from "../screens/menu/HubConfigScreen";
+import FamilyAccessScreen from "../screens/menu/FamilyAccessScreen";
+import InvitationsScreen from "../screens/menu/InvitationsScreen";
 
 import FaultDetailScreen from "../screens/devices/FaultDetailScreen";
 import DeviceControlScreen from "../screens/devices/DeviceControlScreen";
@@ -49,11 +48,13 @@ const Stack = createNativeStackNavigator();
 
 const BounceTabButton = ({ children, onPress }) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
+
   const handlePressIn = () =>
     Animated.spring(scaleValue, {
-      toValue: 0.85,
+      toValue: 0.9,
       useNativeDriver: true,
     }).start();
+
   const handlePressOut = () => {
     Animated.spring(scaleValue, {
       toValue: 1,
@@ -63,6 +64,7 @@ const BounceTabButton = ({ children, onPress }) => {
     }).start();
     onPress();
   };
+
   return (
     <TouchableOpacity
       activeOpacity={1}
@@ -84,24 +86,31 @@ const BounceTabButton = ({ children, onPress }) => {
 };
 
 function BottomTabNavigator() {
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, fontScale } = useTheme();
   const insets = useSafeAreaInsets();
+
+  const scaledSize = (size) => size * fontScale;
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
-          backgroundColor: isDarkMode ? "#161616" : "#ffffff",
-          borderTopColor: isDarkMode ? "#222" : "#e0e0e0",
+          backgroundColor: theme.card,
+          borderTopColor: theme.cardBorder,
+          borderTopWidth: 1,
           height: 60 + insets.bottom,
-          paddingBottom: insets.bottom,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
           paddingTop: 8,
+          elevation: 0,
+          shadowOpacity: 0,
         },
-        tabBarActiveTintColor: theme.primary,
+        tabBarActiveTintColor: theme.buttonPrimary,
         tabBarInactiveTintColor: theme.textSecondary,
         tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: "500",
+          fontSize: scaledSize(10),
+          fontWeight: "600",
           paddingBottom: 4,
         },
       }}
@@ -112,7 +121,11 @@ function BottomTabNavigator() {
         options={{
           tabBarButton: (props) => <BounceTabButton {...props} />,
           tabBarIcon: ({ color }) => (
-            <MaterialIcons name="dashboard" size={24} color={color} />
+            <MaterialIcons
+              name="dashboard"
+              size={scaledSize(24)}
+              color={color}
+            />
           ),
         }}
       />
@@ -123,8 +136,8 @@ function BottomTabNavigator() {
           tabBarButton: (props) => <BounceTabButton {...props} />,
           tabBarIcon: ({ color }) => (
             <MaterialIcons
-              name="insert-chart-outlined"
-              size={24}
+              name="insert-chart"
+              size={scaledSize(24)}
               color={color}
             />
           ),
@@ -138,7 +151,7 @@ function BottomTabNavigator() {
           tabBarIcon: ({ color }) => (
             <MaterialIcons
               name="account-balance-wallet"
-              size={24}
+              size={scaledSize(24)}
               color={color}
             />
           ),
@@ -150,7 +163,11 @@ function BottomTabNavigator() {
         options={{
           tabBarButton: (props) => <BounceTabButton {...props} />,
           tabBarIcon: ({ color }) => (
-            <MaterialIcons name="settings" size={24} color={color} />
+            <MaterialIcons
+              name="settings"
+              size={scaledSize(24)}
+              color={color}
+            />
           ),
         }}
       />
@@ -173,6 +190,7 @@ export default function AppNavigator() {
     >
       {}
       <Stack.Screen name="Landing" component={LandingScreen} />
+      <Stack.Screen name="AuthSelection" component={AuthSelectionScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
@@ -190,6 +208,7 @@ export default function AppNavigator() {
         component={NotificationSettingsScreen}
       />
       <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
+      <Stack.Screen name="AboutUs" component={AboutUsScreen} />
       <Stack.Screen name="ProviderSetup" component={ProviderSetupScreen} />
 
       <Stack.Screen
@@ -200,9 +219,13 @@ export default function AppNavigator() {
       <Stack.Screen name="MonthlyBudget" component={MonthlyBudgetScreen} />
       <Stack.Screen name="LimitDetail" component={LimitDetailScreen} />
 
+      {}
       <Stack.Screen name="MyHubs" component={MyHubsScreen} />
       <Stack.Screen name="SetupHub" component={SetupHubScreen} />
       <Stack.Screen name="HubConfig" component={HubConfigScreen} />
+      <Stack.Screen name="FamilyAccess" component={FamilyAccessScreen} />
+      <Stack.Screen name="Invitations" component={InvitationsScreen} />
+
       <Stack.Screen name="Disconnected" component={DisconnectedScreen} />
       <Stack.Screen name="FaultDetail" component={FaultDetailScreen} />
       <Stack.Screen name="DeviceControl" component={DeviceControlScreen} />

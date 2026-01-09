@@ -2,7 +2,6 @@ import React, { useRef } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   ScrollView,
   StatusBar,
@@ -16,7 +15,9 @@ import { useTheme } from "../../context/ThemeContext";
 export default function BudgetDeviceListScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, fontScale } = useTheme();
+
+  const scaledSize = (size) => size * fontScale;
 
   const { hubName } = route.params || { hubName: "Smart Hub" };
 
@@ -69,7 +70,8 @@ export default function BudgetDeviceListScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.background }]}
+      className="flex-1"
+      style={{ backgroundColor: theme.background }}
       edges={["top", "left", "right"]}
     >
       <StatusBar
@@ -77,50 +79,62 @@ export default function BudgetDeviceListScreen() {
         backgroundColor={theme.background}
       />
 
+      {}
       <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: theme.background,
-            borderBottomColor: theme.cardBorder,
-          },
-        ]}
+        className="flex-row items-center justify-between px-6 py-5 border-b"
+        style={{
+          backgroundColor: theme.background,
+          borderBottomColor: theme.cardBorder,
+        }}
       >
         <TouchableOpacity
-          style={styles.backBtn}
+          className="flex-row items-center"
           onPress={() => navigation.goBack()}
         >
           <MaterialIcons
             name="arrow-back"
-            size={18}
+            size={scaledSize(18)}
             color={theme.textSecondary}
           />
-          <Text style={[styles.backText, { color: theme.textSecondary }]}>
+          <Text
+            className="font-medium ml-1"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+          >
             Back
           </Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>
+        <Text
+          className="font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(16) }}
+        >
           Budget Management
         </Text>
         <View style={{ width: 50 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.introText, { color: theme.textSecondary }]}>
+      <ScrollView
+        contentContainerStyle={{ padding: 24 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text
+          className="mb-6 leading-5"
+          style={{ color: theme.textSecondary, fontSize: scaledSize(13) }}
+        >
           Select a device from{" "}
-          <Text style={{ fontWeight: "700", color: theme.primary }}>
+          <Text style={{ fontWeight: "700", color: theme.buttonPrimary }}>
             {hubName}
           </Text>{" "}
           to configure spending limits, automation rules, and alerts.
         </Text>
 
-        <View style={styles.listContainer}>
+        <View className="gap-3">
           {devices.map((device) => (
             <DeviceRow
               key={device.id}
               data={device}
               theme={theme}
               isDarkMode={isDarkMode}
+              scaledSize={scaledSize}
               onPress={() => handleDevicePress(device)}
             />
           ))}
@@ -130,7 +144,7 @@ export default function BudgetDeviceListScreen() {
   );
 }
 
-function DeviceRow({ data, theme, isDarkMode, onPress }) {
+function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
   const scaleValue = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -151,20 +165,20 @@ function DeviceRow({ data, theme, isDarkMode, onPress }) {
   let iconColor, iconBg, statusTextColor;
 
   if (data.type === "good") {
-    iconColor = isDarkMode ? "#00ff99" : "#00995e";
-    iconBg = isDarkMode ? "rgba(0, 255, 153, 0.1)" : "rgba(0, 153, 94, 0.1)";
+    iconColor = theme.buttonPrimary;
+    iconBg = `${theme.buttonPrimary}22`;
     statusTextColor = iconColor;
   } else if (data.type === "warn") {
-    iconColor = "#ffaa00";
-    iconBg = "rgba(255, 170, 0, 0.1)";
+    iconColor = isDarkMode ? "#ffaa00" : "#b37400";
+    iconBg = isDarkMode ? "rgba(255, 170, 0, 0.15)" : "rgba(179, 116, 0, 0.1)";
     statusTextColor = iconColor;
   } else if (data.type === "critical") {
-    iconColor = "#ff4444";
-    iconBg = "rgba(255, 68, 68, 0.1)";
+    iconColor = isDarkMode ? "#ff4444" : "#c62828";
+    iconBg = isDarkMode ? "rgba(255, 68, 68, 0.15)" : "rgba(198, 40, 40, 0.1)";
     statusTextColor = iconColor;
   } else {
     iconColor = theme.textSecondary;
-    iconBg = theme.cardBorder;
+    iconBg = theme.buttonNeutral;
     statusTextColor = theme.textSecondary;
   }
 
@@ -177,26 +191,37 @@ function DeviceRow({ data, theme, isDarkMode, onPress }) {
       style={{ marginBottom: 12 }}
     >
       <Animated.View
-        style={[
-          styles.deviceItem,
-          {
-            backgroundColor: theme.card,
-            borderColor: theme.cardBorder,
-            transform: [{ scale: scaleValue }],
-            opacity: data.isLocked ? 0.6 : 1,
-          },
-        ]}
+        className="flex-row items-center justify-between p-4 rounded-2xl border"
+        style={{
+          backgroundColor: theme.card,
+          borderColor: theme.cardBorder,
+          transform: [{ scale: scaleValue }],
+          opacity: data.isLocked ? 0.6 : 1,
+        }}
       >
-        <View style={styles.deviceLeft}>
-          <View style={[styles.iconBox, { backgroundColor: iconBg }]}>
-            <MaterialIcons name={data.icon} size={22} color={iconColor} />
+        <View className="flex-row items-center gap-4">
+          <View
+            className="w-10 h-10 rounded-xl items-center justify-center"
+            style={{ backgroundColor: iconBg }}
+          >
+            <MaterialIcons
+              name={data.icon}
+              size={scaledSize(22)}
+              color={iconColor}
+            />
           </View>
 
-          <View style={styles.deviceInfo}>
-            <Text style={[styles.deviceName, { color: theme.text }]}>
+          <View className="gap-0.5">
+            <Text
+              className="font-semibold"
+              style={{ color: theme.text, fontSize: scaledSize(14) }}
+            >
               {data.name}
             </Text>
-            <Text style={[styles.deviceStatus, { color: statusTextColor }]}>
+            <Text
+              className="font-medium"
+              style={{ color: statusTextColor, fontSize: scaledSize(11) }}
+            >
               {data.status}
             </Text>
           </View>
@@ -204,51 +229,10 @@ function DeviceRow({ data, theme, isDarkMode, onPress }) {
 
         <MaterialIcons
           name={data.isLocked ? "lock" : "chevron-right"}
-          size={20}
+          size={scaledSize(20)}
           color={theme.textSecondary}
         />
       </Animated.View>
     </TouchableOpacity>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-  },
-  backBtn: { flexDirection: "row", alignItems: "center", gap: 5 },
-  backText: { fontSize: 14, fontWeight: "500" },
-  headerTitle: { fontSize: 16, fontWeight: "700" },
-
-  content: { padding: 24 },
-  introText: { fontSize: 13, lineHeight: 20, marginBottom: 25 },
-
-  listContainer: { gap: 12 },
-  deviceItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-
-  deviceLeft: { flexDirection: "row", alignItems: "center", gap: 15 },
-  iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  deviceInfo: { gap: 2 },
-  deviceName: { fontSize: 14, fontWeight: "600" },
-  deviceStatus: { fontSize: 11, fontWeight: "500" },
-});

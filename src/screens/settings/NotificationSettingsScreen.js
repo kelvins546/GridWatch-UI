@@ -5,22 +5,38 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  Switch,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 export default function NotificationSettingsScreen() {
   const navigation = useNavigation();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, fontScale, updateFontScale } = useTheme();
+
+  const scaledSize = (size) => size * fontScale;
 
   const [pushEnabled, setPushEnabled] = useState(true);
   const [budgetAlerts, setBudgetAlerts] = useState(true);
   const [deviceStatus, setDeviceStatus] = useState(true);
   const [tipsNews, setTipsNews] = useState(false);
   const [emailDigest, setEmailDigest] = useState(true);
+
+  const handleToggle = (setter, value) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setter(!value);
+  };
 
   return (
     <SafeAreaView
@@ -41,13 +57,13 @@ export default function NotificationSettingsScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons
             name="arrow-back"
-            size={24}
+            size={scaledSize(24)}
             color={theme.textSecondary}
           />
         </TouchableOpacity>
         <Text
-          className="flex-1 text-center text-base font-bold"
-          style={{ color: theme.text }}
+          className="flex-1 text-center font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(18) }}
         >
           Notification Preferences
         </Text>
@@ -55,9 +71,92 @@ export default function NotificationSettingsScreen() {
       </View>
 
       <ScrollView className="flex-1 p-6">
+        {}
         <Text
-          className="text-xs font-bold uppercase tracking-widest mb-3"
-          style={{ color: theme.textSecondary }}
+          className="font-bold uppercase tracking-widest mb-3"
+          style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+        >
+          Appearance
+        </Text>
+
+        <View
+          className="rounded-2xl border p-4 mb-6"
+          style={{
+            backgroundColor: theme.card,
+            borderColor: theme.cardBorder,
+          }}
+        >
+          <View className="flex-row items-center justify-between mb-4">
+            <View className="flex-row items-center">
+              <MaterialIcons
+                name="text-fields"
+                size={scaledSize(20)}
+                color={theme.text}
+                style={{ marginRight: 10 }}
+              />
+              <Text
+                className="font-semibold"
+                style={{ color: theme.text, fontSize: scaledSize(16) }}
+              >
+                Text Size
+              </Text>
+            </View>
+            <Text
+              style={{
+                color: theme.buttonPrimary,
+                fontSize: scaledSize(14),
+                fontWeight: "bold",
+              }}
+            >
+              {fontScale === 0.85
+                ? "Small"
+                : fontScale === 1
+                ? "Standard"
+                : "Large"}
+            </Text>
+          </View>
+
+          {}
+          <View className="flex-row gap-3">
+            {[
+              { label: "Small", value: 0.85 },
+              { label: "Standard", value: 1 },
+              { label: "Large", value: 1.15 },
+            ].map((option) => (
+              <TouchableOpacity
+                key={option.label}
+                onPress={() => updateFontScale(option.value)}
+                className="flex-1 items-center justify-center py-3 rounded-xl border"
+                style={{
+                  backgroundColor:
+                    fontScale === option.value
+                      ? theme.buttonPrimary
+                      : "transparent",
+                  borderColor:
+                    fontScale === option.value
+                      ? theme.buttonPrimary
+                      : theme.cardBorder,
+                }}
+              >
+                <Text
+                  style={{
+                    color: fontScale === option.value ? "#fff" : theme.text,
+                    fontSize:
+                      option.value === 0.85 ? 12 : option.value === 1 ? 16 : 20,
+                    fontWeight: "bold",
+                  }}
+                >
+                  Aa
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {}
+        <Text
+          className="font-bold uppercase tracking-widest mb-3"
+          style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
         >
           General
         </Text>
@@ -74,16 +173,17 @@ export default function NotificationSettingsScreen() {
             desc="Enable or disable all app notifications."
             icon="notifications-active"
             value={pushEnabled}
-            onValueChange={setPushEnabled}
+            onToggle={() => handleToggle(setPushEnabled, pushEnabled)}
             theme={theme}
-            isDarkMode={isDarkMode}
+            scaledSize={scaledSize}
             isLast={true}
           />
         </View>
 
+        {}
         <Text
-          className="text-xs font-bold uppercase tracking-widest mb-3"
-          style={{ color: theme.textSecondary }}
+          className="font-bold uppercase tracking-widest mb-3"
+          style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
         >
           Alert Types
         </Text>
@@ -97,37 +197,38 @@ export default function NotificationSettingsScreen() {
         >
           <ToggleRow
             label="Budget & Cost Alerts"
-            desc="Get notified when you reach 50%, 80%, or 100% of your budget."
+            desc="Get notified when you reach limits."
             icon="attach-money"
             value={budgetAlerts}
-            onValueChange={setBudgetAlerts}
+            onToggle={() => handleToggle(setBudgetAlerts, budgetAlerts)}
             theme={theme}
-            isDarkMode={isDarkMode}
+            scaledSize={scaledSize}
           />
           <ToggleRow
             label="Device Status"
-            desc="Alerts when a hub goes offline or a device is unreachable."
+            desc="Alerts when a hub goes offline."
             icon="router"
             value={deviceStatus}
-            onValueChange={setDeviceStatus}
+            onToggle={() => handleToggle(setDeviceStatus, deviceStatus)}
             theme={theme}
-            isDarkMode={isDarkMode}
+            scaledSize={scaledSize}
           />
           <ToggleRow
             label="Smart Tips & News"
-            desc="Energy saving recommendations and app updates."
+            desc="Energy saving recommendations."
             icon="lightbulb"
             value={tipsNews}
-            onValueChange={setTipsNews}
+            onToggle={() => handleToggle(setTipsNews, tipsNews)}
             theme={theme}
-            isDarkMode={isDarkMode}
+            scaledSize={scaledSize}
             isLast={true}
           />
         </View>
 
+        {}
         <Text
-          className="text-xs font-bold uppercase tracking-widest mb-3"
-          style={{ color: theme.textSecondary }}
+          className="font-bold uppercase tracking-widest mb-3"
+          style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
         >
           Other
         </Text>
@@ -141,12 +242,12 @@ export default function NotificationSettingsScreen() {
         >
           <ToggleRow
             label="Monthly Email Digest"
-            desc="Receive a summary of your energy usage via email."
+            desc="Receive a summary via email."
             icon="email"
             value={emailDigest}
-            onValueChange={setEmailDigest}
+            onToggle={() => handleToggle(setEmailDigest, emailDigest)}
             theme={theme}
-            isDarkMode={isDarkMode}
+            scaledSize={scaledSize}
             isLast={true}
           />
         </View>
@@ -155,14 +256,46 @@ export default function NotificationSettingsScreen() {
   );
 }
 
+function CustomSwitch({ value, onToggle, theme }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onToggle}
+      style={{
+        width: 42,
+        height: 26,
+        borderRadius: 16,
+        backgroundColor: value ? theme.buttonPrimary : theme.buttonNeutral,
+        padding: 2,
+        justifyContent: "center",
+        alignItems: value ? "flex-end" : "flex-start",
+      }}
+    >
+      <View
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          backgroundColor: "#FFFFFF",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 2.5,
+          elevation: 2,
+        }}
+      />
+    </TouchableOpacity>
+  );
+}
+
 function ToggleRow({
   label,
   desc,
   icon,
   value,
-  onValueChange,
+  onToggle,
   theme,
-  isDarkMode,
+  scaledSize,
   isLast,
 }) {
   return (
@@ -176,37 +309,29 @@ function ToggleRow({
         <View
           className="w-9 h-9 rounded-full justify-center items-center mr-3"
           style={{
-            backgroundColor: isDarkMode
-              ? "rgba(255, 255, 255, 0.05)"
-              : "rgba(0,0,0,0.05)",
+            backgroundColor: theme.buttonNeutral,
           }}
         >
-          <MaterialIcons name={icon} size={20} color={theme.text} />
+          <MaterialIcons name={icon} size={scaledSize(20)} color={theme.text} />
         </View>
         <View className="flex-1">
           <Text
-            className="text-sm font-semibold mb-0.5"
-            style={{ color: theme.text }}
+            className="font-semibold mb-0.5"
+            style={{ color: theme.text, fontSize: scaledSize(14) }}
           >
             {label}
           </Text>
           <Text
-            className="text-[11px] leading-4"
-            style={{ color: theme.textSecondary }}
+            className="leading-4"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
           >
             {desc}
           </Text>
         </View>
       </View>
-      <Switch
-        trackColor={{
-          false: "#d1d1d1",
-          true: isDarkMode ? "rgba(0, 255, 153, 0.2)" : "rgba(0, 153, 94, 0.2)",
-        }}
-        thumbColor={value ? theme.primary : "#f4f3f4"}
-        onValueChange={onValueChange}
-        value={value}
-      />
+
+      {}
+      <CustomSwitch value={value} onToggle={onToggle} theme={theme} />
     </View>
   );
 }

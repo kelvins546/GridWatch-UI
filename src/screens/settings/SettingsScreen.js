@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
-  Switch,
   Modal,
   StatusBar,
   Image,
   ActivityIndicator,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -17,13 +19,21 @@ import {
   useRoute,
   useFocusEffect,
 } from "@react-navigation/native";
-import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../context/ThemeContext";
+
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { isDarkMode, toggleTheme, theme } = useTheme();
+  const { isDarkMode, toggleTheme, theme, fontScale } = useTheme();
+
+  const scaledSize = (size) => size * (fontScale || 1);
 
   const [isLoading, setIsLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -89,6 +99,16 @@ export default function SettingsScreen() {
     }, 2000);
   };
 
+  const handleToggleWidgets = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setWidgetsEnabled(!widgetsEnabled);
+  };
+
+  const handleToggleTheme = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    toggleTheme();
+  };
+
   if (isLoading) {
     return (
       <View
@@ -104,12 +124,11 @@ export default function SettingsScreen() {
           backgroundColor={theme.background}
         />
         <ActivityIndicator size="large" color={theme.primary} />
-        {}
         <Text
           style={{
             marginTop: 12,
             color: theme.textSecondary,
-            fontSize: 14,
+            fontSize: scaledSize(14),
             fontWeight: "500",
           }}
         >
@@ -137,13 +156,17 @@ export default function SettingsScreen() {
           borderBottomColor: theme.cardBorder,
         }}
       >
-        <Text className="text-base font-bold" style={{ color: theme.text }}>
+        <Text
+          className="font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(16) }}
+        >
           Settings
         </Text>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="p-6 pb-10">
+          {}
           <TouchableOpacity
             className="flex-row items-center mb-8"
             onPress={() => navigation.navigate("ProfileSettings")}
@@ -157,41 +180,48 @@ export default function SettingsScreen() {
                   resizeMode="cover"
                 />
               ) : (
-                <LinearGradient
-                  colors={
-                    isDarkMode ? ["#0055ff", "#00ff99"] : ["#0055ff", "#00995e"]
-                  }
+                <View
                   className="w-full h-full rounded-full justify-center items-center"
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
+                  style={{ backgroundColor: theme.buttonPrimary }}
                 >
-                  <Text className="text-xl font-bold text-gray-900">
+                  <Text
+                    className="font-bold"
+                    style={{ color: "#fff", fontSize: scaledSize(20) }}
+                  >
                     {userData.initial}
                   </Text>
-                </LinearGradient>
+                </View>
               )}
             </View>
 
             <View className="flex-1">
               <Text
-                className="text-base font-bold"
-                style={{ color: theme.text }}
+                className="font-bold"
+                style={{ color: theme.text, fontSize: scaledSize(16) }}
               >
                 {userData.fullName}
               </Text>
               <Text
-                className="text-xs mt-0.5"
-                style={{ color: theme.textSecondary }}
+                className="mt-0.5"
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(12),
+                }}
               >
                 {userData.unitLocation}
               </Text>
             </View>
-            <MaterialIcons name="edit" size={20} color={theme.textSecondary} />
+            <MaterialIcons
+              name="edit"
+              size={scaledSize(20)}
+              color={theme.textSecondary}
+            />
           </TouchableOpacity>
 
+          {}
           <Text
-            className="text-xs font-bold uppercase tracking-widest mb-3 mt-2"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3 mt-2"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
           >
             Utility & Rates
           </Text>
@@ -202,6 +232,7 @@ export default function SettingsScreen() {
             subtitle="Current Provider"
             onPress={() => navigation.navigate("ProviderSetup")}
             theme={theme}
+            scaledSize={scaledSize}
             customIcon={
               <View className="w-9 h-9 bg-white rounded-lg justify-center items-center overflow-hidden border border-gray-200">
                 {logoSource ? (
@@ -211,7 +242,10 @@ export default function SettingsScreen() {
                     resizeMode="contain"
                   />
                 ) : (
-                  <Text className="text-black font-black text-sm">
+                  <Text
+                    className="font-black"
+                    style={{ color: "#000", fontSize: scaledSize(14) }}
+                  >
                     {displayProvider.charAt(0)}
                   </Text>
                 )}
@@ -220,36 +254,49 @@ export default function SettingsScreen() {
           />
 
           <View
-            className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
+            className="p-4 rounded-xl mb-6 flex-row justify-between items-center border h-[72px]"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
             }}
           >
             <View className="flex-row items-center">
-              <MaterialIcons name="bolt" size={22} color={theme.icon} />
+              <MaterialIcons
+                name="bolt"
+                size={scaledSize(22)}
+                color={theme.icon}
+              />
               <View>
                 <Text
-                  className="text-sm font-medium ml-3"
-                  style={{ color: theme.text }}
+                  className="font-medium ml-3"
+                  style={{ color: theme.text, fontSize: scaledSize(14) }}
                 >
                   Electricity Rate
                 </Text>
                 <Text
-                  className="text-xs mt-0.5 ml-3"
-                  style={{ color: theme.textSecondary }}
+                  className="mt-0.5 ml-3"
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(12),
+                  }}
                 >
                   Last updated: Today, 8:00 AM
                 </Text>
               </View>
             </View>
             <View className="items-end">
-              <Text className="text-sm font-bold" style={{ color: theme.text }}>
+              <Text
+                className="font-bold"
+                style={{ color: theme.text, fontSize: scaledSize(14) }}
+              >
                 ₱ {displayRate}
               </Text>
               <Text
-                className="text-xs font-semibold"
-                style={{ color: theme.primary }}
+                className="font-semibold"
+                style={{
+                  color: theme.buttonPrimary,
+                  fontSize: scaledSize(12),
+                }}
               >
                 Auto-Sync ON
               </Text>
@@ -257,10 +304,9 @@ export default function SettingsScreen() {
           </View>
 
           {}
-
           <Text
-            className="text-xs font-bold uppercase tracking-widest mb-3 mt-2"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
           >
             Preferences
           </Text>
@@ -270,13 +316,7 @@ export default function SettingsScreen() {
             title="Notifications"
             onPress={() => navigation.navigate("NotificationSettings")}
             theme={theme}
-          />
-
-          <SettingsRow
-            icon="help-outline"
-            title="Help & Support"
-            onPress={() => navigation.navigate("HelpSupport")}
-            theme={theme}
+            scaledSize={scaledSize}
           />
 
           {}
@@ -289,24 +329,23 @@ export default function SettingsScreen() {
           >
             <View className="p-4 flex-row justify-between items-center h-[72px]">
               <View className="flex-row items-center">
-                <MaterialIcons name="widgets" size={22} color={theme.icon} />
+                <MaterialIcons
+                  name="widgets"
+                  size={scaledSize(22)}
+                  color={theme.icon}
+                />
                 <Text
-                  className="text-sm font-medium ml-3"
-                  style={{ color: theme.text }}
+                  className="font-medium ml-3"
+                  style={{ color: theme.text, fontSize: scaledSize(14) }}
                 >
                   Home Screen Widgets
                 </Text>
               </View>
-              <Switch
-                trackColor={{
-                  false: "#d1d1d1",
-                  true: isDarkMode
-                    ? "rgba(0, 255, 153, 0.2)"
-                    : "rgba(0, 153, 94, 0.2)",
-                }}
-                thumbColor={widgetsEnabled ? theme.primary : "#f4f3f4"}
-                onValueChange={setWidgetsEnabled}
+              {}
+              <CustomSwitch
                 value={widgetsEnabled}
+                onToggle={handleToggleWidgets}
+                theme={theme}
               />
             </View>
 
@@ -316,13 +355,15 @@ export default function SettingsScreen() {
                 style={{ borderColor: theme.cardBorder }}
               >
                 <Text
-                  className="text-[10px] uppercase font-bold mb-3"
-                  style={{ color: theme.textSecondary }}
+                  className="uppercase font-bold mb-3"
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(10),
+                  }}
                 >
                   Preview: Monthly Budget Card
                 </Text>
 
-                {}
                 <View
                   className="p-5 rounded-2xl border"
                   style={{
@@ -337,10 +378,16 @@ export default function SettingsScreen() {
                 >
                   <View className="flex-row justify-between items-start mb-2">
                     <View>
-                      <Text className="text-[10px] font-bold uppercase tracking-widest mb-1 text-zinc-500">
+                      <Text
+                        className="font-bold uppercase tracking-widest mb-1 text-zinc-500"
+                        style={{ fontSize: scaledSize(10) }}
+                      >
                         Total Spending
                       </Text>
-                      <Text className="text-3xl font-extrabold text-white">
+                      <Text
+                        className="font-extrabold text-white"
+                        style={{ fontSize: scaledSize(30) }}
+                      >
                         ₱ 1,450.75
                       </Text>
                     </View>
@@ -352,9 +399,18 @@ export default function SettingsScreen() {
 
                   <View className="mb-4">
                     <View className="h-1.5 w-full bg-zinc-800 rounded-full mb-2 overflow-hidden">
-                      <View className="h-full bg-[#00ff99] w-[48%]" />
+                      <View
+                        className="h-full w-[48%]"
+                        style={{ backgroundColor: theme.buttonPrimary }}
+                      />
                     </View>
-                    <Text className="text-[#00ff99] text-[9px] font-bold">
+                    <Text
+                      className="font-bold"
+                      style={{
+                        color: theme.buttonPrimary,
+                        fontSize: scaledSize(9),
+                      }}
+                    >
                       48% of Budget Used
                     </Text>
                   </View>
@@ -367,6 +423,7 @@ export default function SettingsScreen() {
                       theme={theme}
                       isDarkMode={true}
                       forceWhiteText={true}
+                      scaledSize={scaledSize}
                     />
                     <View className="w-[1px] h-8 mx-4 bg-zinc-800" />
                     <StatItem
@@ -377,28 +434,26 @@ export default function SettingsScreen() {
                       theme={theme}
                       isDarkMode={true}
                       forceWhiteText={true}
+                      scaledSize={scaledSize}
                     />
                   </View>
                 </View>
 
-                {}
                 <TouchableOpacity
                   className="mt-4 rounded-xl overflow-hidden"
                   onPress={handleAddWidget}
                   disabled={widgetInstalled || isAddingWidget}
+                  style={{
+                    backgroundColor: widgetInstalled
+                      ? isDarkMode
+                        ? "#333"
+                        : "#ccc"
+                      : theme.buttonPrimary,
+                  }}
                 >
-                  <LinearGradient
-                    colors={
-                      widgetInstalled
-                        ? ["#333", "#222"]
-                        : ["#0055ff", "#00ff99"]
-                    }
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    className="py-3 items-center justify-center flex-row"
-                  >
+                  <View className="py-3 items-center justify-center flex-row">
                     {isAddingWidget ? (
-                      <ActivityIndicator size="small" color="#000" />
+                      <ActivityIndicator size="small" color="#fff" />
                     ) : (
                       <>
                         <MaterialIcons
@@ -407,12 +462,12 @@ export default function SettingsScreen() {
                               ? "check-circle"
                               : "add-to-home-screen"
                           }
-                          size={18}
-                          color={widgetInstalled ? "#00ff99" : "#000"}
+                          size={scaledSize(18)}
+                          color="#fff"
                         />
                         <Text
-                          className="font-bold text-xs ml-2"
-                          style={{ color: widgetInstalled ? "#fff" : "#000" }}
+                          className="font-bold ml-2"
+                          style={{ color: "#fff", fontSize: scaledSize(12) }}
                         >
                           {widgetInstalled
                             ? "WIDGET INSTALLED"
@@ -420,12 +475,15 @@ export default function SettingsScreen() {
                         </Text>
                       </>
                     )}
-                  </LinearGradient>
+                  </View>
                 </TouchableOpacity>
 
                 <Text
-                  className="text-[10px] text-center mt-3"
-                  style={{ color: theme.textSecondary }}
+                  className="text-center mt-3"
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(10),
+                  }}
                 >
                   This widget will be added to your phone's home screen.
                 </Text>
@@ -433,35 +491,60 @@ export default function SettingsScreen() {
             )}
           </View>
 
+          {}
           <View
-            className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
+            className="p-4 rounded-xl mb-6 flex-row justify-between items-center border h-[72px]"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
             }}
           >
             <View className="flex-row items-center">
-              <MaterialIcons name="dark-mode" size={22} color={theme.icon} />
+              <MaterialIcons
+                name="dark-mode"
+                size={scaledSize(22)}
+                color={theme.icon}
+              />
               <Text
-                className="text-sm font-medium ml-3"
-                style={{ color: theme.text }}
+                className="font-medium ml-3"
+                style={{ color: theme.text, fontSize: scaledSize(14) }}
               >
                 Dark Mode
               </Text>
             </View>
-            <Switch
-              trackColor={{
-                false: "#d1d1d1",
-                true: isDarkMode
-                  ? "rgba(0, 255, 153, 0.2)"
-                  : "rgba(0, 153, 94, 0.2)",
-              }}
-              thumbColor={isDarkMode ? theme.primary : "#f4f3f4"}
-              onValueChange={toggleTheme}
+            {}
+            <CustomSwitch
               value={isDarkMode}
+              onToggle={handleToggleTheme}
+              theme={theme}
             />
           </View>
 
+          {}
+          <Text
+            className="font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+          >
+            Support
+          </Text>
+
+          <SettingsRow
+            icon="help-outline"
+            title="Help & Support"
+            onPress={() => navigation.navigate("HelpSupport")}
+            theme={theme}
+            scaledSize={scaledSize}
+          />
+
+          <SettingsRow
+            icon="info-outline"
+            title="About Us"
+            onPress={() => navigation.navigate("AboutUs")}
+            theme={theme}
+            scaledSize={scaledSize}
+          />
+
+          {}
           <TouchableOpacity
             className="mt-8 p-4 rounded-xl border items-center"
             style={{
@@ -470,7 +553,12 @@ export default function SettingsScreen() {
             }}
             onPress={() => setModalVisible(true)}
           >
-            <Text className="text-red-500 font-semibold text-sm">Log Out</Text>
+            <Text
+              className="font-semibold"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+            >
+              Log Out
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -484,27 +572,22 @@ export default function SettingsScreen() {
       >
         <View className="flex-1 justify-center items-center bg-black/80">
           <View
-            className="border p-6 rounded-2xl w-72 items-center"
+            className="border p-5 rounded-2xl w-72 items-center"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
             }}
           >
-            <MaterialIcons
-              name="logout"
-              size={40}
-              color="#ff4444"
-              style={{ marginBottom: 15 }}
-            />
+            {}
             <Text
-              className="text-lg font-bold mb-2"
-              style={{ color: theme.text }}
+              className="font-bold mb-2"
+              style={{ color: theme.text, fontSize: scaledSize(18) }}
             >
               Log Out?
             </Text>
             <Text
-              className="text-center text-xs mb-6 leading-5"
-              style={{ color: theme.textSecondary }}
+              className="text-center mb-6 leading-5"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
             >
               Are you sure you want to sign out?
             </Text>
@@ -515,24 +598,25 @@ export default function SettingsScreen() {
                 onPress={() => setModalVisible(false)}
               >
                 <Text
-                  className="font-bold text-xs"
-                  style={{ color: theme.text }}
+                  className="font-bold"
+                  style={{ color: theme.text, fontSize: scaledSize(12) }}
                 >
                   Cancel
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-1 rounded-xl h-10 justify-center items-center overflow-hidden"
+                style={{ backgroundColor: theme.buttonDangerText }}
                 onPress={handleLogout}
               >
-                <LinearGradient
-                  colors={["#ff4444", "#ff8800"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  className="w-full h-full justify-center items-center"
-                >
-                  <Text className="text-white font-bold text-xs">Log Out</Text>
-                </LinearGradient>
+                <View className="w-full h-full justify-center items-center">
+                  <Text
+                    className="font-bold"
+                    style={{ color: "white", fontSize: scaledSize(12) }}
+                  >
+                    Log Out
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
@@ -548,24 +632,22 @@ export default function SettingsScreen() {
       >
         <View className="flex-1 justify-center items-center bg-black/80">
           <View
-            className="border p-6 rounded-2xl w-72 items-center"
+            className="border p-5 rounded-2xl w-72 items-center"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
             }}
           >
-            <View className="w-12 h-12 rounded-full bg-[#00ff99]/10 items-center justify-center mb-4">
-              <MaterialIcons name="check-circle" size={40} color="#00ff99" />
-            </View>
+            {}
             <Text
-              className="text-lg font-bold mb-2"
-              style={{ color: theme.text }}
+              className="font-bold mb-2"
+              style={{ color: theme.text, fontSize: scaledSize(18) }}
             >
               Widget Added
             </Text>
             <Text
-              className="text-center text-xs mb-6 leading-5"
-              style={{ color: theme.textSecondary }}
+              className="text-center mb-6 leading-5"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
             >
               The GridWatch Budget Tracker has been successfully added to your
               Home Screen.
@@ -573,17 +655,16 @@ export default function SettingsScreen() {
             <TouchableOpacity
               className="w-full rounded-xl h-10 justify-center items-center overflow-hidden"
               onPress={() => setSuccessModalVisible(false)}
+              style={{ backgroundColor: theme.buttonPrimary }}
             >
-              <LinearGradient
-                colors={["#0055ff", "#00ff99"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                className="w-full h-full justify-center items-center"
-              >
-                <Text className="text-black font-bold text-xs uppercase tracking-wide">
+              <View className="w-full h-full justify-center items-center">
+                <Text
+                  className="font-bold uppercase tracking-wide"
+                  style={{ color: "white", fontSize: scaledSize(12) }}
+                >
                   Great
                 </Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -592,7 +673,15 @@ export default function SettingsScreen() {
   );
 }
 
-function SettingsRow({ icon, title, subtitle, onPress, theme, customIcon }) {
+function SettingsRow({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  theme,
+  customIcon,
+  scaledSize,
+}) {
   return (
     <TouchableOpacity
       className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
@@ -607,19 +696,19 @@ function SettingsRow({ icon, title, subtitle, onPress, theme, customIcon }) {
         {customIcon ? (
           customIcon
         ) : (
-          <MaterialIcons name={icon} size={22} color={theme.icon} />
+          <MaterialIcons name={icon} size={scaledSize(22)} color={theme.icon} />
         )}
         <View>
           <Text
-            className="text-sm font-medium ml-3"
-            style={{ color: theme.text }}
+            className="font-medium ml-3"
+            style={{ color: theme.text, fontSize: scaledSize(14) }}
           >
             {title}
           </Text>
           {subtitle && (
             <Text
-              className="text-xs mt-0.5 ml-3"
-              style={{ color: theme.textSecondary }}
+              className="mt-0.5 ml-3"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
             >
               {subtitle}
             </Text>
@@ -628,8 +717,40 @@ function SettingsRow({ icon, title, subtitle, onPress, theme, customIcon }) {
       </View>
       <MaterialIcons
         name="chevron-right"
-        size={20}
+        size={scaledSize(20)}
         color={theme.textSecondary}
+      />
+    </TouchableOpacity>
+  );
+}
+
+function CustomSwitch({ value, onToggle, theme }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onToggle}
+      style={{
+        width: 42,
+        height: 26,
+        borderRadius: 16,
+        backgroundColor: value ? theme.buttonPrimary : theme.buttonNeutral,
+        padding: 2,
+        justifyContent: "center",
+        alignItems: value ? "flex-end" : "flex-start",
+      }}
+    >
+      <View
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          backgroundColor: "#FFFFFF",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 2.5,
+          elevation: 2,
+        }}
       />
     </TouchableOpacity>
   );
@@ -643,6 +764,7 @@ function StatItem({
   theme,
   isDarkMode,
   forceWhiteText,
+  scaledSize,
 }) {
   const iconBg = isDarkMode
     ? "rgba(255, 255, 255, 0.1)"
@@ -661,12 +783,15 @@ function StatItem({
       </View>
       <View>
         <Text
-          className="text-[10px] font-medium uppercase"
-          style={{ color: labelColor }}
+          className="font-medium uppercase"
+          style={{ color: labelColor, fontSize: scaledSize(10) }}
         >
           {label}
         </Text>
-        <Text className="text-sm font-bold" style={{ color: textColor }}>
+        <Text
+          className="font-bold"
+          style={{ color: textColor, fontSize: scaledSize(14) }}
+        >
           {value}
         </Text>
       </View>

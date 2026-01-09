@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,13 +10,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
 export default function MenuScreen() {
   const navigation = useNavigation();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, fontScale } = useTheme();
+
+  const scaledSize = (size) => size * fontScale;
 
   const [isLoading, setIsLoading] = useState(true);
   const [userData, setUserData] = useState({
@@ -75,48 +76,59 @@ export default function MenuScreen() {
         backgroundColor={theme.background}
       />
 
+      {}
       <View className="px-6 pt-5 pb-2.5 items-end">
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <MaterialIcons name="close" size={28} color={theme.text} />
+          <MaterialIcons
+            name="close"
+            size={scaledSize(28)}
+            color={theme.text}
+          />
         </TouchableOpacity>
       </View>
 
+      {}
       <View
         className="flex-row items-center px-6 pb-8 border-b gap-4 mb-4"
         style={{ borderBottomColor: theme.cardBorder }}
       >
-        <View style={{ width: 60, height: 60 }}>
+        <View style={{ width: scaledSize(60), height: scaledSize(60) }}>
           {userData.avatarUrl ? (
             <Image
               source={{ uri: userData.avatarUrl }}
               className="w-full h-full rounded-full"
             />
           ) : (
-            <LinearGradient
-              colors={
-                isDarkMode ? ["#0055ff", "#00ff99"] : ["#0055ff", "#00995e"]
-              }
+            <View
               className="w-full h-full rounded-full justify-center items-center shadow-md"
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+              style={{ backgroundColor: theme.buttonPrimary }}
             >
-              <Text className="text-2xl font-bold text-[#1a1a1a]">
+              <Text
+                className="font-bold"
+                style={{ color: "#fff", fontSize: scaledSize(24) }}
+              >
                 {userData.initial}
               </Text>
-            </LinearGradient>
+            </View>
           )}
         </View>
 
         <View className="justify-center">
-          <Text className="text-lg font-bold" style={{ color: theme.text }}>
+          <Text
+            className="font-bold"
+            style={{ color: theme.text, fontSize: scaledSize(18) }}
+          >
             {userData.fullName}
           </Text>
-          <Text className="text-xs mt-1" style={{ color: theme.textSecondary }}>
+          <Text
+            className="mt-1"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+          >
             Role: {userData.role}
           </Text>
           <Text
-            className="text-[11px] mt-1 font-[monospace]"
-            style={{ color: isDarkMode ? "#00ff99" : "#00995e" }}
+            className="mt-1 font-[monospace]"
+            style={{ color: theme.buttonPrimary, fontSize: scaledSize(11) }}
           >
             ID: GW-2025-CAL
           </Text>
@@ -126,67 +138,94 @@ export default function MenuScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="px-6 pb-10">
           <Text
-            className="text-xs font-bold uppercase tracking-widest mb-3 mt-2"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3 mt-2"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
           >
             Device Management
           </Text>
 
+          {}
           <SettingsRow
             icon="router"
             title="My Hubs"
             subtitle="Manage devices"
             onPress={() => navigation.navigate("MyHubs")}
             theme={theme}
+            scaledSize={scaledSize}
           />
 
+          {}
+          <SettingsRow
+            icon="people"
+            title="Family Access"
+            subtitle="Manage shared users"
+            onPress={() => navigation.navigate("FamilyAccess")}
+            theme={theme}
+            scaledSize={scaledSize}
+          />
+
+          {}
+          <SettingsRow
+            icon="mail-outline"
+            title="Invitations"
+            subtitle="Send access invites"
+            onPress={() => navigation.navigate("Invitations")}
+            theme={theme}
+            scaledSize={scaledSize}
+          />
+
+          {}
           <SettingsRow
             icon="add-circle-outline"
             title="Add New Device"
             subtitle="Setup new hardware"
             onPress={() => navigation.navigate("SetupHub")}
             theme={theme}
+            scaledSize={scaledSize}
             customIcon={
               <MaterialIcons
                 name="add-circle-outline"
-                size={22}
-                color={isDarkMode ? "#00ff99" : "#00995e"}
+                size={scaledSize(22)}
+                color={theme.buttonPrimary}
               />
             }
           />
 
           <Text
-            className="text-xs font-bold uppercase tracking-widest mb-3 mt-6"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3 mt-6"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
           >
             App Settings
           </Text>
 
+          {}
           <SettingsRow
             icon="settings"
             title="Account Settings"
             subtitle="Profile & Security"
             onPress={() => navigation.navigate("ProfileSettings")}
             theme={theme}
+            scaledSize={scaledSize}
           />
 
           {}
-
           <SettingsRow
             icon="notifications-none"
             title="Notifications"
             subtitle="Alert preferences"
             onPress={() => navigation.navigate("Notifications")}
             theme={theme}
+            scaledSize={scaledSize}
           />
 
+          {}
           <View
             className="mt-8 border-t pt-6 items-center"
             style={{ borderTopColor: theme.cardBorder }}
           >
             <Text
-              className="text-[11px]"
-              style={{ color: theme.textSecondary }}
+              className=""
+              style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
             >
               GridWatch v1.0.4
             </Text>
@@ -197,7 +236,15 @@ export default function MenuScreen() {
   );
 }
 
-function SettingsRow({ icon, title, subtitle, onPress, theme, customIcon }) {
+function SettingsRow({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  theme,
+  customIcon,
+  scaledSize,
+}) {
   return (
     <TouchableOpacity
       className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
@@ -212,19 +259,19 @@ function SettingsRow({ icon, title, subtitle, onPress, theme, customIcon }) {
         {customIcon ? (
           customIcon
         ) : (
-          <MaterialIcons name={icon} size={22} color={theme.icon} />
+          <MaterialIcons name={icon} size={scaledSize(22)} color={theme.icon} />
         )}
         <View>
           <Text
-            className="text-sm font-medium ml-3"
-            style={{ color: theme.text }}
+            className="font-medium ml-3"
+            style={{ color: theme.text, fontSize: scaledSize(14) }}
           >
             {title}
           </Text>
           {subtitle && (
             <Text
-              className="text-xs mt-0.5 ml-3"
-              style={{ color: theme.textSecondary }}
+              className="mt-0.5 ml-3"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
             >
               {subtitle}
             </Text>
@@ -233,7 +280,7 @@ function SettingsRow({ icon, title, subtitle, onPress, theme, customIcon }) {
       </View>
       <MaterialIcons
         name="chevron-right"
-        size={20}
+        size={scaledSize(20)}
         color={theme.textSecondary}
       />
     </TouchableOpacity>

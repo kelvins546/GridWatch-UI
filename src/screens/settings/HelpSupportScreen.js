@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,116 +10,59 @@ import {
   Platform,
   UIManager,
   Modal,
-  ActivityIndicator,
   KeyboardAvoidingView,
-  Linking,
+  FlatList,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../context/ThemeContext";
 
 if (Platform.OS === "android") {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
-    const isNewArch = global?.nativeFabricUIManager != null;
-
-    if (!isNewArch) {
-      UIManager.setLayoutAnimationEnabledExperimental(true);
-    }
+    UIManager.setLayoutAnimationEnabledExperimental(true);
   }
 }
 
 export default function HelpSupportScreen() {
   const navigation = useNavigation();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, fontScale } = useTheme();
+  const scaledSize = (size) => size * fontScale;
+
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState(null);
 
-  const [ticketModalVisible, setTicketModalVisible] = useState(false);
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const [alertVisible, setAlertVisible] = useState(false);
-  const [alertConfig, setAlertConfig] = useState({
-    title: "",
-    message: "",
-    type: "error",
-  });
-
-  const showAlert = (title, message, type = "error") => {
-    setAlertConfig({ title, message, type });
-    setAlertVisible(true);
-  };
+  const [chatModalVisible, setChatModalVisible] = useState(false);
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatHistory, setChatHistory] = useState([
+    {
+      id: 1,
+      text: "Hello! I am the GridWatch AI Assistant. How can I help you today?",
+      sender: "agent",
+      time: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    },
+  ]);
+  const flatListRef = useRef(null);
 
   const commonIssues = [
     {
       id: 1,
       title: "How to reset the GridWatch Hub?",
       answer:
-        "Locate the small physical button on the side of your Hub. Press and hold it for 10 seconds until the LED indicator flashes red. This will factory reset the device and you will need to pair it again.",
+        "Press and hold the side button for 10 seconds until the LED flashes red.",
     },
     {
       id: 2,
-      title: 'My device shows "Offline"',
-      answer:
-        "This usually means the Hub lost its Wi-Fi connection or power. \n\n1. Check if the Hub is plugged in.\n2. Ensure your home Wi-Fi is working.\n3. Try unplugging the Hub and plugging it back in to reboot it.",
-    },
-    {
-      id: 3,
-      title: "Change Wi-Fi configuration",
-      answer:
-        "To update Wi-Fi, go to the 'My Hubs' screen, select your Hub, and tap the 'Network Connection' setting. You will need to be near the Hub to reconnect it via Bluetooth/Hotspot mode.",
-    },
-    {
-      id: 4,
-      title: "Understanding Critical Faults",
-      answer:
-        "If you receive a 'Short Circuit' or 'Overload' alert, GridWatch has automatically cut power to prevent fire hazards. Please inspect your appliance for damage before attempting to turn the outlet back on.",
-    },
-    {
-      id: 5,
-      title: "Why is my cost calculation wrong?",
-      answer:
-        "Ensure you have selected the correct Utility Provider in Settings. If you chose 'Manual Configuration', double-check that the ₱/kWh rate matches your latest electricity bill.",
-    },
-    {
-      id: 6,
-      title: "How do I update my electricity rate?",
-      answer:
-        "Go to Settings > Utility & Rates. You can select your provider from the list for auto-updates or choose 'Manual Configuration' to input the specific rate from your bill.",
-    },
-    {
-      id: 7,
-      title: "The app keeps crashing",
-      answer:
-        "Please ensure you are using the latest version of the app from the App Store/Play Store. Try clearing the app cache or reinstalling. If the issue persists, submit a ticket with your phone model details.",
-    },
-    {
-      id: 8,
-      title: "Can I control the hub from multiple phones?",
-      answer:
-        "Yes. Simply log in with the same GridWatch account on multiple devices. All settings and controls are synchronized in the cloud.",
-    },
-    {
-      id: 9,
-      title: "I am not receiving notifications",
-      answer:
-        "1. Check if 'Push Notifications' are enabled in the App Settings.\n2. Verify that your phone's system settings allow notifications for GridWatch.\n3. Ensure 'Do Not Disturb' mode is off.",
-    },
-    {
-      id: 10,
-      title: "How to check for firmware updates?",
-      answer:
-        "The Hub automatically checks for updates every 24 hours. You can manually check by going to Device Configuration > System Information. The LED will blink blue during an update.",
+      title: "My device shows 'Offline'",
+      answer: "Check if the Hub is plugged in and your Wi-Fi is working.",
     },
   ];
 
-  const filteredIssues = commonIssues.filter(
-    (issue) =>
-      issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      issue.answer.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredIssues = commonIssues.filter((issue) =>
+    issue.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const toggleExpand = (id) => {
@@ -127,390 +70,391 @@ export default function HelpSupportScreen() {
     setExpandedId(expandedId === id ? null : id);
   };
 
-  const handleSubmitTicket = () => {
-    if (!subject.trim() || !message.trim()) {
-      showAlert(
-        "Missing Info",
-        "Please fill in both the subject and description.",
-        "error"
-      );
-      return;
-    }
+  const handleSendMessage = () => {
+    if (!chatMessage.trim()) return;
 
-    setIsSubmitting(true);
+    const currentTime = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const userMsg = {
+      id: Date.now(),
+      text: chatMessage,
+      sender: "user",
+      time: currentTime,
+    };
+    setChatHistory((prev) => [...prev, userMsg]);
+    setChatMessage("");
 
     setTimeout(() => {
-      setIsSubmitting(false);
-      setTicketModalVisible(false);
-      setSubject("");
-      setMessage("");
+      const replyTime = new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 
-      showAlert(
-        "Ticket Submitted",
-        "Your support ticket #8821 has been created. We will contact you shortly.",
-        "success"
-      );
-    }, 2000);
-  };
-
-  const handleEmailSupport = () => {
-    const email = "support@gridwatch.com";
-    const emailSubject = "GridWatch Support Request";
-    const body = "Please describe your issue here...";
-
-    const url = `mailto:${email}?subject=${encodeURIComponent(
-      emailSubject
-    )}&body=${encodeURIComponent(body)}`;
-
-    Linking.openURL(url).catch((err) => {
-      console.error("Error opening email app:", err);
-      showAlert(
-        "Error",
-        "Could not open email client. Please check if you have a mail app installed.",
-        "error"
-      );
-    });
+      const agentMsg = {
+        id: Date.now() + 1,
+        text: "I understand. I have automatically generated Support Ticket #9921 for this issue. A human agent will review it shortly.",
+        sender: "agent",
+        time: replyTime,
+      };
+      setChatHistory((prev) => [...prev, agentMsg]);
+    }, 1500);
   };
 
   return (
     <SafeAreaView
       className="flex-1"
       style={{ backgroundColor: theme.background }}
+      edges={["top", "left", "right"]}
     >
-      <StatusBar barStyle={theme.statusBarStyle} />
+      <StatusBar
+        barStyle={theme.statusBarStyle}
+        backgroundColor={theme.background}
+      />
 
-      <View className="flex-row items-center justify-between px-6 py-4">
+      <View
+        className="flex-row items-center justify-between px-6 py-4 border-b"
+        style={{ borderBottomColor: theme.cardBorder }}
+      >
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <MaterialIcons name="arrow-back" size={24} color={theme.text} />
+          <MaterialIcons
+            name="arrow-back"
+            size={scaledSize(24)}
+            color={theme.text}
+          />
         </TouchableOpacity>
-        <Text className="text-lg font-bold" style={{ color: theme.text }}>
+        <Text
+          className="font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(18) }}
+        >
           Help & Support
         </Text>
         <View className="w-6" />
       </View>
 
-      <ScrollView>
+      <ScrollView showsVerticalScrollIndicator={false}>
         <View className="px-6 py-6">
           <View
-            className="flex-row items-center rounded-2xl px-4 py-3 mb-8"
-            style={{ backgroundColor: theme.card }}
+            className="flex-row items-center rounded-2xl px-4 py-3 mb-8 border"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            }}
           >
             <MaterialIcons
               name="search"
-              size={24}
+              size={scaledSize(24)}
               color={theme.textSecondary}
             />
             <TextInput
-              className="flex-1 ml-3 text-base"
-              style={{ color: theme.text }}
+              className="flex-1 ml-3"
+              style={{ color: theme.text, fontSize: scaledSize(16) }}
               placeholder="Search for issues..."
               placeholderTextColor={theme.textSecondary}
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery("")}>
-                <MaterialIcons
-                  name="close"
-                  size={20}
-                  color={theme.textSecondary}
-                />
-              </TouchableOpacity>
-            )}
           </View>
 
           <Text
-            className="text-xs font-bold uppercase mb-4 tracking-widest"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase mb-4 tracking-widest"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
           >
             Contact Us
           </Text>
 
-          <View className="flex-row gap-4 mb-8">
-            <TouchableOpacity
-              className="flex-1 p-6 rounded-3xl items-center justify-center gap-3"
-              style={{ backgroundColor: theme.card }}
-              onPress={() => setTicketModalVisible(true)}
+          {}
+          <TouchableOpacity
+            style={{
+              padding: 24,
+              borderRadius: 24,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: theme.card,
+              borderWidth: 1,
+              borderColor: theme.cardBorder,
+              marginBottom: 32,
+              flexDirection: "row",
+              gap: 16,
+            }}
+            onPress={() => setChatModalVisible(true)}
+          >
+            <View
+              style={{
+                width: 50,
+                height: 50,
+                borderRadius: 25,
+                backgroundColor: `${theme.buttonPrimary}20`,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <MaterialIcons name="assignment" size={28} color="#00ff99" />
-              <Text className="font-bold text-sm" style={{ color: theme.text }}>
-                Submit Ticket
+              <MaterialIcons
+                name="chat"
+                size={scaledSize(28)}
+                color={theme.buttonPrimary}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  fontWeight: "bold",
+                  fontSize: scaledSize(16),
+                  color: theme.text,
+                  marginBottom: 4,
+                }}
+              >
+                Start Live Chat
               </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              className="flex-1 p-6 rounded-3xl items-center justify-center gap-3"
-              style={{ backgroundColor: theme.card }}
-              onPress={handleEmailSupport}
-            >
-              <MaterialIcons name="mail-outline" size={28} color="#00ff99" />
-              <Text className="font-bold text-sm" style={{ color: theme.text }}>
-                Email Us
+              <Text
+                style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+              >
+                Chat with our AI assistant. We'll create a ticket for you if
+                needed.
               </Text>
-            </TouchableOpacity>
-          </View>
+            </View>
+            <MaterialIcons
+              name="chevron-right"
+              size={scaledSize(24)}
+              color={theme.textSecondary}
+            />
+          </TouchableOpacity>
 
           <Text
-            className="text-xs font-bold uppercase mb-4 tracking-widest"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase mb-4 tracking-widest"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
           >
             Common Issues
           </Text>
 
-          {filteredIssues.length === 0 ? (
-            <View className="py-10 items-center">
-              <MaterialIcons
-                name="search-off"
-                size={48}
-                color={theme.textSecondary}
-                style={{ opacity: 0.5 }}
-              />
-              <Text
-                className="mt-4 text-sm"
-                style={{ color: theme.textSecondary }}
-              >
-                No matching issues found.
-              </Text>
-            </View>
-          ) : (
-            <View
-              className="rounded-2xl overflow-hidden"
-              style={{ backgroundColor: theme.card }}
-            >
-              {filteredIssues.map((issue, index) => {
-                const isExpanded = expandedId === issue.id;
-                return (
-                  <View
-                    key={issue.id}
-                    style={{
-                      borderBottomWidth:
-                        index !== filteredIssues.length - 1 ? 1 : 0,
-                      borderBottomColor: theme.cardBorder,
-                    }}
-                  >
-                    <TouchableOpacity
-                      className="flex-row items-center justify-between p-5"
-                      onPress={() => toggleExpand(issue.id)}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        className="font-semibold text-sm flex-1 mr-4"
-                        style={{ color: theme.text }}
-                      >
-                        {issue.title}
-                      </Text>
-                      <MaterialIcons
-                        name={
-                          isExpanded ? "keyboard-arrow-up" : "chevron-right"
-                        }
-                        size={20}
-                        color={theme.textSecondary}
-                      />
-                    </TouchableOpacity>
-
-                    {isExpanded && (
-                      <View className="px-5 pb-5">
-                        <Text
-                          className="text-sm leading-6"
-                          style={{ color: theme.textSecondary }}
-                        >
-                          {issue.answer}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          )}
-
-          <Text
-            className="text-center text-xs mt-10 opacity-50 mb-10"
-            style={{ color: theme.textSecondary }}
+          <View
+            className="rounded-2xl overflow-hidden border"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            }}
           >
-            App Version 2.1.0 • Build 8821{"\n"}© 2025 GridWatch Inc.
-          </Text>
+            {filteredIssues.map((issue, index) => (
+              <View
+                key={issue.id}
+                style={{
+                  borderBottomWidth:
+                    index !== filteredIssues.length - 1 ? 1 : 0,
+                  borderBottomColor: theme.cardBorder,
+                }}
+              >
+                <TouchableOpacity
+                  className="flex-row items-center justify-between p-5"
+                  onPress={() => toggleExpand(issue.id)}
+                >
+                  <Text
+                    className="font-semibold flex-1 mr-4"
+                    style={{ color: theme.text, fontSize: scaledSize(14) }}
+                  >
+                    {issue.title}
+                  </Text>
+                  <MaterialIcons
+                    name={
+                      expandedId === issue.id
+                        ? "keyboard-arrow-up"
+                        : "chevron-right"
+                    }
+                    size={scaledSize(20)}
+                    color={theme.textSecondary}
+                  />
+                </TouchableOpacity>
+                {expandedId === issue.id && (
+                  <View className="px-5 pb-5">
+                    <Text
+                      className="leading-6"
+                      style={{
+                        color: theme.textSecondary,
+                        fontSize: scaledSize(14),
+                      }}
+                    >
+                      {issue.answer}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
         </View>
       </ScrollView>
 
       {}
       <Modal
         animationType="slide"
-        transparent={true}
-        visible={ticketModalVisible}
-        onRequestClose={() => setTicketModalVisible(false)}
+        visible={chatModalVisible}
+        onRequestClose={() => setChatModalVisible(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="flex-1 justify-end"
+        <SafeAreaView
+          style={{ flex: 1, backgroundColor: theme.background }}
+          edges={["top", "bottom"]}
         >
-          <TouchableOpacity
-            className="absolute inset-0 bg-black/80"
-            activeOpacity={1}
-            onPress={() => setTicketModalVisible(false)}
-          />
-
           <View
-            className="rounded-t-3xl p-5 h-[60%]"
-            style={{ backgroundColor: theme.background }}
+            className="flex-row items-center justify-between px-6 py-4 border-b"
+            style={{ borderBottomColor: theme.cardBorder }}
           >
-            <View className="items-center mb-4">
-              <View className="w-10 h-1 rounded-full bg-gray-600 mb-3" />
-              <Text className="text-lg font-bold" style={{ color: theme.text }}>
-                New Support Ticket
+            <TouchableOpacity onPress={() => setChatModalVisible(false)}>
+              <MaterialIcons
+                name="close"
+                size={scaledSize(24)}
+                color={theme.text}
+              />
+            </TouchableOpacity>
+            <View className="items-center">
+              <Text
+                className="font-bold"
+                style={{ color: theme.text, fontSize: scaledSize(16) }}
+              >
+                Support Chat
+              </Text>
+              <Text
+                style={{ color: theme.buttonPrimary, fontSize: scaledSize(12) }}
+              >
+                ● Agent Online
               </Text>
             </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text
-                className="text-xs font-bold mb-1.5"
-                style={{ color: theme.textSecondary }}
-              >
-                Subject
-              </Text>
-              <TextInput
-                className="p-3 rounded-xl mb-4 text-sm"
-                style={{
-                  backgroundColor: theme.card,
-                  color: theme.text,
-                  borderWidth: 1,
-                  borderColor: theme.cardBorder,
-                }}
-                placeholder="e.g. Connection Issue"
-                placeholderTextColor={theme.textSecondary}
-                value={subject}
-                onChangeText={setSubject}
-              />
-
-              <Text
-                className="text-xs font-bold mb-1.5"
-                style={{ color: theme.textSecondary }}
-              >
-                Description
-              </Text>
-              <TextInput
-                className="p-3 rounded-xl mb-6 text-sm"
-                style={{
-                  backgroundColor: theme.card,
-                  color: theme.text,
-                  borderWidth: 1,
-                  borderColor: theme.cardBorder,
-                  height: 100,
-                  textAlignVertical: "top",
-                }}
-                placeholder="Describe your issue in detail..."
-                placeholderTextColor={theme.textSecondary}
-                multiline
-                value={message}
-                onChangeText={setMessage}
-              />
-
-              <TouchableOpacity
-                onPress={handleSubmitTicket}
-                disabled={isSubmitting}
-              >
-                <LinearGradient
-                  colors={["#0055ff", "#00ff99"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  className="p-3.5 rounded-xl items-center"
-                >
-                  {isSubmitting ? (
-                    <ActivityIndicator color="black" />
-                  ) : (
-                    <Text className="text-black font-bold text-sm uppercase">
-                      Submit Ticket
-                    </Text>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="mt-3 p-3 items-center"
-                onPress={() => setTicketModalVisible(false)}
-              >
-                <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
+            <View style={{ width: 24 }} />
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
 
-      {}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={alertVisible}
-        onRequestClose={() => setAlertVisible(false)}
-      >
-        <View className="flex-1 justify-center items-center bg-black/80">
-          <View
-            className="w-[70%] max-w-[280px] p-5 rounded-2xl items-center border"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ flex: 1 }}
           >
+            <FlatList
+              ref={flatListRef}
+              data={chatHistory}
+              keyExtractor={(item) => item.id.toString()}
+              contentContainerStyle={{ padding: 20, paddingBottom: 20 }}
+              onContentSizeChange={() =>
+                flatListRef.current?.scrollToEnd({ animated: true })
+              }
+              renderItem={({ item }) => {
+                const isUser = item.sender === "user";
+                return (
+                  <View
+                    style={{
+                      flexDirection: isUser ? "row-reverse" : "row",
+                      alignItems: "flex-end",
+                      marginBottom: 16,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: isUser
+                          ? theme.buttonPrimary
+                          : theme.cardBorder,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        marginLeft: isUser ? 8 : 0,
+                        marginRight: isUser ? 0 : 8,
+                      }}
+                    >
+                      {isUser ? (
+                        <Text
+                          style={{
+                            color: "#fff",
+                            fontWeight: "bold",
+                            fontSize: 10,
+                          }}
+                        >
+                          Me
+                        </Text>
+                      ) : (
+                        <MaterialIcons
+                          name="support-agent"
+                          size={20}
+                          color={theme.textSecondary}
+                        />
+                      )}
+                    </View>
+
+                    <View style={{ maxWidth: "75%" }}>
+                      <View
+                        style={{
+                          backgroundColor: isUser
+                            ? theme.buttonPrimary
+                            : theme.card,
+                          padding: 12,
+                          borderRadius: 20,
+                          borderBottomRightRadius: isUser ? 4 : 20,
+                          borderBottomLeftRadius: isUser ? 20 : 4,
+                          borderWidth: isUser ? 0 : 1,
+                          borderColor: theme.cardBorder,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: isUser ? "#fff" : theme.text,
+                            fontSize: scaledSize(14),
+                          }}
+                        >
+                          {item.text}
+                        </Text>
+                      </View>
+                      <Text
+                        style={{
+                          color: theme.textSecondary,
+                          fontSize: 10,
+                          marginTop: 4,
+                          textAlign: isUser ? "right" : "left",
+                        }}
+                      >
+                        {item.time}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }}
+            />
+
             <View
-              className="w-10 h-10 rounded-full justify-center items-center mb-3"
+              className="p-4 border-t flex-row items-center gap-3"
               style={{
-                backgroundColor:
-                  alertConfig.type === "success"
-                    ? "rgba(0, 255, 153, 0.1)"
-                    : "rgba(255, 68, 68, 0.1)",
+                backgroundColor: theme.background,
+                borderColor: theme.cardBorder,
               }}
             >
-              <MaterialIcons
-                name={
-                  alertConfig.type === "success" ? "check" : "priority-high"
-                }
-                size={22}
-                color={alertConfig.type === "success" ? "#00ff99" : "#ff4444"}
+              <TextInput
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.card,
+                  color: theme.text,
+                  borderRadius: 24,
+                  paddingHorizontal: 20,
+                  paddingVertical: 12,
+                  fontSize: scaledSize(14),
+                  borderWidth: 1,
+                  borderColor: theme.cardBorder,
+                }}
+                placeholder="Type a message..."
+                placeholderTextColor={theme.textSecondary}
+                value={chatMessage}
+                onChangeText={setChatMessage}
               />
-            </View>
-
-            <Text
-              className="text-base font-bold mb-1.5 text-center"
-              style={{ color: theme.text }}
-            >
-              {alertConfig.title}
-            </Text>
-
-            <Text
-              className="text-xs text-center mb-5 leading-4"
-              style={{ color: theme.textSecondary }}
-            >
-              {alertConfig.message}
-            </Text>
-
-            <TouchableOpacity
-              className="w-full"
-              onPress={() => setAlertVisible(false)}
-            >
-              <LinearGradient
-                colors={
-                  alertConfig.type === "success"
-                    ? ["#0055ff", "#00ff99"]
-                    : ["#ff4444", "#ff8800"]
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                className="p-2.5 rounded-xl items-center"
+              <TouchableOpacity
+                onPress={handleSendMessage}
+                style={{
+                  backgroundColor: theme.buttonPrimary,
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
-                <Text
-                  className="font-bold text-xs uppercase tracking-wider"
-                  style={{
-                    color: alertConfig.type === "success" ? "black" : "white",
-                  }}
-                >
-                  {alertConfig.type === "success" ? "Okay" : "Try Again"}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
+                <MaterialIcons name="send" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );

@@ -5,6 +5,7 @@ import React, {
   useCallback,
   forwardRef,
 } from "react";
+
 import {
   View,
   Text,
@@ -17,13 +18,12 @@ import {
   Modal,
   Dimensions,
 } from "react-native";
+
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../../context/ThemeContext";
-import { supabase } from "../../lib/supabase";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -129,7 +129,7 @@ const HUBS_DATA = [
       {
         id: 4,
         name: "Electric Fan",
-        cost: "Standby",
+        cost: "Offline",
         watts: "0 W",
         icon: "mode-fan-off",
         type: "off",
@@ -169,8 +169,6 @@ export default function HomeScreen() {
   const { theme, isDarkMode } = useTheme();
   const navigation = useNavigation();
   const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const [userName, setUserName] = useState("Kelvin");
   const [isLoading, setIsLoading] = useState(true);
   const [tourStepIndex, setTourStepIndex] = useState(-1);
   const [activeLayout, setActiveLayout] = useState(null);
@@ -284,6 +282,7 @@ export default function HomeScreen() {
         >
           <MaterialIcons name="menu" size={28} color={theme.textSecondary} />
         </TouchableOpacity>
+
         <TouchableOpacity onPress={handleResetTour}>
           <Image
             source={require("../../../assets/GridWatch-logo.png")}
@@ -291,6 +290,7 @@ export default function HomeScreen() {
             resizeMode="contain"
           />
         </TouchableOpacity>
+
         <TouchableOpacity
           ref={notifRef}
           onPress={() => navigation.navigate("Notifications")}
@@ -314,26 +314,7 @@ export default function HomeScreen() {
         contentContainerClassName="pb-24"
         showsVerticalScrollIndicator={false}
       >
-        <View className="px-6 mb-5">
-          <Text
-            className="text-sm font-medium mb-1"
-            style={{ color: theme.textSecondary }}
-          >
-            Good Afternoon, Kelvin
-          </Text>
-          <View className="flex-row items-center">
-            <View
-              className="w-2 h-2 rounded-full mr-2"
-              style={{ backgroundColor: "#ff4444" }}
-            />
-            <Text
-              className="text-xs font-semibold"
-              style={{ color: theme.text }}
-            >
-              One has shorted
-            </Text>
-          </View>
-        </View>
+        <View className="mb-2" />
 
         <Animated.View
           ref={budgetRef}
@@ -358,44 +339,54 @@ export default function HomeScreen() {
             <View className="flex-row justify-between items-start mb-2">
               <View>
                 <Text
-                  className="text-xs font-bold uppercase tracking-widest mb-1"
-                  style={{ color: theme.textSecondary }}
+                  className="font-bold uppercase tracking-widest mb-1"
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: theme.font.xs,
+                  }}
                 >
                   Total Spending
                 </Text>
                 <Text
-                  className="text-3xl font-extrabold"
-                  style={{ color: theme.text }}
+                  className="font-extrabold"
+                  style={{ color: theme.text, fontSize: theme.font["3xl"] }}
                 >
                   ₱ 1,450.75
                 </Text>
               </View>
               <View className="items-end">
                 <Text
-                  className="text-[10px] uppercase font-bold"
-                  style={{ color: theme.textSecondary }}
+                  className="uppercase font-bold"
+                  style={{ color: theme.textSecondary, fontSize: 10 }}
                 >
                   Budget Limit
                 </Text>
                 <Text
-                  className="text-sm font-semibold"
-                  style={{ color: theme.textSecondary }}
+                  className="font-semibold"
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: theme.font.sm,
+                  }}
                 >
                   ₱ 3,000.00
                 </Text>
               </View>
             </View>
+
             <View className="mb-4">
               <View className="flex-row justify-between mb-1.5">
                 <Text
-                  className="text-xs font-medium"
-                  style={{ color: theme.primary }}
+                  className="font-medium"
+                  style={{ color: theme.text, fontSize: theme.font.xs }}
                 >
                   48% Used
                 </Text>
                 <Text
-                  className="text-xs font-medium"
-                  style={{ color: theme.textSecondary }}
+                  className="font-medium"
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: theme.font.xs,
+                  }}
                 >
                   ₱ 1,549.25 Remaining
                 </Text>
@@ -404,16 +395,13 @@ export default function HomeScreen() {
                 className="h-3 rounded-full w-full overflow-hidden"
                 style={{ backgroundColor: isDarkMode ? "#333" : "#f0f0f0" }}
               >
-                <LinearGradient
-                  colors={
-                    isDarkMode ? ["#0055ff", "#00ff99"] : ["#0055ff", "#00995e"]
-                  }
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
+                <View
                   className="h-full rounded-full w-[48%]"
+                  style={{ backgroundColor: theme.buttonPrimary }}
                 />
               </View>
             </View>
+
             <View
               className="flex-row border-t pt-4"
               style={{ borderColor: theme.cardBorder }}
@@ -443,11 +431,12 @@ export default function HomeScreen() {
         {HUBS_DATA.map((hub) => (
           <View key={hub.id} className="mb-5">
             <Text
-              className="text-[13px] font-semibold uppercase tracking-wider mb-3 px-6"
-              style={{ color: theme.textSecondary }}
+              className="font-semibold uppercase tracking-wider mb-3 px-6"
+              style={{ color: theme.textSecondary, fontSize: theme.font.sm }}
             >
               {hub.name} ({hub.active}/{hub.total})
             </Text>
+
             <View className="flex-row flex-wrap justify-between px-6">
               {hub.devices.map((device) => (
                 <DeviceItem
@@ -479,7 +468,6 @@ export default function HomeScreen() {
           </View>
         ))}
 
-        {}
         <TouchableOpacity
           onPress={() => navigation.navigate("SetupHub")}
           className="mx-6 mb-8 mt-2 py-4 rounded-xl border border-dashed flex-row justify-center items-center"
@@ -487,15 +475,14 @@ export default function HomeScreen() {
         >
           <MaterialIcons name="add" size={20} color={theme.textSecondary} />
           <Text
-            className="ml-2 font-bold text-xs uppercase tracking-wider"
-            style={{ color: theme.textSecondary }}
+            className="ml-2 font-bold uppercase tracking-wider"
+            style={{ color: theme.textSecondary, fontSize: theme.font.xs }}
           >
             Add New Device
           </Text>
         </TouchableOpacity>
       </ScrollView>
 
-      {}
       {tourStepIndex >= 0 && (
         <TourOverlay
           step={TOUR_STEPS[tourStepIndex]}
@@ -512,8 +499,8 @@ export default function HomeScreen() {
 
 function StatItem({ label, value, icon, color, theme, isDarkMode }) {
   const iconBg = isDarkMode
-    ? "rgba(255, 255, 255, 0.1)"
-    : "rgba(0, 0, 0, 0.05)";
+    ? "rgba(0, 179, 74, 0.15)"
+    : "rgba(0, 179, 74, 0.1)";
   return (
     <View className="flex-1 flex-row items-center gap-3">
       <View
@@ -524,12 +511,15 @@ function StatItem({ label, value, icon, color, theme, isDarkMode }) {
       </View>
       <View>
         <Text
-          className="text-[10px] font-medium uppercase"
-          style={{ color: theme.textSecondary }}
+          className="font-medium uppercase"
+          style={{ color: theme.textSecondary, fontSize: 10 }}
         >
           {label}
         </Text>
-        <Text className="text-sm font-bold" style={{ color: theme.text }}>
+        <Text
+          className="font-bold"
+          style={{ color: theme.text, fontSize: theme.font.sm }}
+        >
           {value}
         </Text>
       </View>
@@ -554,41 +544,42 @@ const TourOverlay = ({ step, layout, theme, isDarkMode, onNext, onSkip }) => {
               borderColor: theme.cardBorder,
             }}
           >
-            <LinearGradient
-              colors={["rgba(0,85,255,0.1)", "rgba(0,255,153,0.1)"]}
+            <View
               className="p-3 rounded-full mb-3"
+              style={{ backgroundColor: theme.buttonNeutral }}
             >
               <MaterialIcons name="explore" size={32} color={theme.primary} />
-            </LinearGradient>
+            </View>
             <Text
-              className="text-lg font-bold text-center mb-2"
-              style={{ color: theme.text }}
+              className="font-bold text-center mb-2"
+              style={{ color: theme.text, fontSize: theme.font.lg }}
             >
               {step.title}
             </Text>
             <Text
-              className="text-xs text-center mb-5 leading-4"
-              style={{ color: theme.textSecondary }}
+              className="text-center mb-5 leading-4"
+              style={{ color: theme.textSecondary, fontSize: theme.font.xs }}
             >
               {step.description}
             </Text>
             <TouchableOpacity onPress={onNext} className="w-full">
-              <LinearGradient
-                colors={["#0055ff", "#00ff99"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              <View
                 className="py-3 rounded-xl items-center"
+                style={{ backgroundColor: theme.buttonPrimary }}
               >
-                <Text className="text-[#0f0f0f] font-bold text-xs uppercase">
+                <Text
+                  className="font-bold uppercase"
+                  style={{
+                    fontSize: theme.font.xs,
+                    color: theme.buttonPrimaryText,
+                  }}
+                >
                   {step.buttonText || "Next"}
                 </Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
             <TouchableOpacity onPress={onSkip} className="mt-3">
-              <Text
-                className="text-[10px]"
-                style={{ color: theme.textSecondary }}
-              >
+              <Text style={{ color: theme.textSecondary, fontSize: 10 }}>
                 Skip tour
               </Text>
             </TouchableOpacity>
@@ -671,8 +662,8 @@ const TourOverlay = ({ step, layout, theme, isDarkMode, onNext, onSkip }) => {
                 color={theme.primary}
               />
               <Text
-                className="text-[10px] font-bold ml-1 uppercase"
-                style={{ color: theme.primary }}
+                className="font-bold ml-1 uppercase"
+                style={{ color: theme.primary, fontSize: 10 }}
               >
                 TIP
               </Text>
@@ -686,14 +677,14 @@ const TourOverlay = ({ step, layout, theme, isDarkMode, onNext, onSkip }) => {
             </TouchableOpacity>
           </View>
           <Text
-            className="text-base font-bold mb-1"
-            style={{ color: theme.text }}
+            className="font-bold mb-1"
+            style={{ color: theme.text, fontSize: theme.font.base }}
           >
             {step.title}
           </Text>
           <Text
-            className="text-xs mb-4 leading-4"
-            style={{ color: theme.textSecondary }}
+            className="mb-4 leading-4"
+            style={{ color: theme.textSecondary, fontSize: theme.font.xs }}
           >
             {step.description}
           </Text>
@@ -704,23 +695,30 @@ const TourOverlay = ({ step, layout, theme, isDarkMode, onNext, onSkip }) => {
               style={{ borderColor: theme.cardBorder }}
             >
               <Text
-                className="text-center font-semibold text-xs"
-                style={{ color: theme.textSecondary }}
+                className="text-center font-semibold"
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: theme.font.xs,
+                }}
               >
                 Dismiss
               </Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={onNext} className="flex-1">
-              <LinearGradient
-                colors={["#0055ff", "#00ff99"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              <View
                 className="py-2.5 rounded-lg items-center"
+                style={{ backgroundColor: theme.buttonPrimary }}
               >
-                <Text className="text-[#0f0f0f] text-center font-bold text-xs">
+                <Text
+                  className="font-bold"
+                  style={{
+                    fontSize: theme.font.xs,
+                    color: theme.buttonPrimaryText,
+                  }}
+                >
                   Next
                 </Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
           <View
@@ -742,6 +740,7 @@ const TourOverlay = ({ step, layout, theme, isDarkMode, onNext, onSkip }) => {
 
 const DeviceItem = forwardRef(({ data, theme, isDarkMode, onPress }, ref) => {
   const scale = useRef(new Animated.Value(1)).current;
+
   const pressIn = () =>
     Animated.spring(scale, { toValue: 0.96, useNativeDriver: true }).start();
   const pressOut = () =>
@@ -752,41 +751,58 @@ const DeviceItem = forwardRef(({ data, theme, isDarkMode, onPress }, ref) => {
       useNativeDriver: true,
     }).start();
 
+  const yellow = isDarkMode ? "#ffaa00" : "#b37400";
+  const red = isDarkMode ? "#ff4444" : "#c62828";
+
   let colors = {
-    bg: theme.card,
-    border: theme.cardBorder,
-    icon: theme.primary,
-    iconBg: isDarkMode ? "rgba(0, 255, 153, 0.1)" : "rgba(0, 153, 94, 0.1)",
-    cost: theme.primary,
-    tag: theme.textSecondary,
-    tagBg: theme.background,
+    bg: `${theme.buttonPrimary}1A`,
+    border: theme.buttonPrimary,
+    icon: theme.buttonPrimary,
+    iconBg: `${theme.buttonPrimary}33`,
+    text: theme.text,
+    cost: theme.text,
+    watts: theme.textSecondary,
+    tag: "#FFFFFF",
+    tagBg: theme.buttonPrimary,
   };
 
   if (data.type === "warning") {
-    const yellow = isDarkMode ? "#ffaa00" : "#b37400";
     colors = {
-      ...colors,
-      bg: isDarkMode ? "rgba(255, 170, 0, 0.05)" : "rgba(179, 116, 0, 0.05)",
+      bg: isDarkMode ? "rgba(255, 170, 0, 0.1)" : "rgba(179, 116, 0, 0.1)",
+      border: yellow,
       icon: yellow,
-      iconBg: "rgba(255, 170, 0, 0.15)",
-      cost: yellow,
-      tag: yellow,
+      iconBg: isDarkMode ? "rgba(255, 170, 0, 0.2)" : "rgba(179, 116, 0, 0.2)",
+      text: theme.text,
+      cost: theme.text,
+      watts: theme.textSecondary,
+
+      tag: "#FFFFFF",
+      tagBg: yellow,
     };
   } else if (data.type === "critical") {
-    const red = isDarkMode ? "#ff4444" : "#c62828";
     colors = {
-      ...colors,
-      bg: isDarkMode ? "rgba(255, 68, 68, 0.05)" : "rgba(198, 40, 40, 0.05)",
+      bg: isDarkMode ? "rgba(255, 68, 68, 0.1)" : "rgba(198, 40, 40, 0.1)",
+      border: red,
       icon: red,
-      iconBg: "rgba(255, 68, 68, 0.15)",
-      cost: red,
-      tag: red,
+      iconBg: isDarkMode ? "rgba(255, 68, 68, 0.2)" : "rgba(198, 40, 40, 0.2)",
+      text: theme.text,
+      cost: theme.text,
+      watts: theme.textSecondary,
+
+      tag: "#FFFFFF",
+      tagBg: red,
     };
   } else if (data.type === "off") {
     colors = {
-      ...colors,
+      bg: theme.card,
+      border: theme.cardBorder,
       icon: theme.textSecondary,
+      iconBg: theme.buttonNeutral,
+      text: theme.text,
       cost: theme.textSecondary,
+      watts: theme.textSecondary,
+      tag: theme.textSecondary,
+      tagBg: theme.buttonNeutral,
     };
   }
 
@@ -805,6 +821,7 @@ const DeviceItem = forwardRef(({ data, theme, isDarkMode, onPress }, ref) => {
           backgroundColor: colors.bg,
           borderColor: colors.border,
           transform: [{ scale }],
+          borderWidth: data.type === "normal" ? 1.5 : 1,
         }}
       >
         <View className="flex-row justify-between items-start">
@@ -819,27 +836,28 @@ const DeviceItem = forwardRef(({ data, theme, isDarkMode, onPress }, ref) => {
             style={{ backgroundColor: colors.tagBg }}
           >
             <Text
-              className="text-[9px] font-bold"
-              style={{ color: colors.tag }}
+              className="font-bold"
+              style={{ color: colors.tag, fontSize: 9 }}
             >
               {data.tag}
             </Text>
           </View>
         </View>
+
         <View>
           <Text
-            className="text-[13px] font-semibold mb-1"
-            style={{ color: theme.text }}
+            className="font-semibold mb-1"
+            style={{ color: colors.text, fontSize: theme.font.sm }}
           >
             {data.name}
           </Text>
           <Text
-            className="text-[13px] font-semibold mb-0.5"
-            style={{ color: colors.cost }}
+            className="font-semibold mb-0.5"
+            style={{ color: colors.cost, fontSize: theme.font.sm }}
           >
             {data.cost}
           </Text>
-          <Text className="text-[10px]" style={{ color: theme.textSecondary }}>
+          <Text style={{ color: colors.watts, fontSize: 10 }}>
             {data.watts}
           </Text>
         </View>

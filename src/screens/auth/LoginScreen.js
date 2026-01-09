@@ -15,15 +15,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
-import MaskedView from "@react-native-masked-view/masked-view";
+import { useTheme } from "../../context/ThemeContext";
 
 const ALLOWED_EMAIL_REGEX =
   /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
 
 export default function LoginScreen() {
   const navigation = useNavigation();
+  const { theme, isDarkMode } = useTheme();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -96,7 +96,6 @@ export default function LoginScreen() {
 
     setTimeout(() => {
       setIsLoading(false);
-
       navigation.reset({
         index: 0,
         routes: [{ name: "MainApp" }],
@@ -105,13 +104,21 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#0f0f0f]">
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView
+      className="flex-1"
+      style={{ backgroundColor: theme.background }}
+    >
+      <StatusBar
+        barStyle={theme.statusBarStyle}
+        backgroundColor={theme.background}
+      />
 
       {isLoading && (
         <View className="absolute z-50 w-full h-full bg-black/70 justify-center items-center">
-          <ActivityIndicator size="large" color="#00ff99" />
-          <Text className="text-white mt-4 font-bold">Logging in...</Text>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text className="mt-4 font-bold" style={{ color: theme.text }}>
+            Logging in...
+          </Text>
         </View>
       )}
 
@@ -127,37 +134,39 @@ export default function LoginScreen() {
             {}
             <View className="items-center mb-10">
               <Animated.View
-                style={{ transform: [{ translateY: floatAnim }] }}
-                className="w-[120px] h-[120px] rounded-full items-center justify-center mb-6 bg-[#1a1a1a] shadow-lg shadow-[#00ff99]/30 elevation-10"
+                style={{
+                  transform: [{ translateY: floatAnim }],
+                  backgroundColor: "black",
+                  borderRadius: 999,
+                  shadowColor: theme.primary,
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: isDarkMode ? 0.6 : 0.3,
+                  shadowRadius: 30,
+                  elevation: 20,
+                }}
+                className="w-[120px] h-[120px] items-center justify-center mb-6"
               >
                 <Image
                   source={require("../../../assets/GridWatch-logo.png")}
                   className="w-[110px] h-[110px]"
                   resizeMode="contain"
+                  style={{ borderRadius: 60, backgroundColor: "black" }}
                 />
               </Animated.View>
 
-              <View className="h-[40px] justify-center mb-1">
-                <MaskedView
-                  style={{ width: 220, height: 40 }}
-                  maskElement={
-                    <View className="items-center justify-center flex-1">
-                      <Text className="text-[28px] font-black text-center tracking-[4px] uppercase">
-                        GridWatch
-                      </Text>
-                    </View>
-                  }
+              <View className="items-center justify-center mb-1">
+                <Text
+                  className="text-[28px] font-black text-center tracking-[4px] uppercase"
+                  style={{ color: theme.text }}
                 >
-                  <LinearGradient
-                    colors={["#0055ff", "#00ff99"]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={{ flex: 1 }}
-                  />
-                </MaskedView>
+                  GridWatch
+                </Text>
               </View>
 
-              <Text className="text-[13px] text-[#888] tracking-[0.5px]">
+              <Text
+                className="text-[13px] tracking-[0.5px]"
+                style={{ color: theme.textSecondary }}
+              >
                 Smart Energy Monitoring
               </Text>
             </View>
@@ -170,45 +179,57 @@ export default function LoginScreen() {
               value={email}
               onChangeText={(text) => handleChange("email", text)}
               error={touched.email && errors.email}
+              theme={theme}
             />
 
-            <View className="mb-5">
+            <View className="mb-2">
               <View className="flex-row justify-between">
                 <Text
-                  className={`text-[11px] font-bold uppercase mb-2 ${
-                    touched.password && errors.password
-                      ? "text-red-500"
-                      : "text-[#888]"
-                  }`}
+                  className="text-[11px] font-bold uppercase mb-2"
+                  style={{
+                    color:
+                      touched.password && errors.password
+                        ? theme.buttonDangerText
+                        : theme.textSecondary,
+                  }}
                 >
                   Password
                 </Text>
                 {touched.password && errors.password && (
-                  <Text className="text-[10px] text-red-500 italic mr-1">
+                  <Text
+                    className="text-[10px] italic mr-1"
+                    style={{ color: theme.buttonDangerText }}
+                  >
                     {errors.password}
                   </Text>
                 )}
               </View>
 
               <View
-                className={`flex-row items-center bg-[#222] rounded-xl px-4 py-2.5 border ${
-                  touched.password && errors.password
-                    ? "border-red-500"
-                    : "border-[#333]"
-                }`}
+                className="flex-row items-center rounded-xl px-4 py-2.5 border"
+                style={{
+                  backgroundColor: theme.buttonNeutral,
+                  borderColor:
+                    touched.password && errors.password
+                      ? theme.buttonDangerText
+                      : theme.cardBorder,
+                }}
               >
                 <MaterialIcons
                   name="lock"
                   size={20}
                   color={
-                    touched.password && errors.password ? "#ef4444" : "#666"
+                    touched.password && errors.password
+                      ? theme.buttonDangerText
+                      : theme.textSecondary
                   }
                   style={{ marginRight: 12 }}
                 />
                 <TextInput
-                  className="flex-1 text-white text-sm"
+                  className="flex-1 text-sm"
+                  style={{ color: theme.text }}
                   placeholder="••••••••"
-                  placeholderTextColor="#555"
+                  placeholderTextColor={theme.textSecondary}
                   secureTextEntry={!showPass}
                   value={password}
                   onChangeText={(text) => handleChange("password", text)}
@@ -217,7 +238,7 @@ export default function LoginScreen() {
                   <MaterialIcons
                     name={showPass ? "visibility" : "visibility-off"}
                     size={20}
-                    color="#666"
+                    color={theme.textSecondary}
                   />
                 </TouchableOpacity>
               </View>
@@ -226,30 +247,50 @@ export default function LoginScreen() {
             <TouchableOpacity
               onPress={() => navigation.navigate("ForgotPassword")}
             >
-              <Text className="self-end text-[#0055ff] font-semibold text-xs mb-[25px]">
+              <Text
+                className="self-end font-semibold text-sm mb-[25px]"
+                style={{ color: theme.textSecondary }}
+              >
                 Forgot Password?
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={handleLogin}>
-              <LinearGradient
-                colors={["#0055ff", "#00ff99"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                className="p-4 rounded-2xl items-center shadow-sm shadow-[#00ff99]/20"
+            {}
+            <TouchableOpacity onPress={handleLogin} activeOpacity={0.8}>
+              <View
+                className="p-4 rounded-2xl items-center shadow-sm"
+                style={{ backgroundColor: theme.buttonPrimary }}
               >
-                <Text className="font-bold text-[15px] text-black">LOG IN</Text>
-              </LinearGradient>
+                <Text
+                  className="font-bold text-[15px]"
+                  style={{ color: theme.buttonPrimaryText }}
+                >
+                  LOG IN
+                </Text>
+              </View>
             </TouchableOpacity>
 
             <View className="flex-row justify-center mt-[30px]">
-              <Text className="text-[#888]">Don't have an account? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate("Signup")}>
-                <Text className="text-[#00ff99] font-bold">Sign Up</Text>
+              <Text style={{ color: theme.textSecondary }}>
+                Don't have an account?{" "}
+              </Text>
+              {}
+              <TouchableOpacity
+                onPress={() => navigation.navigate("AuthSelection")}
+              >
+                <Text
+                  className="font-bold"
+                  style={{ color: theme.buttonPrimary }}
+                >
+                  Sign Up
+                </Text>
               </TouchableOpacity>
             </View>
 
-            <Text className="text-center text-xs text-[#00ff99] italic mt-10 opacity-80">
+            <Text
+              className="text-center text-xs italic mt-10 opacity-80"
+              style={{ color: theme.primary }}
+            >
               "Don't wait for the bill. Control it."
             </Text>
           </View>
@@ -264,30 +305,47 @@ export default function LoginScreen() {
         onRequestClose={() => setErrorModalVisible(false)}
       >
         <View className="flex-1 justify-center items-center bg-black/80">
-          <View className="w-[80%] max-w-[320px] bg-[#1a1a1a] border border-[#333] p-8 rounded-2xl items-center">
-            <View className="mb-4 bg-red-500/10 p-4 rounded-full">
-              <MaterialIcons name="error-outline" size={40} color="#ef4444" />
+          <View
+            className="w-[80%] max-w-[320px] border p-8 rounded-2xl items-center"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            }}
+          >
+            <View
+              className="mb-4 p-4 rounded-full"
+              style={{ backgroundColor: theme.buttonDanger }}
+            >
+              <MaterialIcons
+                name="error-outline"
+                size={40}
+                color={theme.buttonDangerText}
+              />
             </View>
-            <Text className="text-xl font-bold text-white mb-2 text-center">
+            <Text
+              className="text-xl font-bold mb-2 text-center"
+              style={{ color: theme.text }}
+            >
               Login Failed
             </Text>
-            <Text className="text-xs text-[#888] text-center mb-6 leading-5">
+            <Text
+              className="text-xs text-center mb-6 leading-5"
+              style={{ color: theme.textSecondary }}
+            >
               {errorMessage}
             </Text>
             <TouchableOpacity
               className="w-full"
               onPress={() => setErrorModalVisible(false)}
             >
-              <LinearGradient
-                colors={["#ef4444", "#b91c1c"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              <View
                 className="p-3 rounded-xl items-center"
+                style={{ backgroundColor: theme.buttonDangerText }}
               >
                 <Text className="font-bold text-sm text-white uppercase tracking-wider">
                   TRY AGAIN
                 </Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -296,36 +354,53 @@ export default function LoginScreen() {
   );
 }
 
-function InputGroup({ label, icon, placeholder, value, onChangeText, error }) {
+function InputGroup({
+  label,
+  icon,
+  placeholder,
+  value,
+  onChangeText,
+  error,
+  theme,
+}) {
   return (
     <View className="mb-5">
       <View className="flex-row justify-between">
         <Text
-          className={`text-[11px] font-bold uppercase mb-2 ${
-            error ? "text-red-500" : "text-[#888]"
-          }`}
+          className="text-[11px] font-bold uppercase mb-2"
+          style={{
+            color: error ? theme.buttonDangerText : theme.textSecondary,
+          }}
         >
           {label}
         </Text>
         {error && (
-          <Text className="text-[10px] text-red-500 italic mr-1">{error}</Text>
+          <Text
+            className="text-[10px] italic mr-1"
+            style={{ color: theme.buttonDangerText }}
+          >
+            {error}
+          </Text>
         )}
       </View>
       <View
-        className={`flex-row items-center bg-[#222] rounded-xl px-4 py-2.5 border ${
-          error ? "border-red-500" : "border-[#333]"
-        }`}
+        className="flex-row items-center rounded-xl px-4 py-2.5 border"
+        style={{
+          backgroundColor: theme.buttonNeutral,
+          borderColor: error ? theme.buttonDangerText : theme.cardBorder,
+        }}
       >
         <MaterialIcons
           name={icon}
           size={20}
-          color={error ? "#ef4444" : "#666"}
+          color={error ? theme.buttonDangerText : theme.textSecondary}
           style={{ marginRight: 12 }}
         />
         <TextInput
-          className="flex-1 text-white text-sm"
+          className="flex-1 text-sm"
+          style={{ color: theme.text }}
           placeholder={placeholder}
-          placeholderTextColor="#555"
+          placeholderTextColor={theme.textSecondary}
           value={value}
           onChangeText={onChangeText}
           autoCapitalize="none"

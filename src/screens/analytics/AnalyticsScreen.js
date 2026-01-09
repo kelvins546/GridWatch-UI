@@ -24,21 +24,25 @@ const ANALYTICS_DATA = {
       { label: "6pm", height: "70%" },
       { label: "9pm", height: "30%" },
     ],
-
     distribution: [
       {
         name: "1. Air Conditioner",
+        location: "Living Room Hub",
         cost: "₱ 85.00",
         percent: "70%",
-        color: "#00ff99",
       },
       {
         name: "2. Refrigerator",
+        location: "Kitchen Hub",
         cost: "₱ 25.50",
         percent: "21%",
-        color: "#0055ff",
       },
-      { name: "3. Others", cost: "₱ 10.00", percent: "9%", color: "#ffaa00" },
+      {
+        name: "3. Others",
+        location: "Various Hubs",
+        cost: "₱ 10.00",
+        percent: "9%",
+      },
     ],
   },
   Week: {
@@ -54,25 +58,24 @@ const ANALYTICS_DATA = {
       { label: "Sat", height: "20%" },
       { label: "Sun", height: "15%" },
     ],
-
     distribution: [
       {
         name: "1. Air Conditioner",
+        location: "Living Room Hub",
         cost: "₱ 552.00",
         percent: "65%",
-        color: "#00ff99",
       },
       {
         name: "2. Refrigerator",
+        location: "Kitchen Hub",
         cost: "₱ 212.00",
         percent: "25%",
-        color: "#0055ff",
       },
       {
         name: "3. Smart TV",
+        location: "Living Room Hub",
         cost: "₱ 86.50",
         percent: "10%",
-        color: "#ffaa00",
       },
     ],
   },
@@ -86,25 +89,24 @@ const ANALYTICS_DATA = {
       { label: "W3", height: "40%" },
       { label: "W4", height: "95%", active: true },
     ],
-
     distribution: [
       {
         name: "1. Air Conditioner",
+        location: "Living Room Hub",
         cost: "₱ 1,944.00",
         percent: "60%",
-        color: "#00ff99",
       },
       {
         name: "2. Refrigerator",
+        location: "Kitchen Hub",
         cost: "₱ 972.00",
         percent: "30%",
-        color: "#0055ff",
       },
       {
         name: "3. Washing Machine",
+        location: "Service Area Hub",
         cost: "₱ 324.00",
         percent: "10%",
-        color: "#ffaa00",
       },
     ],
   },
@@ -113,9 +115,12 @@ const ANALYTICS_DATA = {
 export default function AnalyticsScreen() {
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState("Week");
-  const { theme, isDarkMode } = useTheme();
+  const { theme, fontScale } = useTheme();
+
+  const scaledSize = (size) => size * (fontScale || 1);
 
   const currentData = ANALYTICS_DATA[activeTab];
+  const isPositive = currentData.comparison.includes("+");
 
   return (
     <SafeAreaView
@@ -135,7 +140,10 @@ export default function AnalyticsScreen() {
           borderBottomColor: theme.cardBorder,
         }}
       >
-        <Text className="text-base font-bold" style={{ color: theme.text }}>
+        <Text
+          className="font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(16) }}
+        >
           Energy Insights
         </Text>
       </View>
@@ -145,18 +153,29 @@ export default function AnalyticsScreen() {
           {}
           <View
             className="flex-row p-1 rounded-xl mb-6"
-            style={{ backgroundColor: isDarkMode ? "#222" : "#e0e0e0" }}
+            style={{ backgroundColor: theme.buttonNeutral }}
           >
             {["Day", "Week", "Month"].map((tab) => (
               <TouchableOpacity
                 key={tab}
                 className="flex-1 py-2 rounded-lg items-center"
-                style={activeTab === tab ? { backgroundColor: theme.card } : {}}
+                style={
+                  activeTab === tab
+                    ? {
+                        backgroundColor: theme.card,
+                        shadowColor: "#000",
+                        shadowOpacity: 0.1,
+                        shadowRadius: 2,
+                        elevation: 2,
+                      }
+                    : {}
+                }
                 onPress={() => setActiveTab(tab)}
               >
                 <Text
-                  className="text-xs font-semibold"
+                  className="font-semibold"
                   style={{
+                    fontSize: scaledSize(12),
                     color: activeTab === tab ? theme.text : theme.textSecondary,
                   }}
                 >
@@ -171,39 +190,40 @@ export default function AnalyticsScreen() {
             className="items-center mb-8 border-b border-dashed pb-6"
             style={{ borderBottomColor: theme.cardBorder }}
           >
-            <Text className="text-[11px] text-[#888] uppercase tracking-widest font-bold mb-1.5">
+            <Text
+              className="uppercase tracking-widest font-bold mb-1.5"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
+            >
               {currentData.label}
             </Text>
             <Text
-              className="text-4xl font-bold mb-1.5"
-              style={{ color: theme.text }}
+              className="font-bold mb-1.5"
+              style={{ color: theme.text, fontSize: scaledSize(36) }}
             >
               {currentData.total}
             </Text>
+
             <View
-              className={`flex-row items-center px-2 py-1 rounded-md gap-1 ${
-                currentData.comparison.includes("+")
-                  ? "bg-red-500/10"
-                  : "bg-green-500/10"
-              }`}
+              className="flex-row items-center px-2 py-1 rounded-md gap-1"
+              style={{
+                backgroundColor: isPositive
+                  ? `${theme.buttonDangerText}1A`
+                  : `${theme.buttonPrimary}1A`,
+              }}
             >
               <MaterialIcons
-                name={
-                  currentData.comparison.includes("+")
-                    ? "trending-up"
-                    : "trending-down"
-                }
-                size={14}
+                name={isPositive ? "trending-up" : "trending-down"}
+                size={scaledSize(14)}
                 color={
-                  currentData.comparison.includes("+") ? "#ff4d4d" : "#00ff99"
+                  isPositive ? theme.buttonDangerText : theme.buttonPrimary
                 }
               />
               <Text
                 style={{
-                  color: currentData.comparison.includes("+")
-                    ? "#ff4d4d"
-                    : "#00ff99",
-                  fontSize: 12,
+                  color: isPositive
+                    ? theme.buttonDangerText
+                    : theme.buttonPrimary,
+                  fontSize: scaledSize(12),
                   fontWeight: "600",
                 }}
               >
@@ -224,20 +244,24 @@ export default function AnalyticsScreen() {
                 height={bar.height}
                 active={bar.active}
                 theme={theme}
+                scaledSize={scaledSize}
                 count={currentData.bars.length}
               />
             ))}
           </View>
 
+          {}
           <View className="flex-row justify-between items-center mb-5">
             <Text
-              className="text-sm font-semibold"
-              style={{ color: theme.text }}
+              className="font-semibold"
+              style={{ color: theme.text, fontSize: scaledSize(14) }}
             >
               Cost Distribution
             </Text>
             <TouchableOpacity>
-              <Text className="text-xs" style={{ color: theme.primary }}>
+              <Text
+                style={{ color: theme.buttonPrimary, fontSize: scaledSize(12) }}
+              >
                 See All
               </Text>
             </TouchableOpacity>
@@ -248,10 +272,12 @@ export default function AnalyticsScreen() {
             <DistributionItem
               key={index}
               name={item.name}
+              location={item.location}
               cost={item.cost}
               percent={item.percent}
-              color={item.color}
+              color={theme.text}
               theme={theme}
+              scaledSize={scaledSize}
             />
           ))}
         </View>
@@ -260,7 +286,7 @@ export default function AnalyticsScreen() {
   );
 }
 
-function Bar({ label, height, active, theme, count }) {
+function Bar({ label, height, active, theme, scaledSize, count }) {
   const barWidth = count > 10 ? "8%" : count > 5 ? "12%" : "20%";
   return (
     <View
@@ -272,15 +298,16 @@ function Bar({ label, height, active, theme, count }) {
           className="w-full rounded-full"
           style={{
             height: height,
-            backgroundColor: active ? theme.primary : theme.cardBorder,
+            backgroundColor: active ? theme.buttonPrimary : theme.cardBorder,
           }}
         />
       </View>
       <Text
-        className="mt-2.5 text-[10px]"
+        className="mt-2.5"
         style={{
           color: active ? theme.text : theme.textSecondary,
           fontWeight: active ? "700" : "500",
+          fontSize: scaledSize(10),
         }}
       >
         {label}
@@ -289,32 +316,61 @@ function Bar({ label, height, active, theme, count }) {
   );
 }
 
-function DistributionItem({ name, cost, percent, color, theme }) {
+function DistributionItem({
+  name,
+  location,
+  cost,
+  percent,
+  color,
+  theme,
+  scaledSize,
+}) {
   return (
     <View className="mb-6">
-      <View className="flex-row justify-between mb-2">
+      <View className="flex-row justify-between items-start mb-2">
+        {}
+        <View>
+          <Text
+            className="font-medium mb-0.5"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+          >
+            {name}
+          </Text>
+          <Text
+            style={{
+              color: theme.textSecondary,
+              fontSize: scaledSize(10),
+              opacity: 0.7,
+            }}
+          >
+            {location}
+          </Text>
+        </View>
+
+        {}
         <Text
-          className="text-sm font-medium"
-          style={{ color: theme.textSecondary }}
+          className="font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(14) }}
         >
-          {name}
-        </Text>
-        <Text className="text-sm font-bold" style={{ color: theme.text }}>
           {cost}
         </Text>
       </View>
+
+      {}
       <View
-        className="h-1.5 w-full rounded-full overflow-hidden"
+        className="h-1.5 w-full rounded-full overflow-hidden mt-1"
         style={{ backgroundColor: theme.cardBorder }}
       >
+        {}
         <View
           className="h-full rounded-full"
           style={{ width: percent, backgroundColor: color }}
         />
       </View>
+
       <Text
-        className="text-[10px] mt-1 text-right"
-        style={{ color: theme.textSecondary }}
+        className="mt-1 text-right"
+        style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
       >
         {percent}
       </Text>

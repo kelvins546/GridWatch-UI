@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -19,16 +19,45 @@ import { useTheme } from "../../context/ThemeContext";
 
 export default function BudgetManagerScreen() {
   const navigation = useNavigation();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, fontScale } = useTheme();
+
+  const scaledSize = (size) => size * fontScale;
+
+  const primaryColor = isDarkMode ? theme.buttonPrimary : "#00995e";
+  const dangerColor = isDarkMode ? theme.buttonDangerText : "#cc0000";
 
   const [isResetting, setIsResetting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
-  const [billingDate, setBillingDate] = useState("15th");
-  const [monthlyBudget, setMonthlyBudget] = useState(2800);
 
+  const [billingDate, setBillingDate] = useState("15th");
+  const [selectedMonthIndex, setSelectedMonthIndex] = useState(
+    new Date().getMonth()
+  );
+
+  const [monthlyBudget, setMonthlyBudget] = useState(2800);
   const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+
+  const daysInCurrentMonth = useMemo(() => {
+    const year = new Date().getFullYear();
+    return new Date(year, selectedMonthIndex + 1, 0).getDate();
+  }, [selectedMonthIndex]);
 
   const animateButton = (toValue) => {
     Animated.spring(scaleAnim, {
@@ -63,7 +92,6 @@ export default function BudgetManagerScreen() {
   const handleBudgetChange = (text) => {
     const cleanedText = text.replace(/[^0-9]/g, "");
     const number = parseInt(cleanedText);
-
     if (!isNaN(number)) {
       setMonthlyBudget(number);
     } else if (cleanedText === "") {
@@ -103,13 +131,6 @@ export default function BudgetManagerScreen() {
       type: "active",
     },
     {
-      id: "bedroom",
-      name: "Bedroom Hub",
-      status: "Slow Connection",
-      devices: 1,
-      type: "warn",
-    },
-    {
       id: "garage",
       name: "Garage Hub",
       status: "Offline",
@@ -131,14 +152,13 @@ export default function BudgetManagerScreen() {
 
       {isResetting && (
         <View className="absolute z-[100] w-full h-full bg-black/70 justify-center items-center">
-          <ActivityIndicator size="large" color={theme.primary} />
+          <ActivityIndicator size="large" color={primaryColor} />
           <Text className="text-white mt-4 font-bold">
             Updating Settings...
           </Text>
         </View>
       )}
 
-      {}
       <View
         className="flex-row items-center justify-center px-6 py-5 border-b"
         style={{
@@ -146,14 +166,16 @@ export default function BudgetManagerScreen() {
           borderBottomColor: theme.cardBorder,
         }}
       >
-        <Text className="text-base font-bold" style={{ color: theme.text }}>
+        <Text
+          className="font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(16) }}
+        >
           Budget & Management
         </Text>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
         <View className="p-6">
-          {}
           <TouchableOpacity
             activeOpacity={1}
             style={{ marginBottom: 20 }}
@@ -177,14 +199,17 @@ export default function BudgetManagerScreen() {
               <View className="flex-row justify-between items-start mb-2">
                 <View>
                   <Text
-                    className="text-xs font-bold uppercase tracking-widest mb-1"
-                    style={{ color: theme.textSecondary }}
+                    className="font-bold uppercase tracking-widest mb-1"
+                    style={{
+                      color: theme.textSecondary,
+                      fontSize: scaledSize(12),
+                    }}
                   >
                     Total Spending
                   </Text>
                   <Text
-                    className="text-3xl font-extrabold"
-                    style={{ color: theme.text }}
+                    className="font-extrabold"
+                    style={{ color: theme.text, fontSize: scaledSize(30) }}
                   >
                     ₱ 1,450.75
                   </Text>
@@ -199,14 +224,20 @@ export default function BudgetManagerScreen() {
               <View className="mb-4">
                 <View className="flex-row justify-between mb-1.5">
                   <Text
-                    className="text-xs font-medium"
-                    style={{ color: theme.primary }}
+                    className="font-medium"
+                    style={{
+                      color: primaryColor,
+                      fontSize: scaledSize(12),
+                    }}
                   >
                     48% Used
                   </Text>
                   <Text
-                    className="text-xs font-medium"
-                    style={{ color: theme.textSecondary }}
+                    className="font-medium"
+                    style={{
+                      color: theme.textSecondary,
+                      fontSize: scaledSize(12),
+                    }}
                   >
                     ₱ {monthlyBudget.toLocaleString()} Limit
                   </Text>
@@ -215,15 +246,9 @@ export default function BudgetManagerScreen() {
                   className="h-3 rounded-full w-full overflow-hidden"
                   style={{ backgroundColor: isDarkMode ? "#333" : "#f0f0f0" }}
                 >
-                  <LinearGradient
-                    colors={
-                      isDarkMode
-                        ? ["#0055ff", "#00ff99"]
-                        : ["#0055ff", "#00995e"]
-                    }
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
+                  <View
                     className="h-full rounded-full w-[48%]"
+                    style={{ backgroundColor: primaryColor }}
                   />
                 </View>
               </View>
@@ -237,7 +262,8 @@ export default function BudgetManagerScreen() {
                   value="₱ 120.50"
                   icon="trending-up"
                   theme={theme}
-                  isDarkMode={isDarkMode}
+                  primaryColor={primaryColor}
+                  scaledSize={scaledSize}
                 />
                 <View
                   className="w-[1px] h-8 mx-4"
@@ -248,13 +274,13 @@ export default function BudgetManagerScreen() {
                   value={`Every ${billingDate}`}
                   icon="event-repeat"
                   theme={theme}
-                  isDarkMode={isDarkMode}
+                  primaryColor={primaryColor}
+                  scaledSize={scaledSize}
                 />
               </View>
             </Animated.View>
           </TouchableOpacity>
 
-          {}
           <TouchableOpacity
             className="flex-row items-center justify-between p-4 rounded-xl border mb-3"
             style={{
@@ -267,18 +293,21 @@ export default function BudgetManagerScreen() {
               <MaterialIcons
                 name="calendar-today"
                 size={20}
-                color={theme.primary}
+                color={primaryColor}
               />
               <View className="ml-3">
                 <Text
-                  className="text-sm font-bold"
-                  style={{ color: theme.text }}
+                  className="font-bold"
+                  style={{ color: theme.text, fontSize: scaledSize(14) }}
                 >
                   Billing Cycle Date
                 </Text>
                 <Text
-                  className="text-[11px]"
-                  style={{ color: theme.textSecondary }}
+                  className=""
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(11),
+                  }}
                 >
                   App resets automatically every month
                 </Text>
@@ -286,8 +315,11 @@ export default function BudgetManagerScreen() {
             </View>
             <View className="flex-row items-center">
               <Text
-                className="text-xs font-bold mr-1"
-                style={{ color: theme.primary }}
+                className="font-bold mr-1"
+                style={{
+                  color: primaryColor,
+                  fontSize: scaledSize(12),
+                }}
               >
                 {billingDate}
               </Text>
@@ -299,29 +331,31 @@ export default function BudgetManagerScreen() {
             </View>
           </TouchableOpacity>
 
-          {}
           <TouchableOpacity
             onPress={() => setShowConfirmModal(true)}
             className="flex-row items-center justify-center py-4 rounded-xl border mb-8"
             style={{
-              borderColor: "#ff4444",
+              borderColor: dangerColor,
               backgroundColor: isDarkMode
                 ? "rgba(255, 68, 68, 0.05)"
-                : "rgba(255, 68, 68, 0.02)",
+                : "rgba(204, 0, 0, 0.05)",
             }}
           >
-            <MaterialIcons name="restart-alt" size={20} color="#ff4444" />
+            <MaterialIcons name="restart-alt" size={20} color={dangerColor} />
             <Text
-              className="ml-2 font-bold text-xs uppercase tracking-wider"
-              style={{ color: "#ff4444" }}
+              className="ml-2 font-bold uppercase tracking-wider"
+              style={{
+                color: dangerColor,
+                fontSize: scaledSize(12),
+              }}
             >
               Manual Reset
             </Text>
           </TouchableOpacity>
 
           <Text
-            className="text-[11px] font-bold uppercase tracking-widest mb-3"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
           >
             Select Hub to Manage
           </Text>
@@ -333,16 +367,19 @@ export default function BudgetManagerScreen() {
                 data={hub}
                 theme={theme}
                 isDarkMode={isDarkMode}
+                primaryColor={primaryColor}
+                dangerColor={dangerColor}
+                scaledSize={scaledSize}
                 onPress={() =>
-                  navigation.navigate("BudgetDeviceList", { hubName: hub.name })
+                  navigation.navigate("BudgetDeviceList", {
+                    hubName: hub.name,
+                  })
                 }
               />
             ))}
           </View>
         </View>
       </ScrollView>
-
-      {}
 
       {}
       <Modal visible={showConfirmModal} transparent animationType="fade">
@@ -354,18 +391,21 @@ export default function BudgetManagerScreen() {
               borderColor: theme.cardBorder,
             }}
           >
-            <View className="w-12 h-12 rounded-full bg-[#ff4444]/10 items-center justify-center mb-3">
-              <MaterialIcons name="warning" size={28} color="#ff4444" />
+            <View
+              className="w-12 h-12 rounded-full items-center justify-center mb-3"
+              style={{ backgroundColor: `${dangerColor}22` }}
+            >
+              <MaterialIcons name="warning" size={28} color={dangerColor} />
             </View>
             <Text
-              className="text-base font-bold mb-2 text-center"
-              style={{ color: theme.text }}
+              className="font-bold mb-2 text-center"
+              style={{ color: theme.text, fontSize: scaledSize(16) }}
             >
               Reset Spending?
             </Text>
             <Text
-              className="text-[11px] text-center mb-5 leading-4"
-              style={{ color: theme.textSecondary }}
+              className="text-center mb-5 leading-4"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
             >
               This will clear your current spending. Use this if your billing
               cycle started earlier than scheduled.
@@ -377,17 +417,23 @@ export default function BudgetManagerScreen() {
                 style={{ borderColor: theme.cardBorder }}
               >
                 <Text
-                  className="font-bold text-xs"
-                  style={{ color: theme.text }}
+                  className="font-bold"
+                  style={{ color: theme.text, fontSize: scaledSize(12) }}
                 >
                   Cancel
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleManualReset}
-                className="flex-1 py-2.5 bg-[#ff4444] rounded-xl items-center"
+                className="flex-1 py-2.5 rounded-xl items-center"
+                style={{ backgroundColor: dangerColor }}
               >
-                <Text className="text-white font-bold text-xs">Reset</Text>
+                <Text
+                  className="text-white font-bold"
+                  style={{ fontSize: scaledSize(12) }}
+                >
+                  Reset
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -407,7 +453,7 @@ export default function BudgetManagerScreen() {
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
-              height: "50%",
+              height: "60%",
             }}
           >
             <View className="flex-row justify-between items-center mb-6">
@@ -422,15 +468,60 @@ export default function BudgetManagerScreen() {
                 />
               </TouchableOpacity>
             </View>
+
             <Text
-              className="text-xs mb-4"
-              style={{ color: theme.textSecondary }}
+              className="mb-4"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
             >
-              GridWatch will automatically reset your month-to-date spending
-              tracker on this day every month.
+              First, select the reference month to determine available days:
             </Text>
+
+            <View className="h-12 mb-4">
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingRight: 20 }}
+              >
+                {months.map((m, index) => (
+                  <TouchableOpacity
+                    key={m}
+                    onPress={() => setSelectedMonthIndex(index)}
+                    className="mr-2 px-4 h-9 rounded-full justify-center items-center border"
+                    style={{
+                      backgroundColor:
+                        selectedMonthIndex === index
+                          ? primaryColor
+                          : "transparent",
+                      borderColor:
+                        selectedMonthIndex === index
+                          ? primaryColor
+                          : theme.cardBorder,
+                    }}
+                  >
+                    <Text
+                      className="font-bold"
+                      style={{
+                        color:
+                          selectedMonthIndex === index ? "#fff" : theme.text,
+                        fontSize: scaledSize(12),
+                      }}
+                    >
+                      {m}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            <Text
+              className="mb-4"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+            >
+              Select the day of the month your bill resets:
+            </Text>
+
             <FlatList
-              data={Array.from({ length: 31 }, (_, i) => i + 1)}
+              data={Array.from({ length: daysInCurrentMonth }, (_, i) => i + 1)}
               keyExtractor={(item) => item.toString()}
               numColumns={5}
               contentContainerStyle={{ paddingBottom: 20 }}
@@ -443,9 +534,7 @@ export default function BudgetManagerScreen() {
                     style={{
                       borderColor: theme.cardBorder,
                       backgroundColor: isSelected
-                        ? isDarkMode
-                          ? "#0055ff"
-                          : "#0055ff"
+                        ? primaryColor
                         : "transparent",
                     }}
                   >
@@ -494,8 +583,8 @@ export default function BudgetManagerScreen() {
 
             <View className="items-center mb-8">
               <Text
-                className="text-xs font-bold mb-5 tracking-[1px]"
-                style={{ color: theme.textSecondary }}
+                className="font-bold mb-5 tracking-[1px]"
+                style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
               >
                 SET TOTAL LIMIT
               </Text>
@@ -516,11 +605,10 @@ export default function BudgetManagerScreen() {
                   <MaterialIcons name="remove" size={24} color={theme.text} />
                 </TouchableOpacity>
 
-                {}
                 <View className="flex-row items-center justify-center flex-1 mx-2">
                   <Text
-                    className="text-[32px] font-bold mr-1"
-                    style={{ color: theme.text }}
+                    className="font-bold mr-1"
+                    style={{ color: theme.text, fontSize: scaledSize(32) }}
                   >
                     ₱
                   </Text>
@@ -528,8 +616,12 @@ export default function BudgetManagerScreen() {
                     value={monthlyBudget.toString()}
                     onChangeText={handleBudgetChange}
                     keyboardType="numeric"
-                    className="text-[32px] font-bold text-center"
-                    style={{ color: theme.text, minWidth: 80 }}
+                    className="font-bold text-center"
+                    style={{
+                      color: theme.text,
+                      minWidth: 80,
+                      fontSize: scaledSize(32),
+                    }}
                     maxLength={7}
                   />
                 </View>
@@ -543,30 +635,29 @@ export default function BudgetManagerScreen() {
               </View>
 
               <Text
-                className="text-center text-[13px] leading-5 px-4"
-                style={{ color: theme.textSecondary }}
+                className="text-center leading-5 px-4"
+                style={{ color: theme.textSecondary, fontSize: scaledSize(13) }}
               >
                 You will receive alerts when your total spending approaches this
                 limit.
               </Text>
             </View>
 
-            {}
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={handleSaveBudget}
-              style={{ width: "100%", borderRadius: 12, overflow: "hidden" }}
+              style={{
+                width: "100%",
+                borderRadius: 12,
+                overflow: "hidden",
+                backgroundColor: primaryColor,
+              }}
             >
-              <LinearGradient
-                colors={["#0055ff", "#00ff99"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                className="py-4 items-center justify-center"
-              >
-                <Text className="text-black font-bold text-sm">
+              <View className="py-4 items-center justify-center">
+                <Text className="text-white font-bold text-sm">
                   Save Changes
                 </Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -575,10 +666,17 @@ export default function BudgetManagerScreen() {
   );
 }
 
-function StatItem({ label, value, icon, color, theme, isDarkMode }) {
-  const iconBg = isDarkMode
-    ? "rgba(255, 255, 255, 0.1)"
-    : "rgba(0, 0, 0, 0.05)";
+function StatItem({
+  label,
+  value,
+  icon,
+  color,
+  theme,
+  primaryColor,
+  scaledSize,
+}) {
+  const iconBg = `${primaryColor}26`;
+
   return (
     <View className="flex-1 flex-row items-center gap-3">
       <View
@@ -589,12 +687,15 @@ function StatItem({ label, value, icon, color, theme, isDarkMode }) {
       </View>
       <View>
         <Text
-          className="text-[10px] font-medium uppercase"
-          style={{ color: theme.textSecondary }}
+          className="font-medium uppercase"
+          style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
         >
           {label}
         </Text>
-        <Text className="text-xs font-bold" style={{ color: theme.text }}>
+        <Text
+          className="font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(12) }}
+        >
           {value}
         </Text>
       </View>
@@ -602,7 +703,15 @@ function StatItem({ label, value, icon, color, theme, isDarkMode }) {
   );
 }
 
-function HubCard({ data, theme, isDarkMode, onPress }) {
+function HubCard({
+  data,
+  theme,
+  isDarkMode,
+  primaryColor,
+  dangerColor,
+  scaledSize,
+  onPress,
+}) {
   const scaleValue = useRef(new Animated.Value(1)).current;
   const isOffline = data.type === "offline";
   const handlePressIn = () =>
@@ -618,15 +727,15 @@ function HubCard({ data, theme, isDarkMode, onPress }) {
       useNativeDriver: true,
     }).start();
 
-  let statusColor = isDarkMode ? "#00ff99" : "#00995e";
-  let iconBg = isDarkMode ? "rgba(0, 255, 153, 0.1)" : "rgba(0, 153, 94, 0.1)";
+  let statusColor = primaryColor;
+  let iconBg = `${primaryColor}1A`;
 
   if (data.type === "warn") {
-    statusColor = "#ffaa00";
+    statusColor = isDarkMode ? "#ffaa00" : "#b37400";
     iconBg = "rgba(255, 170, 0, 0.1)";
   } else if (data.type === "offline") {
-    statusColor = "#ff4444";
-    iconBg = "rgba(255, 68, 68, 0.1)";
+    statusColor = theme.textSecondary;
+    iconBg = `${theme.textSecondary}1A`;
   }
 
   return (
@@ -643,7 +752,7 @@ function HubCard({ data, theme, isDarkMode, onPress }) {
           backgroundColor: theme.card,
           borderColor: theme.cardBorder,
           transform: [{ scale: scaleValue }],
-          opacity: isOffline ? 0.6 : 1,
+          opacity: isOffline ? 0.7 : 1,
         }}
       >
         <View className="flex-row items-center gap-3">
@@ -658,7 +767,10 @@ function HubCard({ data, theme, isDarkMode, onPress }) {
             />
           </View>
           <View>
-            <Text className="text-sm font-bold" style={{ color: theme.text }}>
+            <Text
+              className="font-bold"
+              style={{ color: theme.text, fontSize: scaledSize(14) }}
+            >
               {data.name}
             </Text>
             <View className="flex-row items-center gap-1.5">
@@ -667,8 +779,11 @@ function HubCard({ data, theme, isDarkMode, onPress }) {
                 style={{ backgroundColor: statusColor }}
               />
               <Text
-                className="text-[11px]"
-                style={{ color: theme.textSecondary }}
+                className=""
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(11),
+                }}
               >
                 {data.status} {!isOffline && `• ${data.devices} Devices`}
               </Text>

@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
@@ -44,13 +43,14 @@ const HUB_LOCATIONS = [
   "Others",
 ];
 
-const PLACEHOLDER_DEVICE = "Select Device";
 const PLACEHOLDER_HUB = "Select Location";
 
 export default function HubConfigScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, fontScale } = useTheme();
+
+  const scaledSize = (size) => size * fontScale;
 
   const { hubId } = route.params || { hubId: "demo_hub_123" };
 
@@ -60,20 +60,21 @@ export default function HubConfigScreen() {
     selection: PLACEHOLDER_HUB,
     custom: "",
   });
+
   const [outlet1, setOutlet1] = useState({
-    selection: PLACEHOLDER_DEVICE,
+    selection: "Unused",
     custom: "",
   });
   const [outlet2, setOutlet2] = useState({
-    selection: PLACEHOLDER_DEVICE,
+    selection: "Unused",
     custom: "",
   });
   const [outlet3, setOutlet3] = useState({
-    selection: PLACEHOLDER_DEVICE,
+    selection: "Unused",
     custom: "",
   });
   const [outlet4, setOutlet4] = useState({
-    selection: PLACEHOLDER_DEVICE,
+    selection: "Unused",
     custom: "",
   });
 
@@ -95,11 +96,9 @@ export default function HubConfigScreen() {
     if (callback) callback();
   };
 
-  const getFinalName = (state) =>
-    state.selection === "Others" ? state.custom.trim() : state.selection;
-
   const isValid = (state, placeholder) => {
-    if (state.selection === placeholder) return false;
+    if (placeholder && state.selection === placeholder) return false;
+
     if (state.selection === "Others" && !state.custom.trim()) return false;
     return true;
   };
@@ -114,31 +113,25 @@ export default function HubConfigScreen() {
 
     if (!isValid(hubName, PLACEHOLDER_HUB))
       return showAlert("Missing Info", "Please select or name your Hub.");
-    if (!isValid(outlet1, PLACEHOLDER_DEVICE))
-      return showAlert("Missing Info", "Please configure Outlet 1.");
-    if (!isValid(outlet2, PLACEHOLDER_DEVICE))
-      return showAlert("Missing Info", "Please configure Outlet 2.");
-    if (!isValid(outlet3, PLACEHOLDER_DEVICE))
-      return showAlert("Missing Info", "Please configure Outlet 3.");
-    if (!isValid(outlet4, PLACEHOLDER_DEVICE))
-      return showAlert("Missing Info", "Please configure Outlet 4.");
+
+    if (!isValid(outlet1))
+      return showAlert("Missing Info", "Please check Outlet 1 configuration.");
+    if (!isValid(outlet2))
+      return showAlert("Missing Info", "Please check Outlet 2 configuration.");
+    if (!isValid(outlet3))
+      return showAlert("Missing Info", "Please check Outlet 3 configuration.");
+    if (!isValid(outlet4))
+      return showAlert("Missing Info", "Please check Outlet 4 configuration.");
 
     setIsLoading(true);
 
     setTimeout(() => {
       setIsLoading(false);
-
       showAlert("Setup Complete", "Hub & Outlets Synced!", "success", () =>
         navigation.navigate("MainApp", { screen: "Home" })
       );
     }, 2000);
   };
-
-  const getAlertColor = (type) => (type === "success" ? "#00ff99" : "#ff4444");
-  const getAlertBg = (type) =>
-    type === "success" ? "rgba(0, 255, 153, 0.1)" : "rgba(255, 68, 68, 0.1)";
-  const getAlertBtnColors = (type) =>
-    type === "success" ? ["#0055ff", "#00ff99"] : ["#333", "#444"];
 
   return (
     <SafeAreaView
@@ -164,13 +157,21 @@ export default function HubConfigScreen() {
             alignItems: "center",
           }}
         >
-          <ActivityIndicator size="large" color="#00ff99" />
-          <Text style={{ color: "#fff", marginTop: 15, fontWeight: "bold" }}>
+          <ActivityIndicator size="large" color={theme.buttonPrimary} />
+          <Text
+            style={{
+              color: "#fff",
+              marginTop: 15,
+              fontWeight: "bold",
+              fontSize: scaledSize(14),
+            }}
+          >
             Finalizing Setup...
           </Text>
         </View>
       )}
 
+      {}
       <View
         className="flex-row items-center justify-between px-6 py-5 border-b"
         style={{
@@ -184,17 +185,20 @@ export default function HubConfigScreen() {
         >
           <MaterialIcons
             name="arrow-back"
-            size={18}
+            size={scaledSize(18)}
             color={theme.textSecondary}
           />
           <Text
-            className="text-sm font-medium ml-1"
-            style={{ color: theme.textSecondary }}
+            className="font-medium ml-1"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
           >
             Back
           </Text>
         </TouchableOpacity>
-        <Text className="text-base font-bold" style={{ color: theme.text }}>
+        <Text
+          className="font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(16) }}
+        >
           Configure Hub
         </Text>
         <View className="w-[50px]" />
@@ -211,8 +215,8 @@ export default function HubConfigScreen() {
         >
           <View className="p-6">
             <Text
-              className="text-sm mb-5 leading-5"
-              style={{ color: theme.textSecondary }}
+              className="mb-5 leading-5"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
             >
               Give your hub a name and identify the devices plugged into each
               outlet.
@@ -225,6 +229,7 @@ export default function HubConfigScreen() {
               setState={setHubName}
               placeholder={PLACEHOLDER_HUB}
               theme={theme}
+              scaledSize={scaledSize}
             />
 
             <View
@@ -240,17 +245,21 @@ export default function HubConfigScreen() {
               }}
             >
               <View className="flex-row gap-2.5 mb-1.5 items-center">
-                <MaterialIcons name="warning" size={20} color="#ffaa00" />
+                <MaterialIcons
+                  name="warning"
+                  size={scaledSize(20)}
+                  color="#ffaa00"
+                />
                 <Text
-                  className="font-bold text-sm"
-                  style={{ color: "#ffaa00" }}
+                  className="font-bold"
+                  style={{ color: "#ffaa00", fontSize: scaledSize(14) }}
                 >
                   Important for Accuracy
                 </Text>
               </View>
               <Text
-                className="text-xs leading-5"
-                style={{ color: theme.textSecondary }}
+                className="leading-5"
+                style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
               >
                 Ensure you plug the correct appliance into the matching physical
                 outlet number on the Hub.
@@ -258,8 +267,8 @@ export default function HubConfigScreen() {
             </View>
 
             <Text
-              className="text-base font-bold mb-5"
-              style={{ color: theme.text }}
+              className="font-bold mb-5"
+              style={{ color: theme.text, fontSize: scaledSize(16) }}
             >
               Outlet Devices
             </Text>
@@ -269,32 +278,32 @@ export default function HubConfigScreen() {
               options={APPLIANCE_OPTIONS}
               state={outlet1}
               setState={setOutlet1}
-              placeholder={PLACEHOLDER_DEVICE}
               theme={theme}
+              scaledSize={scaledSize}
             />
             <ConfigDropdown
               label="Outlet 2"
               options={APPLIANCE_OPTIONS}
               state={outlet2}
               setState={setOutlet2}
-              placeholder={PLACEHOLDER_DEVICE}
               theme={theme}
+              scaledSize={scaledSize}
             />
             <ConfigDropdown
               label="Outlet 3"
               options={APPLIANCE_OPTIONS}
               state={outlet3}
               setState={setOutlet3}
-              placeholder={PLACEHOLDER_DEVICE}
               theme={theme}
+              scaledSize={scaledSize}
             />
             <ConfigDropdown
               label="Outlet 4"
               options={APPLIANCE_OPTIONS}
               state={outlet4}
               setState={setOutlet4}
-              placeholder={PLACEHOLDER_DEVICE}
               theme={theme}
+              scaledSize={scaledSize}
             />
 
             <View className="h-10" />
@@ -303,69 +312,63 @@ export default function HubConfigScreen() {
 
         <View className="p-6">
           <TouchableOpacity onPress={handleFinishSetup}>
-            <LinearGradient
-              colors={["#0055ff", "#00ff99"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+            <View
               className="p-4 rounded-xl items-center"
+              style={{ backgroundColor: theme.buttonPrimary }}
             >
-              <Text className="font-bold text-base text-black uppercase">
+              <Text
+                className="font-bold uppercase"
+                style={{ color: "#fff", fontSize: scaledSize(16) }}
+              >
                 Finish Setup
               </Text>
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
 
+      {}
       <Modal transparent visible={alertConfig.visible} animationType="fade">
-        <View className="flex-1 bg-black/60 justify-center items-center">
+        <View className="flex-1 bg-black/60 justify-center items-center p-6">
           <View
-            className="w-3/4 p-6 rounded-3xl border items-center shadow-lg"
+            className="w-[85%] max-w-[320px] p-5 rounded-2xl border items-center shadow-lg"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
             }}
           >
-            <View
-              className="w-12 h-12 rounded-full justify-center items-center mb-4"
-              style={{ backgroundColor: getAlertBg(alertConfig.type) }}
-            >
-              <MaterialIcons
-                name={
-                  alertConfig.type === "success" ? "check" : "priority-high"
-                }
-                size={28}
-                color={getAlertColor(alertConfig.type)}
-              />
-            </View>
+            {}
             <Text
-              className="text-lg font-bold mb-2 text-center"
-              style={{ color: theme.text }}
+              className="font-bold mb-2 text-center"
+              style={{ color: theme.text, fontSize: scaledSize(18) }}
             >
               {alertConfig.title}
             </Text>
+
             <Text
-              className="text-sm text-center mb-5 leading-5"
-              style={{ color: theme.textSecondary }}
+              className="text-center mb-6 leading-5"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(13) }}
             >
               {alertConfig.message}
             </Text>
+
             <TouchableOpacity onPress={closeAlert} className="w-full">
-              <LinearGradient
-                colors={getAlertBtnColors(alertConfig.type)}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              <View
                 className="py-3 rounded-xl w-full items-center"
+                style={{
+                  backgroundColor: theme.buttonPrimary,
+                }}
               >
                 <Text
-                  className="font-bold text-xs tracking-widest uppercase"
+                  className="font-bold tracking-widest uppercase"
                   style={{
-                    color: alertConfig.type === "success" ? "#000" : "#fff",
+                    color: "#fff",
+                    fontSize: scaledSize(12),
                   }}
                 >
                   {alertConfig.type === "success" ? "CONTINUE" : "OKAY"}
                 </Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -381,54 +384,86 @@ function ConfigDropdown({
   setState,
   placeholder,
   theme,
+  scaledSize,
 }) {
   const [isModalVisible, setModalVisible] = useState(false);
+
   const handleSelect = (option) => {
-    setState((prev) => ({ ...prev, selection: option }));
+    setState((prev) => ({
+      ...prev,
+      selection: option,
+
+      custom: option === "Others" ? prev.custom : "",
+    }));
     setModalVisible(false);
   };
+
+  const isCustom = state.selection === "Others";
+
   const displayColor =
     state.selection === placeholder ? theme.textSecondary : theme.text;
 
   return (
     <View className="mb-5">
       <Text
-        className="text-xs font-bold uppercase mb-2"
-        style={{ color: theme.textSecondary }}
+        className="font-bold uppercase mb-2"
+        style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
       >
         {label} <Text style={{ color: "#ff4444" }}>*</Text>
       </Text>
-      <TouchableOpacity
-        className="flex-row justify-between items-center border rounded-xl p-4"
-        style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}
-        onPress={() => setModalVisible(true)}
+
+      {/* Container for Input/Select 
+        If "Others" -> Show TextInput on Left, Dropdown Icon on Right
+        If Not "Others" -> Show Text on Left, Dropdown Icon on Right
+      */}
+      <View
+        className="flex-row items-center border rounded-xl"
+        style={{
+          backgroundColor: theme.card,
+          borderColor: theme.cardBorder,
+        }}
       >
-        <Text className="text-base" style={{ color: displayColor }}>
-          {state.selection}
-        </Text>
-        <MaterialIcons
-          name="arrow-drop-down"
-          size={24}
-          color={theme.textSecondary}
-        />
-      </TouchableOpacity>
-      {state.selection === "Others" && (
-        <TextInput
-          className="mt-3 border rounded-xl p-4 text-base"
-          style={{
-            color: theme.text,
-            backgroundColor: theme.card,
-            borderColor: theme.cardBorder,
-          }}
-          value={state.custom}
-          onChangeText={(text) =>
-            setState((prev) => ({ ...prev, custom: text }))
-          }
-          placeholder="Type custom name..."
-          placeholderTextColor={theme.textSecondary}
-          autoFocus
-        />
-      )}
+        {isCustom ? (
+          <TextInput
+            className="flex-1 p-4"
+            style={{
+              color: theme.text,
+              fontSize: scaledSize(16),
+            }}
+            value={state.custom}
+            onChangeText={(text) =>
+              setState((prev) => ({ ...prev, custom: text }))
+            }
+            placeholder="Type name..."
+            placeholderTextColor={theme.textSecondary}
+            autoFocus
+          />
+        ) : (
+          <TouchableOpacity
+            className="flex-1 p-4"
+            onPress={() => setModalVisible(true)}
+          >
+            <Text
+              style={{
+                color: displayColor,
+                fontSize: scaledSize(16),
+              }}
+            >
+              {state.selection}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {}
+        <TouchableOpacity className="p-4" onPress={() => setModalVisible(true)}>
+          <MaterialIcons
+            name="arrow-drop-down"
+            size={scaledSize(24)}
+            color={theme.textSecondary}
+          />
+        </TouchableOpacity>
+      </View>
+
       <Modal transparent visible={isModalVisible} animationType="fade">
         <TouchableOpacity
           className="flex-1 bg-black/60 justify-center items-center"
@@ -440,8 +475,8 @@ function ConfigDropdown({
             style={{ backgroundColor: theme.card }}
           >
             <Text
-              className="text-base font-bold mb-4"
-              style={{ color: theme.text }}
+              className="font-bold mb-4"
+              style={{ color: theme.text, fontSize: scaledSize(16) }}
             >
               Select Option
             </Text>
@@ -455,11 +490,13 @@ function ConfigDropdown({
                   onPress={() => handleSelect(item)}
                 >
                   <Text
-                    className="text-base"
                     style={{
                       color:
-                        item === state.selection ? theme.primary : theme.text,
+                        item === state.selection
+                          ? theme.buttonPrimary
+                          : theme.text,
                       fontWeight: item === state.selection ? "700" : "400",
+                      fontSize: scaledSize(16),
                     }}
                   >
                     {item}
@@ -467,8 +504,8 @@ function ConfigDropdown({
                   {item === state.selection && (
                     <MaterialIcons
                       name="check"
-                      size={18}
-                      color={theme.primary}
+                      size={scaledSize(18)}
+                      color={theme.buttonPrimary}
                     />
                   )}
                 </TouchableOpacity>

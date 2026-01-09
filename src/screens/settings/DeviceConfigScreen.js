@@ -16,7 +16,9 @@ import { useTheme } from "../../context/ThemeContext";
 export default function DeviceConfigScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, fontScale } = useTheme();
+
+  const scaledSize = (size) => size * fontScale;
 
   const { hubName, hubId, status } = route.params || {};
 
@@ -40,7 +42,8 @@ export default function DeviceConfigScreen() {
   let statusDetailText = isOnline
     ? "Online • Stable"
     : "Offline • Check Connection";
-  let statusColor = isOnline ? theme.primary : "#ff4444";
+
+  let statusColor = isOnline ? theme.buttonPrimary : "#ff4444";
   let statusBg = isOnline
     ? isDarkMode
       ? "rgba(0, 255, 153, 0.1)"
@@ -60,8 +63,6 @@ export default function DeviceConfigScreen() {
     type: null,
     title: "",
     msg: "",
-    icon: "",
-    iconColor: "",
     loading: false,
   });
 
@@ -73,24 +74,18 @@ export default function DeviceConfigScreen() {
         ...config,
         title: "Wi-Fi Setup",
         msg: "To change Wi-Fi, please connect to 'GridWatch-Setup' hotspot first.",
-        icon: "wifi-find",
-        iconColor: isDarkMode ? "#ffaa00" : "#b37400",
       };
     } else if (type === "restart") {
       config = {
         ...config,
         title: "Restart Hub?",
         msg: "The device will go offline for approximately 10 seconds.",
-        icon: "warning",
-        iconColor: isDarkMode ? "#ffaa00" : "#b37400",
       };
     } else if (type === "unpair") {
       config = {
         ...config,
         title: "Reset & Unpair?",
         msg: "This will remove this Hub from your account.",
-        icon: "delete-forever",
-        iconColor: isDarkMode ? "#ff4444" : "#c62828",
       };
     }
     setModalState(config);
@@ -112,8 +107,6 @@ export default function DeviceConfigScreen() {
         type: "success",
         title: "Unlinked",
         msg: "Device removed successfully.",
-        icon: "check-circle",
-        iconColor: "#00995e",
         loading: false,
       });
 
@@ -178,6 +171,7 @@ export default function DeviceConfigScreen() {
   };
 
   const dangerColor = isDarkMode ? "#ff4444" : "#c62828";
+
   const dangerBg = isDarkMode
     ? "rgba(255, 68, 68, 0.1)"
     : "rgba(198, 40, 40, 0.05)";
@@ -191,7 +185,7 @@ export default function DeviceConfigScreen() {
         className="flex-1 justify-center items-center"
         style={{ backgroundColor: theme.background }}
       >
-        <ActivityIndicator size="large" color={theme.primary} />
+        <ActivityIndicator size="large" color={theme.buttonPrimary} />
       </View>
     );
   }
@@ -220,17 +214,20 @@ export default function DeviceConfigScreen() {
         >
           <MaterialIcons
             name="arrow-back"
-            size={18}
+            size={scaledSize(18)}
             color={theme.textSecondary}
           />
           <Text
-            className="text-sm font-medium ml-1"
-            style={{ color: theme.textSecondary }}
+            className="font-medium ml-1"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
           >
             Back
           </Text>
         </TouchableOpacity>
-        <Text className="text-base font-bold" style={{ color: theme.text }}>
+        <Text
+          className="font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(16) }}
+        >
           Device Configuration
         </Text>
         <View className="w-[50px]" />
@@ -242,7 +239,6 @@ export default function DeviceConfigScreen() {
             className="items-center py-5 border-b mb-5"
             style={{ borderBottomColor: theme.cardBorder }}
           >
-            {}
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={toggleStatus}
@@ -254,13 +250,13 @@ export default function DeviceConfigScreen() {
               >
                 <MaterialIcons
                   name={statusIcon}
-                  size={40}
+                  size={scaledSize(40)}
                   color={statusColor}
                 />
               </View>
               <Text
-                className="text-lg font-bold mb-1.5"
-                style={{ color: theme.text }}
+                className="font-bold mb-1.5"
+                style={{ color: theme.text, fontSize: scaledSize(18) }}
               >
                 {hubName || "Living Room Hub"}
               </Text>
@@ -270,8 +266,8 @@ export default function DeviceConfigScreen() {
                   style={{ backgroundColor: statusColor }}
                 />
                 <Text
-                  className="text-xs font-semibold"
-                  style={{ color: statusColor }}
+                  className="font-semibold"
+                  style={{ color: statusColor, fontSize: scaledSize(12) }}
                 >
                   {statusDetailText}
                 </Text>
@@ -280,8 +276,8 @@ export default function DeviceConfigScreen() {
           </View>
 
           <Text
-            className="text-[11px] font-bold uppercase tracking-widest mb-3"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
           >
             System Information
           </Text>
@@ -292,29 +288,41 @@ export default function DeviceConfigScreen() {
               borderColor: theme.cardBorder,
             }}
           >
-            <InfoItem label="Model" value={hubData.model} theme={theme} />
+            <InfoItem
+              label="Model"
+              value={hubData.model}
+              theme={theme}
+              scaledSize={scaledSize}
+            />
             <InfoItem
               label="Serial Number"
               value={hubData.serial_number}
               theme={theme}
+              scaledSize={scaledSize}
             />
             <View
               className="p-4 flex-row justify-between border-b"
               style={{ borderBottomColor: theme.cardBorder }}
             >
-              <Text className="text-sm" style={{ color: theme.textSecondary }}>
+              <Text
+                className="font-medium"
+                style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+              >
                 Firmware
               </Text>
               <View className="items-end">
                 <Text
-                  className="text-sm font-mono"
-                  style={{ color: theme.text }}
+                  className="font-mono"
+                  style={{ color: theme.text, fontSize: scaledSize(14) }}
                 >
                   v{hubData.current_firmware}
                 </Text>
                 <Text
-                  className="text-[10px]"
-                  style={{ color: theme.textSecondary }}
+                  className=""
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(10),
+                  }}
                 >
                   Auto updates
                 </Text>
@@ -323,8 +331,8 @@ export default function DeviceConfigScreen() {
           </View>
 
           <Text
-            className="text-[11px] font-bold uppercase tracking-widest mb-3"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
           >
             Network Connection
           </Text>
@@ -338,19 +346,22 @@ export default function DeviceConfigScreen() {
             <View className="flex-row items-center gap-3">
               <MaterialIcons
                 name="wifi"
-                size={24}
+                size={scaledSize(24)}
                 color={theme.textSecondary}
               />
               <View>
                 <Text
-                  className="text-sm font-semibold"
-                  style={{ color: theme.text }}
+                  className="font-semibold"
+                  style={{ color: theme.text, fontSize: scaledSize(14) }}
                 >
                   {hubData.wifi_ssid}
                 </Text>
                 <Text
-                  className="text-[11px] mt-0.5"
-                  style={{ color: theme.textSecondary }}
+                  className="mt-0.5"
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(11),
+                  }}
                 >
                   IP: {hubData.ip_address}
                 </Text>
@@ -365,8 +376,8 @@ export default function DeviceConfigScreen() {
               onPress={() => openModal("wifi")}
             >
               <Text
-                className="text-[11px] font-semibold"
-                style={{ color: theme.text }}
+                className="font-semibold"
+                style={{ color: theme.text, fontSize: scaledSize(11) }}
               >
                 Change
               </Text>
@@ -374,8 +385,8 @@ export default function DeviceConfigScreen() {
           </View>
 
           <Text
-            className="text-[11px] font-bold uppercase tracking-widest mb-3"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
           >
             Outlet Configuration
           </Text>
@@ -402,20 +413,23 @@ export default function DeviceConfigScreen() {
               >
                 <MaterialIcons
                   name="settings-input-component"
-                  size={20}
+                  size={scaledSize(20)}
                   color={theme.textSecondary}
                 />
               </View>
               <View>
                 <Text
-                  className="text-sm font-bold"
-                  style={{ color: theme.text }}
+                  className="font-bold"
+                  style={{ color: theme.text, fontSize: scaledSize(14) }}
                 >
                   Edit Outlet Devices
                 </Text>
                 <Text
-                  className="text-[11px]"
-                  style={{ color: theme.textSecondary }}
+                  className=""
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(11),
+                  }}
                 >
                   Rename appliances and change types
                 </Text>
@@ -423,14 +437,14 @@ export default function DeviceConfigScreen() {
             </View>
             <MaterialIcons
               name="chevron-right"
-              size={24}
+              size={scaledSize(24)}
               color={theme.textSecondary}
             />
           </TouchableOpacity>
 
           <Text
-            className="text-[11px] font-bold uppercase tracking-widest mb-3"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
           >
             Advanced Actions
           </Text>
@@ -443,10 +457,14 @@ export default function DeviceConfigScreen() {
             }}
             onPress={() => openModal("restart")}
           >
-            <MaterialIcons name="restart-alt" size={18} color={theme.text} />
+            <MaterialIcons
+              name="restart-alt"
+              size={scaledSize(18)}
+              color={theme.text}
+            />
             <Text
-              className="font-semibold text-sm"
-              style={{ color: theme.text }}
+              className="font-semibold"
+              style={{ color: theme.text, fontSize: scaledSize(14) }}
             >
               Restart Hub
             </Text>
@@ -457,10 +475,14 @@ export default function DeviceConfigScreen() {
             style={{ backgroundColor: dangerBg, borderColor: dangerBorder }}
             onPress={() => openModal("unpair")}
           >
-            <MaterialIcons name="link-off" size={18} color={dangerColor} />
+            <MaterialIcons
+              name="link-off"
+              size={scaledSize(18)}
+              color={dangerColor}
+            />
             <Text
-              className="font-semibold text-sm"
-              style={{ color: dangerColor }}
+              className="font-semibold"
+              style={{ color: dangerColor, fontSize: scaledSize(14) }}
             >
               Unpair & Reset
             </Text>
@@ -468,15 +490,16 @@ export default function DeviceConfigScreen() {
         </View>
       </ScrollView>
 
+      {}
       <Modal
         transparent
         visible={modalState.visible}
         animationType="fade"
         onRequestClose={closeModal}
       >
-        <View className="flex-1 bg-black/80 justify-center items-center">
+        <View className="flex-1 bg-black/80 justify-center items-center p-6">
           <View
-            className="w-[280px] p-6 rounded-[20px] border items-center"
+            className="w-[85%] max-w-[320px] p-5 rounded-2xl border items-center"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
@@ -485,54 +508,53 @@ export default function DeviceConfigScreen() {
             {modalState.loading ? (
               <ActivityIndicator
                 size="large"
-                color={theme.primary}
+                color={theme.buttonPrimary}
                 className="my-5"
               />
-            ) : (
-              <MaterialIcons
-                name={modalState.icon}
-                size={40}
-                color={modalState.iconColor}
-                style={{ marginBottom: 15 }}
-              />
-            )}
+            ) : null}
+
             <Text
-              className="text-lg font-bold mb-2.5"
-              style={{ color: theme.text }}
+              className="font-bold mb-2.5 text-center"
+              style={{ color: theme.text, fontSize: scaledSize(18) }}
             >
               {modalState.title}
             </Text>
             <Text
-              className="text-[13px] text-center mb-6 leading-5"
-              style={{ color: theme.textSecondary }}
+              className="text-center mb-6 leading-5"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(13) }}
             >
               {modalState.msg}
             </Text>
+
             {!modalState.loading && (
-              <View className="flex-row w-full justify-center">
+              <View className="flex-row gap-3 w-full">
                 {(modalState.type === "restart" ||
                   modalState.type === "unpair" ||
                   modalState.type === "force_unpair" ||
                   modalState.type === "error") && (
                   <TouchableOpacity
-                    className="flex-1 h-10 rounded-lg justify-center items-center mr-2.5 border"
+                    className="flex-1 py-3 rounded-xl border items-center"
                     style={{ borderColor: theme.cardBorder }}
                     onPress={closeModal}
                   >
-                    <Text className="font-bold" style={{ color: theme.text }}>
+                    <Text
+                      className="font-bold"
+                      style={{ color: theme.text, fontSize: scaledSize(13) }}
+                    >
                       Cancel
                     </Text>
                   </TouchableOpacity>
                 )}
+
                 <TouchableOpacity
-                  className="flex-1 h-10 rounded-lg justify-center items-center"
+                  className="flex-1 py-3 rounded-xl items-center"
                   style={{
                     backgroundColor:
                       modalState.type === "unpair" ||
                       modalState.type === "force_unpair" ||
                       modalState.type === "error"
-                        ? "#c62828"
-                        : "#00995e",
+                        ? theme.buttonDangerText
+                        : theme.buttonPrimary,
                   }}
                   onPress={
                     modalState.type === "wifi" || modalState.type === "success"
@@ -540,7 +562,10 @@ export default function DeviceConfigScreen() {
                       : handleConfirm
                   }
                 >
-                  <Text className="text-white font-bold">
+                  <Text
+                    className="font-bold"
+                    style={{ color: "#fff", fontSize: scaledSize(13) }}
+                  >
                     {modalState.type === "wifi" || modalState.type === "success"
                       ? "Okay"
                       : modalState.type === "force_unpair"
@@ -557,16 +582,22 @@ export default function DeviceConfigScreen() {
   );
 }
 
-function InfoItem({ label, value, theme }) {
+function InfoItem({ label, value, theme, scaledSize }) {
   return (
     <View
       className="p-4 flex-row justify-between border-b"
       style={{ borderBottomColor: theme.cardBorder }}
     >
-      <Text className="text-sm" style={{ color: theme.textSecondary }}>
+      <Text
+        className="font-medium"
+        style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+      >
         {label}
       </Text>
-      <Text className="text-sm font-mono" style={{ color: theme.text }}>
+      <Text
+        className="font-mono"
+        style={{ color: theme.text, fontSize: scaledSize(14) }}
+      >
         {value}
       </Text>
     </View>

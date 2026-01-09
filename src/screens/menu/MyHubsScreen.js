@@ -34,15 +34,16 @@ const DEMO_HUBS = [
 
 export default function MyHubsScreen() {
   const navigation = useNavigation();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, fontScale } = useTheme();
 
   const [hubs, setHubs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const scaledSize = (baseSize) => baseSize * (fontScale || 1);
+
   const fetchHubs = async () => {
     setLoading(true);
-
     setTimeout(() => {
       setHubs(DEMO_HUBS);
       setLoading(false);
@@ -82,18 +83,18 @@ export default function MyHubsScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons
             name="arrow-back"
-            size={18}
+            size={scaledSize(20)}
             color={theme.textSecondary}
           />
         </TouchableOpacity>
         <Text
-          className="flex-1 text-center text-base font-bold"
-          style={{ color: theme.text }}
+          className="flex-1 text-center font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(18) }}
         >
           My Hubs
         </Text>
         <TouchableOpacity onPress={() => navigation.navigate("SetupHub")}>
-          <MaterialIcons name="add" size={28} color={theme.primary} />
+          <MaterialIcons name="add" size={scaledSize(28)} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
@@ -118,7 +119,7 @@ export default function MyHubsScreen() {
               <MaterialIcons name="router" size={60} color={theme.cardBorder} />
               <Text
                 className="mt-4 text-center"
-                style={{ color: theme.textSecondary }}
+                style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
               >
                 No hubs connected.
               </Text>
@@ -129,7 +130,7 @@ export default function MyHubsScreen() {
                 key={hub.id}
                 hub={hub}
                 theme={theme}
-                isDarkMode={isDarkMode}
+                scaledSize={scaledSize}
                 navigation={navigation}
               />
             ))
@@ -140,75 +141,23 @@ export default function MyHubsScreen() {
   );
 }
 
-function HubCard({ hub, theme, isDarkMode, navigation }) {
-  const [now, setNow] = useState(Date.now());
+function HubCard({ hub, theme, scaledSize, navigation }) {
+  let isOnline = hub.id === 1;
 
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  let isOnline = false;
-  let diffInSeconds = 0;
-  let timeAgoText = "";
-
-  if (hub.last_seen) {
-    let timeStr = hub.last_seen.replace(" ", "T");
-    if (!timeStr.endsWith("Z") && !timeStr.includes("+")) {
-      timeStr += "Z";
-    }
-
-    const lastSeenMs = new Date(timeStr).getTime();
-    if (!isNaN(lastSeenMs)) {
-      diffInSeconds = (now - lastSeenMs) / 1000;
-
-      isOnline = diffInSeconds < 8 && diffInSeconds > -5;
-
-      if (!isOnline) {
-        let displayDiff = Math.max(1, diffInSeconds - 7);
-
-        if (displayDiff < 60) {
-          timeAgoText = `${Math.floor(displayDiff)}s ago`;
-        } else if (displayDiff < 3600) {
-          timeAgoText = `${Math.floor(displayDiff / 60)}m ago`;
-        } else if (displayDiff < 86400) {
-          timeAgoText = `${Math.floor(displayDiff / 3600)}h ago`;
-        } else {
-          timeAgoText = `${Math.floor(displayDiff / 86400)}d ago`;
-        }
-      }
-    }
-  }
-
-  if (hub.id === 1) {
-    isOnline = true;
-  } else if (hub.id === 2) {
-    isOnline = false;
-    timeAgoText = "2h ago";
-  }
-
-  const deviceCount = hub.devices?.[0]?.count || 0;
-
-  const statusColor = isOnline
-    ? isDarkMode
-      ? "#00ff99"
-      : "#00995e"
-    : isDarkMode
-    ? "#ff4444"
-    : "#c62828";
-
-  const statusBg = isOnline
-    ? isDarkMode
-      ? "rgba(0, 255, 153, 0.1)"
-      : "rgba(0, 153, 94, 0.1)"
-    : isDarkMode
-    ? "rgba(255, 68, 68, 0.1)"
-    : "rgba(198, 40, 40, 0.1)";
+  const statusColor = isOnline ? theme.buttonPrimary : theme.textSecondary;
+  const cardBgColor = isOnline ? `${theme.buttonPrimary}1A` : theme.card;
+  const iconContainerBg = isOnline
+    ? `${theme.buttonPrimary}33`
+    : `${theme.textSecondary}1A`;
 
   return (
     <TouchableOpacity
       className="rounded-2xl p-4 mb-4 border relative"
-      style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}
+      style={{
+        backgroundColor: cardBgColor,
+        borderColor: isOnline ? theme.buttonPrimary : theme.cardBorder,
+        borderWidth: isOnline ? 1.5 : 1,
+      }}
       activeOpacity={0.8}
       onPress={() =>
         navigation.navigate("DeviceConfig", {
@@ -221,11 +170,11 @@ function HubCard({ hub, theme, isDarkMode, navigation }) {
       <View className="flex-row justify-between items-start mb-3">
         <View
           className="w-10 h-10 rounded-xl justify-center items-center"
-          style={{ backgroundColor: statusBg }}
+          style={{ backgroundColor: iconContainerBg }}
         >
           <MaterialIcons
             name={isOnline ? "router" : "wifi-off"}
-            size={24}
+            size={scaledSize(24)}
             color={statusColor}
           />
         </View>
@@ -234,25 +183,16 @@ function HubCard({ hub, theme, isDarkMode, navigation }) {
           <View
             className="px-2 py-1 rounded-md border mb-1"
             style={{
-              backgroundColor: isOnline
-                ? isDarkMode
-                  ? "rgba(0, 255, 153, 0.15)"
-                  : "rgba(0, 153, 94, 0.15)"
-                : isDarkMode
-                ? "rgba(255, 68, 68, 0.15)"
-                : "rgba(198, 40, 40, 0.15)",
-              borderColor: isOnline
-                ? isDarkMode
-                  ? "rgba(0, 255, 153, 0.3)"
-                  : "rgba(0, 153, 94, 0.3)"
-                : isDarkMode
-                ? "rgba(255, 68, 68, 0.3)"
-                : "rgba(198, 40, 40, 0.3)",
+              backgroundColor: isOnline ? theme.buttonPrimary : "transparent",
+              borderColor: statusColor,
             }}
           >
             <Text
-              className="text-[10px] font-bold uppercase"
-              style={{ color: statusColor }}
+              className="font-bold uppercase"
+              style={{
+                color: isOnline ? "#ffffff" : statusColor,
+                fontSize: scaledSize(10),
+              }}
             >
               {isOnline ? "Online" : "Offline"}
             </Text>
@@ -260,64 +200,83 @@ function HubCard({ hub, theme, isDarkMode, navigation }) {
 
           {!isOnline && (
             <Text
-              className="text-[10px] font-medium"
-              style={{ color: theme.textSecondary }}
+              className="font-medium"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
             >
-              Seen {timeAgoText}
+              Seen 2h ago
             </Text>
           )}
         </View>
       </View>
 
       <Text
-        className="text-[15px] font-bold mb-1"
-        style={{ color: theme.text }}
+        className="font-bold mb-1"
+        style={{ color: theme.text, fontSize: scaledSize(16) }}
       >
         {hub.name}
       </Text>
-      <Text className="text-[11px] mb-3" style={{ color: theme.textSecondary }}>
+      <Text
+        style={{
+          color: theme.textSecondary,
+          fontSize: scaledSize(11),
+          marginBottom: 12,
+        }}
+      >
         SN: {hub.serial_number}
       </Text>
 
       <View
         className="flex-row border-t pt-3 mt-1"
-        style={{ borderTopColor: theme.cardBorder }}
+        style={{
+          borderTopColor: isOnline
+            ? `${theme.buttonPrimary}33`
+            : theme.cardBorder,
+        }}
       >
-        <StatCol label="SSID" value={hub.wifi_ssid || "---"} theme={theme} />
-
+        <StatCol
+          label="SSID"
+          value={hub.wifi_ssid || "---"}
+          theme={theme}
+          scaledSize={scaledSize}
+        />
         <StatCol
           label="Signal"
-          value={isOnline ? "Strong" : "Unplugged"}
-          color={statusColor}
+          value={isOnline ? "Strong" : "None"}
+          color={theme.text}
           theme={theme}
+          scaledSize={scaledSize}
         />
-
         <StatCol
           label="Devices"
-          value={`${deviceCount} Linked`}
+          value={`${hub.devices?.[0]?.count || 0} Linked`}
           theme={theme}
+          scaledSize={scaledSize}
         />
       </View>
 
       <View className="absolute bottom-4 right-4">
-        <MaterialIcons name="settings" size={20} color={theme.textSecondary} />
+        <MaterialIcons
+          name="settings"
+          size={scaledSize(20)}
+          color={theme.textSecondary}
+        />
       </View>
     </TouchableOpacity>
   );
 }
 
-function StatCol({ label, value, color, theme }) {
+function StatCol({ label, value, color, theme, scaledSize }) {
   return (
     <View className="flex-1 gap-1">
       <Text
-        className="text-[10px] uppercase font-semibold"
-        style={{ color: theme.textSecondary }}
+        className="uppercase font-semibold"
+        style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
       >
         {label}
       </Text>
       <Text
-        className="text-xs font-medium"
-        style={{ color: color || theme.text }}
+        className="font-medium"
+        style={{ color: color || theme.text, fontSize: scaledSize(12) }}
         numberOfLines={1}
       >
         {value}

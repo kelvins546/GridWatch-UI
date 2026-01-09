@@ -5,7 +5,7 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  Switch,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -15,20 +15,38 @@ import { useTheme } from "../../context/ThemeContext";
 export default function BudgetDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, fontScale } = useTheme();
+
+  const scaledSize = (size) => size * fontScale;
 
   const { deviceName } = route.params || { deviceName: "Air Conditioner" };
 
   const [period, setPeriod] = useState("Monthly");
-  const [limit, setLimit] = useState(2000);
+  const [limit, setLimit] = useState("2000");
   const [autoCutoff, setAutoCutoff] = useState(true);
 
-  const usedAmount = 1450.75;
-  const percentage = Math.min((usedAmount / limit) * 100, 100).toFixed(0);
-  const remaining = Math.max(limit - usedAmount, 0).toFixed(2);
+  const [pushNotifications, setPushNotifications] = useState(true);
 
-  const adjustLimit = (amount) =>
-    setLimit((prev) => Math.max(0, prev + amount));
+  const usedAmount = 1450.75;
+  const numericLimit = parseFloat(limit) || 0;
+
+  const percentage =
+    numericLimit > 0
+      ? Math.min((usedAmount / numericLimit) * 100, 100).toFixed(0)
+      : 100;
+
+  const remaining = Math.max(numericLimit - usedAmount, 0).toFixed(2);
+
+  const adjustLimit = (amount) => {
+    const current = parseFloat(limit) || 0;
+    const next = Math.max(0, current + amount);
+    setLimit(next.toString());
+  };
+
+  const handleLimitChange = (text) => {
+    const cleaned = text.replace(/[^0-9]/g, "");
+    setLimit(cleaned);
+  };
 
   return (
     <SafeAreaView
@@ -41,6 +59,7 @@ export default function BudgetDetailScreen() {
         backgroundColor={theme.background}
       />
 
+      {}
       <View
         className="flex-row items-center justify-between px-6 py-5 border-b"
         style={{
@@ -54,34 +73,35 @@ export default function BudgetDetailScreen() {
         >
           <MaterialIcons
             name="arrow-back"
-            size={18}
+            size={scaledSize(18)}
             color={theme.textSecondary}
           />
           <Text
-            className="text-sm font-medium"
-            style={{ color: theme.textSecondary }}
-          >
-            Back
-          </Text>
+            className="font-medium"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+          ></Text>
         </TouchableOpacity>
-        <Text className="text-base font-bold" style={{ color: theme.text }}>
+        <Text
+          className="font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(16) }}
+        >
           {deviceName}
         </Text>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text
-            className="text-sm font-semibold"
-            style={{ color: theme.primary }}
+            className="font-bold"
+            style={{ color: theme.buttonPrimary, fontSize: scaledSize(14) }}
           >
             Save
           </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView>
+      <ScrollView showsVerticalScrollIndicator={false}>
         <View className="p-6">
           <Text
-            className="text-[11px] font-bold uppercase tracking-widest mb-3"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
           >
             Budget Period
           </Text>
@@ -106,9 +126,10 @@ export default function BudgetDetailScreen() {
                 onPress={() => setPeriod(item)}
               >
                 <Text
-                  className="text-xs font-semibold"
+                  className="font-semibold"
                   style={{
                     color: period === item ? theme.text : theme.textSecondary,
+                    fontSize: scaledSize(12),
                   }}
                 >
                   {item}
@@ -118,8 +139,8 @@ export default function BudgetDetailScreen() {
           </View>
 
           <Text
-            className="text-[11px] font-bold uppercase tracking-widest mb-3"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
           >
             Set Limit (Pesos)
           </Text>
@@ -135,42 +156,63 @@ export default function BudgetDetailScreen() {
               style={{ backgroundColor: isDarkMode ? "#333" : "#eee" }}
               onPress={() => adjustLimit(-100)}
             >
-              <MaterialIcons name="remove" size={24} color={theme.text} />
+              <MaterialIcons
+                name="remove"
+                size={scaledSize(24)}
+                color={theme.text}
+              />
             </TouchableOpacity>
 
-            <Text
-              className="text-[28px] font-bold"
-              style={{ color: theme.text }}
-            >
-              ₱ {limit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </Text>
+            <View className="flex-row items-center">
+              <Text
+                className="font-bold mr-1"
+                style={{ color: theme.text, fontSize: scaledSize(28) }}
+              >
+                ₱
+              </Text>
+              <TextInput
+                value={limit}
+                onChangeText={handleLimitChange}
+                keyboardType="numeric"
+                className="font-bold text-center"
+                style={{
+                  color: theme.text,
+                  fontSize: scaledSize(28),
+                  minWidth: 80,
+                }}
+                maxLength={6}
+              />
+            </View>
 
             <TouchableOpacity
               className="w-10 h-10 rounded-full items-center justify-center"
               style={{ backgroundColor: isDarkMode ? "#333" : "#eee" }}
               onPress={() => adjustLimit(100)}
             >
-              <MaterialIcons name="add" size={24} color={theme.text} />
+              <MaterialIcons
+                name="add"
+                size={scaledSize(24)}
+                color={theme.text}
+              />
             </TouchableOpacity>
           </View>
 
           <Text
-            className="text-[11px] font-bold uppercase tracking-widest mb-3"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
           >
             Current Usage Status
           </Text>
           <View className="mb-8">
             <View className="flex-row justify-between mb-2">
               <Text
-                className="text-[13px]"
-                style={{ color: theme.textSecondary }}
+                style={{ color: theme.textSecondary, fontSize: scaledSize(13) }}
               >
                 Used: ₱ {usedAmount.toLocaleString()}
               </Text>
               <Text
-                className="text-[13px] font-bold"
-                style={{ color: theme.primary }}
+                className="font-bold"
+                style={{ color: theme.buttonPrimary, fontSize: scaledSize(13) }}
               >
                 {percentage}%
               </Text>
@@ -184,21 +226,19 @@ export default function BudgetDetailScreen() {
                 className="h-full"
                 style={{
                   width: `${percentage}%`,
-                  backgroundColor: theme.primary,
+                  backgroundColor: theme.buttonPrimary,
                 }}
               />
             </View>
 
             <View className="flex-row justify-between">
               <Text
-                className="text-[11px]"
-                style={{ color: theme.textSecondary }}
+                style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
               >
                 Remaining: ₱ {remaining}
               </Text>
               <Text
-                className="text-[11px]"
-                style={{ color: theme.textSecondary }}
+                style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
               >
                 Resets in: 12 Days
               </Text>
@@ -206,8 +246,8 @@ export default function BudgetDetailScreen() {
           </View>
 
           <Text
-            className="text-[11px] font-bold uppercase tracking-widest mb-3"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
           >
             Automation Rules
           </Text>
@@ -216,19 +256,19 @@ export default function BudgetDetailScreen() {
             title="Auto-Cutoff Power"
             desc="If limit is reached, automatically turn off the device to save cost."
             value={autoCutoff}
-            onToggle={setAutoCutoff}
+            onToggle={() => setAutoCutoff(!autoCutoff)}
             theme={theme}
-            isDarkMode={isDarkMode}
+            scaledSize={scaledSize}
           />
 
           <RuleItem
             title="Push Notifications"
             desc="Receive alerts when usage hits 80%, 90%, and 100% of limit."
-            value={true}
-            onToggle={() => {}}
-            disabled={true}
+            value={pushNotifications}
+            onToggle={() => setPushNotifications(!pushNotifications)}
+            disabled={false}
             theme={theme}
-            isDarkMode={isDarkMode}
+            scaledSize={scaledSize}
           />
         </View>
       </ScrollView>
@@ -243,48 +283,77 @@ function RuleItem({
   onToggle,
   disabled,
   theme,
-  isDarkMode,
+  scaledSize,
 }) {
   return (
     <View
       className="flex-row items-center justify-between p-4 rounded-2xl mb-3"
       style={{
         backgroundColor: theme.card,
-        opacity: disabled ? 0.8 : 1,
+        opacity: disabled ? 0.7 : 1,
       }}
     >
       <View className="flex-1 mr-4">
         <Text
-          className="text-sm font-semibold mb-1"
-          style={{ color: theme.text }}
+          className="font-semibold mb-1"
+          style={{ color: theme.text, fontSize: scaledSize(14) }}
         >
           {title}{" "}
           {disabled && (
             <Text
-              className="text-[10px] font-bold"
-              style={{ color: theme.primary }}
+              className="font-bold"
+              style={{ color: theme.buttonPrimary, fontSize: scaledSize(10) }}
             >
               (Always On)
             </Text>
           )}
         </Text>
         <Text
-          className="text-[11px] leading-4"
-          style={{ color: theme.textSecondary }}
+          className="leading-4"
+          style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
         >
           {desc}
         </Text>
       </View>
-      <Switch
-        disabled={disabled}
-        trackColor={{
-          false: "#767577",
-          true: isDarkMode ? "rgba(0, 255, 153, 0.2)" : "rgba(0, 153, 94, 0.2)",
-        }}
-        thumbColor={value ? theme.primary : "#f4f3f4"}
-        onValueChange={onToggle}
+
+      {}
+      <CustomSwitch
         value={value}
+        onToggle={disabled ? null : onToggle}
+        theme={theme}
       />
     </View>
+  );
+}
+
+function CustomSwitch({ value, onToggle, theme }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onToggle}
+      style={{
+        width: 42,
+        height: 26,
+        borderRadius: 16,
+        backgroundColor: value ? theme.buttonPrimary : theme.buttonNeutral,
+        padding: 2,
+        justifyContent: "center",
+        alignItems: value ? "flex-end" : "flex-start",
+      }}
+    >
+      <View
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          backgroundColor: "#FFFFFF",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 2.5,
+          elevation: 2,
+        }}
+      />
+    </TouchableOpacity>
   );
 }
