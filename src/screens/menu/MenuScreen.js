@@ -15,7 +15,8 @@ import { useTheme } from "../../context/ThemeContext";
 
 export default function MenuScreen() {
   const navigation = useNavigation();
-  const { theme, isDarkMode, fontScale } = useTheme();
+  // Added isAdvancedMode to the destructuring
+  const { theme, isDarkMode, fontScale, isAdvancedMode } = useTheme();
 
   const scaledSize = (size) => size * fontScale;
 
@@ -76,7 +77,7 @@ export default function MenuScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
+      {/* Close Button */}
       <View className="px-6 pt-5 pb-2.5 items-end">
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons
@@ -87,7 +88,7 @@ export default function MenuScreen() {
         </TouchableOpacity>
       </View>
 
-      {}
+      {/* Profile Header */}
       <View
         className="flex-row items-center px-6 pb-8 border-b gap-4 mb-4"
         style={{ borderBottomColor: theme.cardBorder }}
@@ -144,7 +145,7 @@ export default function MenuScreen() {
             Device Management
           </Text>
 
-          {}
+          {/* My Hubs - Always Visible */}
           <SettingsRow
             icon="router"
             title="My Hubs"
@@ -154,27 +155,31 @@ export default function MenuScreen() {
             scaledSize={scaledSize}
           />
 
-          {}
-          <SettingsRow
-            icon="people"
-            title="Family Access"
-            subtitle="Manage shared users"
-            onPress={() => navigation.navigate("FamilyAccess")}
-            theme={theme}
-            scaledSize={scaledSize}
-          />
+          {/* Family Access - Hidden in Simple Mode */}
+          {isAdvancedMode && (
+            <SettingsRow
+              icon="people"
+              title="Family Access"
+              subtitle="Manage shared users"
+              onPress={() => navigation.navigate("FamilyAccess")}
+              theme={theme}
+              scaledSize={scaledSize}
+            />
+          )}
 
-          {}
-          <SettingsRow
-            icon="mail-outline"
-            title="Invitations"
-            subtitle="Send access invites"
-            onPress={() => navigation.navigate("Invitations")}
-            theme={theme}
-            scaledSize={scaledSize}
-          />
+          {/* Invitations - Hidden in Simple Mode */}
+          {isAdvancedMode && (
+            <SettingsRow
+              icon="mail-outline"
+              title="Invitations"
+              subtitle="Review recieved invites"
+              onPress={() => navigation.navigate("Invitations")}
+              theme={theme}
+              scaledSize={scaledSize}
+            />
+          )}
 
-          {}
+          {/* Add New Device - Always Visible */}
           <SettingsRow
             icon="add-circle-outline"
             title="Add New Device"
@@ -198,7 +203,7 @@ export default function MenuScreen() {
             App Settings
           </Text>
 
-          {}
+          {/* Account Settings */}
           <SettingsRow
             icon="settings"
             title="Account Settings"
@@ -208,7 +213,7 @@ export default function MenuScreen() {
             scaledSize={scaledSize}
           />
 
-          {}
+          {/* Notifications */}
           <SettingsRow
             icon="notifications-none"
             title="Notifications"
@@ -218,7 +223,7 @@ export default function MenuScreen() {
             scaledSize={scaledSize}
           />
 
-          {}
+          {/* Version Info */}
           <View
             className="mt-8 border-t pt-6 items-center"
             style={{ borderTopColor: theme.cardBorder }}

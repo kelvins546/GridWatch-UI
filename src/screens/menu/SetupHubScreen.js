@@ -17,16 +17,20 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
 const { width } = Dimensions.get("window");
 
 export default function SetupHubScreen() {
   const navigation = useNavigation();
+  const route = useRoute(); // Access params
   const { theme, fontScale } = useTheme();
 
   const scaledSize = (size) => size * fontScale;
+
+  // Detect if user came from Signup flow
+  const fromSignup = route.params?.fromSignup;
 
   useEffect(() => {
     LogBox.ignoreLogs([
@@ -43,6 +47,7 @@ export default function SetupHubScreen() {
   const [isPairing, setIsPairing] = useState(false);
   const [statusStep, setStatusStep] = useState("");
 
+  // Generic Alert State
   const [alertConfig, setAlertConfig] = useState({
     visible: false,
     title: "",
@@ -51,12 +56,31 @@ export default function SetupHubScreen() {
     onPress: null,
   });
 
+  // Logout Confirmation Modal State
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+
   const handleBack = () => {
+    // If coming from Signup, warn them about logging out
+    if (fromSignup) {
+      setLogoutModalVisible(true);
+      return;
+    }
+
+    // Normal Back Behavior
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
       navigation.replace("MainApp");
     }
+  };
+
+  const handleConfirmLogout = () => {
+    setLogoutModalVisible(false);
+    // Redirect to Login and clear history
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Login" }],
+    });
   };
 
   const showAlert = (title, message, type = "error", onPress = null) => {
@@ -117,6 +141,79 @@ export default function SetupHubScreen() {
     }, 2500);
   };
 
+  // --- STANDARD MODAL STYLES ---
+  const styles = StyleSheet.create({
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.8)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContainer: {
+      borderWidth: 1,
+      padding: 20, // p-5
+      borderRadius: 16, // rounded-2xl
+      width: 288, // w-72
+      alignItems: "center",
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+    },
+    modalTitle: {
+      fontWeight: "bold",
+      marginBottom: 8, // mb-2
+      textAlign: "center",
+      color: theme.text,
+      fontSize: scaledSize(18),
+    },
+    modalBody: {
+      textAlign: "center",
+      marginBottom: 24, // mb-6
+      lineHeight: 20, // leading-5
+      color: theme.textSecondary,
+      fontSize: scaledSize(12),
+    },
+    // Button Container for Decision Modals
+    buttonRow: {
+      flexDirection: "row",
+      gap: 10, // gap-2.5
+      width: "100%",
+    },
+    // Standard Cancel Button
+    modalCancelBtn: {
+      flex: 1,
+      height: 40, // h-10
+      borderRadius: 12, // rounded-xl
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: theme.textSecondary,
+    },
+    // Standard Confirm Button
+    modalConfirmBtn: {
+      flex: 1,
+      height: 40, // h-10
+      borderRadius: 12, // rounded-xl
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.buttonDangerText, // Red for logout/cancel flow
+      overflow: "hidden",
+    },
+    // Generic Full Width Button
+    modalButtonFull: {
+      width: "100%",
+      height: 40,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalButtonText: {
+      fontWeight: "bold",
+      fontSize: scaledSize(12),
+      textTransform: "uppercase",
+      letterSpacing: 1,
+    },
+  });
+
   return (
     <SafeAreaView
       className="flex-1"
@@ -128,7 +225,6 @@ export default function SetupHubScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
       <View
         className="flex-row items-center justify-between px-6 py-5 border-b"
         style={{
@@ -149,7 +245,7 @@ export default function SetupHubScreen() {
             className="font-medium ml-1"
             style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
           >
-            Back
+            {fromSignup ? "Cancel Setup" : "Back"}
           </Text>
         </TouchableOpacity>
         <Text
@@ -181,19 +277,19 @@ export default function SetupHubScreen() {
             <View
               className="p-5 rounded-2xl border mb-5"
               style={{
-                backgroundColor: `${theme.buttonPrimary}10`,
-                borderColor: `${theme.buttonPrimary}30`,
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
               }}
             >
               <View className="flex-row gap-3 mb-2.5">
                 <View
                   className="w-9 h-9 rounded-full justify-center items-center"
-                  style={{ backgroundColor: theme.buttonPrimary }}
+                  style={{ backgroundColor: theme.buttonNeutral }}
                 >
                   <MaterialIcons
                     name="wifi-tethering"
                     size={scaledSize(20)}
-                    color="#fff"
+                    color={theme.buttonPrimary}
                   />
                 </View>
                 <View className="flex-1">
@@ -217,8 +313,11 @@ export default function SetupHubScreen() {
               </View>
 
               <View
-                className="p-4 rounded-xl my-4"
-                style={{ backgroundColor: theme.background }}
+                className="p-4 rounded-xl my-4 border border-dashed"
+                style={{
+                  backgroundColor: theme.background,
+                  borderColor: theme.cardBorder,
+                }}
               >
                 <Text
                   className="mb-2 leading-5"
@@ -287,7 +386,6 @@ export default function SetupHubScreen() {
               Hub so it can get online.
             </Text>
 
-            {}
             <View className="mb-5">
               <Text
                 className="font-semibold mb-2"
@@ -324,7 +422,6 @@ export default function SetupHubScreen() {
               </View>
             </View>
 
-            {}
             <View className="mb-5">
               <Text
                 className="font-semibold mb-2"
@@ -382,7 +479,55 @@ export default function SetupHubScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {}
+      {/* --- CONFIRM LOGOUT MODAL --- */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={logoutModalVisible}
+        onRequestClose={() => setLogoutModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Cancel Setup?</Text>
+            <Text style={styles.modalBody}>
+              If you continue, you will be logged out and your progress will be
+              lost.
+            </Text>
+
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setLogoutModalVisible(false)}
+              >
+                <Text
+                  style={[
+                    styles.modalButtonText,
+                    { color: theme.text }, // Cancel text is usually themed color
+                  ]}
+                >
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalConfirmBtn}
+                onPress={handleConfirmLogout}
+              >
+                <Text
+                  style={[
+                    styles.modalButtonText,
+                    { color: "#fff" }, // Confirm text is white
+                  ]}
+                >
+                  Logout
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- SCANNING MODAL (FULL SCREEN EXCEPTION) --- */}
       <Modal visible={isScanning} animationType="slide">
         <View className="flex-1 bg-black">
           <SafeAreaView edges={["top"]} className="bg-black z-20">
@@ -460,7 +605,7 @@ export default function SetupHubScreen() {
         </View>
       </Modal>
 
-      {}
+      {/* --- PAIRING SPINNER (FULL SCREEN EXCEPTION) --- */}
       <Modal transparent visible={isPairing}>
         <View className="flex-1 justify-center items-center bg-black/80">
           <View
@@ -478,74 +623,29 @@ export default function SetupHubScreen() {
         </View>
       </Modal>
 
-      {}
+      {/* --- STANDARD ALERT MODAL --- */}
       <Modal transparent visible={alertConfig.visible} animationType="fade">
-        <View className="flex-1 justify-center items-center bg-black/60">
-          <View
-            className="w-[280px] p-6 rounded-[20px] border items-center shadow-lg"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
-          >
-            <View
-              className="w-12 h-12 rounded-full justify-center items-center mb-4"
-              style={{
-                backgroundColor:
-                  alertConfig.type === "success"
-                    ? `${theme.buttonPrimary}1A`
-                    : alertConfig.type === "warning"
-                    ? "rgba(255, 165, 0, 0.1)"
-                    : "rgba(255, 68, 68, 0.1)",
-              }}
-            >
-              <MaterialIcons
-                name={
-                  alertConfig.type === "success"
-                    ? "check"
-                    : alertConfig.type === "warning"
-                    ? "wifi-off"
-                    : "priority-high"
-                }
-                size={scaledSize(28)}
-                color={
-                  alertConfig.type === "success"
-                    ? theme.buttonPrimary
-                    : alertConfig.type === "warning"
-                    ? "#FFA500"
-                    : "#ff4444"
-                }
-              />
-            </View>
-
-            <Text
-              className="font-bold mb-2 text-center"
-              style={{ color: theme.text, fontSize: scaledSize(18) }}
-            >
-              {alertConfig.title}
-            </Text>
-
-            <Text
-              className="text-center mb-6 leading-5"
-              style={{ color: theme.textSecondary, fontSize: scaledSize(13) }}
-            >
-              {alertConfig.message}
-            </Text>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {/* Standard Alert has No Icon now */}
+            <Text style={styles.modalTitle}>{alertConfig.title}</Text>
+            <Text style={styles.modalBody}>{alertConfig.message}</Text>
 
             <TouchableOpacity
               onPress={closeAlert}
-              className="w-full py-3 rounded-xl items-center"
-              style={{
-                backgroundColor: theme.buttonPrimary,
-              }}
+              style={[
+                styles.modalButtonFull,
+                {
+                  backgroundColor:
+                    alertConfig.type === "success"
+                      ? theme.buttonPrimary
+                      : alertConfig.type === "warning"
+                      ? "#FFA500"
+                      : theme.buttonDangerText,
+                },
+              ]}
             >
-              <Text
-                className="font-bold tracking-widest uppercase"
-                style={{
-                  color: "#fff",
-                  fontSize: scaledSize(12),
-                }}
-              >
+              <Text style={[styles.modalButtonText, { color: "#fff" }]}>
                 {alertConfig.type === "success" ? "CONTINUE" : "OKAY"}
               </Text>
             </TouchableOpacity>

@@ -36,7 +36,8 @@ const checkPasswordStrength = (str) => {
 
 export default function SignupScreen() {
   const navigation = useNavigation();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, fontScale } = useTheme();
+  const scaledSize = (size) => size * fontScale;
 
   const [currentStep, setCurrentStep] = useState(0);
 
@@ -63,7 +64,9 @@ export default function SignupScreen() {
 
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [generatedOtp, setGeneratedOtp] = useState(null);
-  const [timer, setTimer] = useState(120);
+
+  // 3 Minute Timer (180s)
+  const [timer, setTimer] = useState(180);
   const [canResend, setCanResend] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -256,7 +259,7 @@ export default function SignupScreen() {
       setIsLoading(false);
       setGeneratedOtp("123456");
       setOtpModalVisible(true);
-      setTimer(120);
+      setTimer(180);
       setCanResend(false);
       setOtp(["", "", "", "", "", ""]);
     }, 1500);
@@ -283,7 +286,8 @@ export default function SignupScreen() {
     setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
-      navigation.navigate("SetupHub");
+      // --- FIX IS HERE: Passing the flag ---
+      navigation.navigate("SetupHub", { fromSignup: true });
     }, 1500);
   };
 
@@ -291,7 +295,7 @@ export default function SignupScreen() {
     setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
-      setTimer(120);
+      setTimer(180);
       setCanResend(false);
     }, 1000);
   };
@@ -330,6 +334,91 @@ export default function SignupScreen() {
     return "100%";
   };
 
+  // --- STYLES ---
+  const styles = StyleSheet.create({
+    // Standard Design System Modal Styles
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.8)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContainer: {
+      borderWidth: 1,
+      padding: 20, // p-5
+      borderRadius: 16, // rounded-2xl
+      width: 288, // w-72 (Design System)
+      alignItems: "center",
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+    },
+    // OTP Modal Exception (Wider for inputs)
+    otpModalContainer: {
+      borderWidth: 1,
+      padding: 24,
+      borderRadius: 20,
+      width: "85%",
+      maxWidth: 340,
+      alignItems: "center",
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+    },
+    modalTitle: {
+      fontWeight: "bold",
+      marginBottom: 8,
+      textAlign: "center",
+      color: theme.text,
+      fontSize: scaledSize(18),
+    },
+    modalBody: {
+      textAlign: "center",
+      marginBottom: 24, // mb-6 (Design System)
+      lineHeight: 20,
+      color: theme.textSecondary,
+      fontSize: scaledSize(12),
+    },
+    // Standard Button Style (h-10, rounded-xl)
+    modalButton: {
+      width: "100%",
+      height: 40,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: theme.textSecondary,
+    },
+    modalButtonPrimary: {
+      width: "100%",
+      height: 40,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.buttonPrimary,
+    },
+    modalButtonDanger: {
+      width: "100%",
+      height: 40,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.buttonDangerText,
+    },
+    // OTP Specific Inputs
+    otpInput: {
+      width: 42,
+      height: 50,
+      borderRadius: 10,
+      textAlign: "center",
+      fontSize: scaledSize(20),
+      fontWeight: "bold",
+      borderWidth: 1,
+      backgroundColor: theme.buttonNeutral,
+      borderColor: theme.cardBorder,
+      color: theme.text,
+      marginHorizontal: 1,
+    },
+  });
+
   return (
     <SafeAreaView
       className="flex-1"
@@ -363,7 +452,7 @@ export default function SignupScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View className="mt-8">
-            {}
+            {/* Header */}
             <View className="mb-6">
               <Text
                 className="text-[28px] font-extrabold mb-1"
@@ -389,7 +478,7 @@ export default function SignupScreen() {
               </View>
             </View>
 
-            {}
+            {/* STEP 1 */}
             {currentStep === 0 && (
               <View>
                 <InputGroup
@@ -400,6 +489,7 @@ export default function SignupScreen() {
                   onChangeText={(t) => handleChange("firstName", t)}
                   error={touched.firstName && errors.firstName}
                   theme={theme}
+                  scaledSize={scaledSize}
                 />
 
                 <InputGroup
@@ -410,6 +500,7 @@ export default function SignupScreen() {
                   onChangeText={(t) => handleChange("lastName", t)}
                   error={touched.lastName && errors.lastName}
                   theme={theme}
+                  scaledSize={scaledSize}
                 />
 
                 <View className="flex-row gap-3 mt-4">
@@ -455,7 +546,7 @@ export default function SignupScreen() {
               </View>
             )}
 
-            {}
+            {/* STEP 2 */}
             {currentStep === 1 && (
               <View>
                 <InputGroup
@@ -466,6 +557,7 @@ export default function SignupScreen() {
                   onChangeText={(t) => handleChange("region", t)}
                   error={touched.region && errors.region}
                   theme={theme}
+                  scaledSize={scaledSize}
                 />
 
                 <View className="flex-row gap-3">
@@ -478,6 +570,7 @@ export default function SignupScreen() {
                       onChangeText={(t) => handleChange("city", t)}
                       error={touched.city && errors.city}
                       theme={theme}
+                      scaledSize={scaledSize}
                     />
                   </View>
                   <View className="flex-[0.6]">
@@ -491,6 +584,7 @@ export default function SignupScreen() {
                       maxLength={4}
                       keyboardType="number-pad"
                       theme={theme}
+                      scaledSize={scaledSize}
                     />
                   </View>
                 </View>
@@ -504,6 +598,7 @@ export default function SignupScreen() {
                   error={touched.fullAddress && errors.fullAddress}
                   maxLength={MAX_ADDRESS_LENGTH}
                   theme={theme}
+                  scaledSize={scaledSize}
                 />
 
                 <View className="flex-row gap-3 mt-4">
@@ -549,7 +644,7 @@ export default function SignupScreen() {
               </View>
             )}
 
-            {}
+            {/* STEP 3 */}
             {currentStep === 2 && (
               <View>
                 <InputGroup
@@ -560,6 +655,7 @@ export default function SignupScreen() {
                   onChangeText={(t) => handleChange("email", t)}
                   error={touched.email && errors.email}
                   theme={theme}
+                  scaledSize={scaledSize}
                 />
                 <InputGroup
                   label="Password"
@@ -572,6 +668,7 @@ export default function SignupScreen() {
                   onChangeText={(t) => handleChange("password", t)}
                   error={touched.password && errors.password}
                   theme={theme}
+                  scaledSize={scaledSize}
                 />
                 <InputGroup
                   label="Confirm Password"
@@ -584,6 +681,7 @@ export default function SignupScreen() {
                   onChangeText={(t) => handleChange("confirmPassword", t)}
                   error={touched.confirmPassword && errors.confirmPassword}
                   theme={theme}
+                  scaledSize={scaledSize}
                 />
 
                 {password.length > 0 && (
@@ -641,7 +739,7 @@ export default function SignupScreen() {
                   </View>
                 )}
 
-                {}
+                {/* Terms Agreement Link */}
                 <View className="mb-6 mt-2">
                   <View className="flex-row flex-wrap items-center justify-center">
                     <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
@@ -663,7 +761,7 @@ export default function SignupScreen() {
                       .
                     </Text>
                   </View>
-                  {}
+                  {/* Status Indicator */}
                   <View className="flex-row justify-center items-center mt-2">
                     <MaterialIcons
                       name={
@@ -692,7 +790,7 @@ export default function SignupScreen() {
                   </View>
                 </View>
 
-                {}
+                {/* Final Buttons */}
                 <View className="flex-row gap-3">
                   <TouchableOpacity
                     onPress={handleBackStep}
@@ -755,7 +853,7 @@ export default function SignupScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {}
+      {/* Terms Modal (UNCHANGED) */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -848,7 +946,7 @@ export default function SignupScreen() {
               </Text>
             </ScrollView>
 
-            {}
+            {/* Terms Footer */}
             <View
               className="p-5 border-t"
               style={{
@@ -897,7 +995,7 @@ export default function SignupScreen() {
         </View>
       </Modal>
 
-      {}
+      {/* OTP Modal (Exception Style) */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -905,48 +1003,28 @@ export default function SignupScreen() {
         onRequestClose={() => setOtpModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalCard,
-              {
-                width: "85%",
-                maxWidth: 300,
-                paddingVertical: 20,
-                backgroundColor: theme.card,
-                borderColor: theme.cardBorder,
-              },
-            ]}
-          >
-            <View
-              className="w-12 h-12 rounded-full items-center justify-center mb-4"
-              style={{ backgroundColor: theme.buttonNeutral }}
-            >
-              <MaterialIcons
-                name="mark-email-read"
-                size={24}
-                color={theme.buttonPrimary}
-              />
-            </View>
-            <Text style={[styles.modalTitleSmall, { color: theme.text }]}>
-              Verify Email
-            </Text>
-            <Text
-              style={[styles.modalDescSmall, { color: theme.textSecondary }]}
-            >
-              Enter the code sent to your email.
+          <View style={styles.otpModalContainer}>
+            <Text style={styles.modalTitle}>Verify Email</Text>
+            {/* UPDATED: Informational Text */}
+            <Text style={styles.modalBody}>
+              We have sent a verification code to your email address. Please
+              enter the 6-digit code below to complete your registration.
             </Text>
 
-            <View className="flex-row gap-2 mb-6">
+            {/* UPDATED: Reduced Gap */}
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 1,
+                marginBottom: 20,
+                justifyContent: "center",
+              }}
+            >
               {otp.map((digit, index) => (
                 <TextInput
                   key={index}
                   ref={(ref) => (inputRefs.current[index] = ref)}
-                  className="w-10 h-12 rounded-lg text-center text-lg font-bold border"
-                  style={{
-                    backgroundColor: theme.buttonNeutral,
-                    borderColor: theme.cardBorder,
-                    color: theme.text,
-                  }}
+                  style={styles.otpInput}
                   maxLength={1}
                   keyboardType="number-pad"
                   value={digit}
@@ -956,50 +1034,64 @@ export default function SignupScreen() {
                 />
               ))}
             </View>
-            <TouchableOpacity className="w-full mb-3" onPress={handleVerifyOtp}>
+
+            <TouchableOpacity
+              onPress={handleVerifyOtp}
+              style={{ width: "100%", marginBottom: 12 }}
+            >
               <View
-                style={[
-                  styles.modalBtnSmall,
-                  { backgroundColor: theme.buttonPrimary },
-                ]}
+                style={{
+                  height: 40,
+                  borderRadius: 12,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: theme.buttonPrimary,
+                }}
               >
                 <Text
-                  style={[
-                    styles.btnTextBlack,
-                    { color: theme.buttonPrimaryText },
-                  ]}
+                  style={{
+                    color: theme.buttonPrimaryText,
+                    fontWeight: "bold",
+                    fontSize: scaledSize(12),
+                  }}
                 >
                   VERIFY
                 </Text>
               </View>
             </TouchableOpacity>
-            <View className="flex-row items-center mb-4">
-              <Text className="text-xs" style={{ color: theme.textSecondary }}>
-                Didn't receive code?{" "}
-              </Text>
+
+            <View style={{ width: "100%", alignItems: "center", gap: 12 }}>
               <TouchableOpacity disabled={!canResend} onPress={handleResend}>
                 <Text
-                  className="text-xs font-bold"
                   style={{
+                    fontSize: scaledSize(12),
+                    fontWeight: "bold",
                     color: canResend
                       ? theme.buttonPrimary
                       : theme.textSecondary,
                   }}
                 >
-                  {canResend ? "Resend" : `Resend in ${formatTime(timer)}`}
+                  {canResend ? "Resend Code" : `Resend in ${formatTime(timer)}`}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setOtpModalVisible(false)}>
+                <Text
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(12),
+                    textDecorationLine: "underline",
+                  }}
+                >
+                  Cancel
                 </Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => setOtpModalVisible(false)}>
-              <Text className="text-xs" style={{ color: theme.textSecondary }}>
-                Cancel
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {}
+      {/* Standard Error/Success Modal */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -1009,34 +1101,10 @@ export default function SignupScreen() {
         }}
       >
         <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalCard,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            ]}
-          >
-            <MaterialIcons
-              name={
-                modalConfig.type === "success"
-                  ? "check-circle"
-                  : "error-outline"
-              }
-              size={40}
-              color={
-                modalConfig.type === "success"
-                  ? theme.buttonPrimary
-                  : theme.buttonDangerText
-              }
-              style={{ marginBottom: 15 }}
-            />
-            <Text style={[styles.modalTitleSmall, { color: theme.text }]}>
-              {modalConfig.title}
-            </Text>
-            <Text
-              style={[styles.modalDescSmall, { color: theme.textSecondary }]}
-            >
-              {modalConfig.message}
-            </Text>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>{modalConfig.title}</Text>
+            <Text style={styles.modalBody}>{modalConfig.message}</Text>
+
             <TouchableOpacity
               style={{ width: "100%" }}
               onPress={() => {
@@ -1046,9 +1114,13 @@ export default function SignupScreen() {
             >
               <View
                 style={[
-                  styles.modalBtnSmall,
+                  styles.modalButton,
                   {
                     backgroundColor:
+                      modalConfig.type === "success"
+                        ? theme.buttonPrimary
+                        : theme.buttonDangerText,
+                    borderColor:
                       modalConfig.type === "success"
                         ? theme.buttonPrimary
                         : theme.buttonDangerText,
@@ -1056,15 +1128,11 @@ export default function SignupScreen() {
                 ]}
               >
                 <Text
-                  style={[
-                    styles.btnTextBlack,
-                    {
-                      color:
-                        modalConfig.type === "success"
-                          ? theme.buttonPrimaryText
-                          : "#ffffff",
-                    },
-                  ]}
+                  style={{
+                    color: "#fff",
+                    fontWeight: "bold",
+                    fontSize: scaledSize(12),
+                  }}
                 >
                   {modalConfig.type === "success" ? "CONTINUE" : "TRY AGAIN"}
                 </Text>
@@ -1090,6 +1158,7 @@ function InputGroup({
   maxLength,
   keyboardType,
   theme,
+  scaledSize,
 }) {
   return (
     <View className="mb-3">
@@ -1111,7 +1180,7 @@ function InputGroup({
         <MaterialIcons
           name={icon}
           size={20}
-          color={theme.textSecondary}
+          color={error ? theme.buttonDangerText : theme.textSecondary}
           style={{ marginRight: 10 }}
         />
         <TextInput
@@ -1177,45 +1246,3 @@ function RequirementRow({ met, text, theme }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.85)",
-  },
-  modalCard: {
-    width: "75%",
-    maxWidth: 280,
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    borderRadius: 18,
-    alignItems: "center",
-    borderWidth: 1,
-  },
-  modalTitleSmall: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  modalDescSmall: {
-    fontSize: 13,
-    textAlign: "center",
-    marginBottom: 20,
-    lineHeight: 18,
-  },
-  modalBtnSmall: {
-    padding: 12,
-    borderRadius: 10,
-    alignItems: "center",
-    width: "100%",
-  },
-  btnTextBlack: {
-    fontWeight: "700",
-    fontSize: 13,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-});

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,37 +7,48 @@ import {
   StatusBar,
   Image,
   Linking,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
+// Enable LayoutAnimation for Android
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 const TEAM_MEMBERS = [
   {
     name: "Kelvin Arnold E. Manalad",
     role: "Project Manager / Full Stack Dev",
-    image: null, // require('../../assets/kelvin.png')
+    image: require("../../../assets/kelvin.png"),
   },
   {
     name: "Natasha Pearl Alonzo",
-    role: "Documentation",
-    image: null, // require('../../assets/natasha.png')
+    role: "Hardware Specialist/ Documentation",
+    image: null, // require('../../../assets/natasha.png')
   },
   {
     name: "Leo Carlo C. Atay",
     role: "Frontend Dev/ Hardware Specialist",
-    image: null, // require('../../assets/leo.png')
+    image: null, // require('../../../assets/leo.png')
   },
   {
     name: "Cielo P. Cortado",
     role: "UI/UX Designer/Documentation",
-    image: null, // require('../../assets/cielo.png')
+    image: null, // require('../../../assets/cielo.png')
   },
   {
     name: "Francis Gian N. Felipe",
     role: "UI/UX Designer/Documentation",
-    image: null, // require('../../assets/francis.png')
+    image: require("../../../assets/francis.png"),
   },
 ];
 
@@ -48,10 +59,20 @@ export default function AboutUsScreen() {
   // Helper for font scaling
   const scaledSize = (size) => size * fontScale;
 
+  // Track which card is expanded (by index)
+  const [expandedIndex, setExpandedIndex] = useState(null);
+
   const handleLinkPress = (url) => {
     Linking.openURL(url).catch((err) =>
       console.error("An error occurred", err)
     );
+  };
+
+  const toggleExpand = (index) => {
+    // Configure smooth animation
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    // Toggle: if clicking same index, close it. Else, open new index.
+    setExpandedIndex(expandedIndex === index ? null : index);
   };
 
   return (
@@ -137,64 +158,131 @@ export default function AboutUsScreen() {
           </Text>
 
           <View className="gap-3 mb-8">
-            {TEAM_MEMBERS.map((member, index) => (
-              <View
-                key={index}
-                className="flex-row items-center p-4 rounded-xl border"
-                style={{
-                  backgroundColor: theme.card,
-                  borderColor: theme.cardBorder,
-                }}
-              >
-                {/* Image Slot */}
-                <View
-                  className="w-12 h-12 rounded-full overflow-hidden mr-4"
+            {TEAM_MEMBERS.map((member, index) => {
+              const isExpanded = expandedIndex === index;
+
+              return (
+                <TouchableOpacity
+                  key={index}
+                  onPress={() => toggleExpand(index)}
+                  activeOpacity={0.9}
+                  className="rounded-xl border overflow-hidden"
                   style={{
-                    backgroundColor: `${theme.buttonPrimary}15`,
-                    borderWidth: 1,
-                    borderColor: theme.cardBorder,
+                    backgroundColor: theme.card,
+                    borderColor: isExpanded
+                      ? theme.buttonPrimary
+                      : theme.cardBorder,
+                    padding: isExpanded ? 20 : 16,
                   }}
                 >
-                  {member.image ? (
-                    <Image
-                      source={member.image}
-                      style={{ width: "100%", height: "100%" }}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    // Fallback Initial if no image provided
-                    <View className="flex-1 items-center justify-center">
-                      <Text
-                        className="font-bold"
+                  {isExpanded ? (
+                    // --- EXPANDED VIEW ---
+                    <View className="items-center">
+                      <View
+                        className="w-32 h-32 rounded-full overflow-hidden mb-4 shadow-md"
                         style={{
-                          color: theme.buttonPrimary,
-                          fontSize: scaledSize(16),
+                          backgroundColor: `${theme.buttonPrimary}15`,
+                          borderWidth: 2,
+                          borderColor: theme.cardBorder,
                         }}
                       >
-                        {member.name.charAt(0)}
+                        {member.image ? (
+                          <Image
+                            source={member.image}
+                            style={{ width: "100%", height: "100%" }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View className="flex-1 items-center justify-center">
+                            <Text
+                              className="font-bold"
+                              style={{
+                                color: theme.buttonPrimary,
+                                fontSize: scaledSize(40),
+                              }}
+                            >
+                              {member.name.charAt(0)}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text
+                        className="font-bold text-center mb-1"
+                        style={{ color: theme.text, fontSize: scaledSize(18) }}
+                      >
+                        {member.name}
+                      </Text>
+                      <Text
+                        className="text-center font-medium"
+                        style={{
+                          color: theme.buttonPrimary,
+                          fontSize: scaledSize(14),
+                        }}
+                      >
+                        {member.role}
                       </Text>
                     </View>
-                  )}
-                </View>
+                  ) : (
+                    // --- COMPACT VIEW (Original) ---
+                    <View className="flex-row items-center">
+                      <View
+                        className="w-12 h-12 rounded-full overflow-hidden mr-4"
+                        style={{
+                          backgroundColor: `${theme.buttonPrimary}15`,
+                          borderWidth: 1,
+                          borderColor: theme.cardBorder,
+                        }}
+                      >
+                        {member.image ? (
+                          <Image
+                            source={member.image}
+                            style={{ width: "100%", height: "100%" }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View className="flex-1 items-center justify-center">
+                            <Text
+                              className="font-bold"
+                              style={{
+                                color: theme.buttonPrimary,
+                                fontSize: scaledSize(16),
+                              }}
+                            >
+                              {member.name.charAt(0)}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
 
-                <View className="flex-1">
-                  <Text
-                    className="font-bold"
-                    style={{ color: theme.text, fontSize: scaledSize(14) }}
-                  >
-                    {member.name}
-                  </Text>
-                  <Text
-                    style={{
-                      color: theme.textSecondary,
-                      fontSize: scaledSize(12),
-                    }}
-                  >
-                    {member.role}
-                  </Text>
-                </View>
-              </View>
-            ))}
+                      <View className="flex-1">
+                        <Text
+                          className="font-bold"
+                          style={{
+                            color: theme.text,
+                            fontSize: scaledSize(14),
+                          }}
+                        >
+                          {member.name}
+                        </Text>
+                        <Text
+                          style={{
+                            color: theme.textSecondary,
+                            fontSize: scaledSize(12),
+                          }}
+                        >
+                          {member.role}
+                        </Text>
+                      </View>
+                      <MaterialIcons
+                        name="keyboard-arrow-down"
+                        size={scaledSize(20)}
+                        color={theme.textSecondary}
+                      />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {/* Legal Links */}

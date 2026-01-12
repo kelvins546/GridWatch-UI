@@ -6,10 +6,11 @@ import {
   ScrollView,
   StatusBar,
   Modal,
-  Switch,
   TextInput,
-  FlatList,
   Platform,
+  StyleSheet,
+  UIManager,
+  LayoutAnimation,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -17,28 +18,45 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 export default function DeviceControlScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { theme } = useTheme();
+  const { theme, fontScale, isDarkMode } = useTheme();
+  const scaledSize = (size) => size * fontScale;
 
   const { deviceName, status } = route.params || {
-    deviceName: "Device",
+    deviceName: "Smart Socket",
     status: "ON",
   };
+
   const initialPower = !status?.includes("Standby") && !status?.includes("OFF");
   const [isPowered, setIsPowered] = useState(initialPower);
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
 
+  // --- MOCK DATA ---
   const [schedules, setSchedules] = useState([
     {
       id: "1",
       time: "22:00",
       days: [true, true, true, true, true, true, true],
-      action: false,
+      action: false, // OFF
       active: true,
+    },
+    {
+      id: "2",
+      time: "06:30",
+      days: [false, true, true, true, true, true, false],
+      action: true, // ON
+      active: false,
     },
   ]);
 
@@ -54,11 +72,18 @@ export default function DeviceControlScreen() {
   ]);
   const [isActionOn, setIsActionOn] = useState(true);
 
-  const heroColors = isPowered
-    ? ["#0055ff", theme.background]
-    : ["#2c3e50", theme.background];
+  // --- DYNAMIC COLORS ---
+  const gradientColors = isPowered
+    ? [theme.buttonPrimary, theme.background]
+    : isDarkMode
+    ? ["#2c3e50", theme.background]
+    : ["#94a3b8", theme.background];
 
+  const activeColor = theme.buttonPrimary;
+
+  // --- ACTIONS ---
   const confirmToggle = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setIsPowered(!isPowered);
     setShowConfirm(false);
   };
@@ -77,6 +102,7 @@ export default function DeviceControlScreen() {
       action: isActionOn,
       active: true,
     };
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSchedules([...schedules, newSchedule]);
     setShowSchedule(false);
   };
@@ -87,250 +113,521 @@ export default function DeviceControlScreen() {
     );
   };
 
+  // --- STYLES ---
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    headerOverlay: {
+      position: "absolute",
+      top: Platform.OS === "android" ? 40 : 50,
+      left: 20,
+      right: 20,
+      zIndex: 10,
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    card: {
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+      borderWidth: 1,
+      borderRadius: 20,
+      padding: 20,
+      marginBottom: 16,
+    },
+    detailLabel: {
+      color: theme.textSecondary,
+      fontSize: scaledSize(13),
+    },
+    detailValue: {
+      color: theme.text,
+      fontSize: scaledSize(15),
+      fontWeight: "600",
+    },
+    powerBtn: {
+      width: 90,
+      height: 90,
+      borderRadius: 45,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 4,
+      borderColor: isPowered ? `${activeColor}40` : theme.cardBorder,
+      backgroundColor: isPowered ? activeColor : theme.card,
+      shadowColor: isPowered ? activeColor : "#000",
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: isPowered ? 0.6 : 0.1,
+      shadowRadius: 20,
+      elevation: 10,
+    },
+    // --- MODAL STYLES COPIED EXACTLY FROM SETTINGS ---
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.8)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContainer: {
+      borderWidth: 1,
+      padding: 20, // p-5
+      borderRadius: 16, // rounded-2xl
+      width: 288, // w-72
+      alignItems: "center",
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+    },
+    modalTitle: {
+      fontWeight: "bold",
+      marginBottom: 8,
+      textAlign: "center",
+      color: theme.text,
+      fontSize: scaledSize(18),
+    },
+    modalBody: {
+      textAlign: "center",
+      marginBottom: 24, // mb-6
+      lineHeight: 20, // leading-5
+      color: theme.textSecondary,
+      fontSize: scaledSize(12),
+    },
+    modalBtnRow: {
+      flexDirection: "row",
+      gap: 10,
+      width: "100%",
+    },
+    modalBtnCancel: {
+      flex: 1,
+      borderRadius: 12, // rounded-xl
+      height: 40, // h-10
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.textSecondary,
+    },
+    modalBtnConfirm: {
+      flex: 1,
+      borderRadius: 12, // rounded-xl
+      height: 40, // h-10
+      justifyContent: "center",
+      alignItems: "center",
+      overflow: "hidden",
+    },
+    modalBtnText: {
+      fontWeight: "bold",
+      fontSize: scaledSize(12),
+    },
+  });
+
   return (
-    <SafeAreaView
-      className="flex-1"
-      style={{ backgroundColor: theme.background }}
-      edges={["left", "right", "bottom"]}
-    >
+    <View style={styles.container}>
       <StatusBar
         barStyle="light-content"
         backgroundColor="transparent"
         translucent={true}
       />
 
-      <View
-        className="absolute left-6 right-6 z-10 flex-row justify-between"
-        style={{ top: Platform.OS === "android" ? 50 : 60 }}
-      >
+      {/* --- HEADER OVERLAY --- */}
+      <View style={styles.headerOverlay}>
         <TouchableOpacity
-          className="flex-row items-center gap-1.5"
           onPress={() => navigation.goBack()}
+          style={{ flexDirection: "row", alignItems: "center" }}
         >
-          <MaterialIcons name="arrow-back" size={18} color="#fff" />
-          <Text className="text-white text-sm font-medium">Back</Text>
+          <MaterialIcons name="arrow-back" size={24} color="#fff" />
+          <Text
+            style={{
+              color: "#fff",
+              marginLeft: 8,
+              fontSize: scaledSize(16),
+              fontWeight: "600",
+              textShadowColor: "rgba(0,0,0,0.3)",
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 3,
+            }}
+          >
+            Back
+          </Text>
         </TouchableOpacity>
-        <MaterialIcons
-          name="settings"
-          size={24}
-          color="rgba(255,255,255,0.8)"
-        />
+        <TouchableOpacity>
+          <MaterialIcons name="settings" size={24} color="#fff" />
+        </TouchableOpacity>
       </View>
 
-      <LinearGradient colors={heroColors} className="pt-32 pb-8 items-center">
-        <View className="w-20 h-20 rounded-full bg-black/20 items-center justify-center border-2 border-white/20 mb-4">
+      {/* --- HERO SECTION --- */}
+      <LinearGradient
+        colors={gradientColors}
+        style={{ paddingTop: 140, paddingBottom: 40, alignItems: "center" }}
+      >
+        <View
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            backgroundColor: "rgba(0,0,0,0.2)",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 16,
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.2)",
+          }}
+        >
           <MaterialIcons
-            name={isPowered ? "ac-unit" : "power-off"}
+            name={isPowered ? "power" : "power-off"}
             size={40}
             color="#fff"
           />
         </View>
-        <Text className="text-2xl font-extrabold text-white mb-1.5">
-          {isPowered ? "Power ON" : "Standby Mode"}
+        <Text
+          style={{
+            fontSize: scaledSize(28),
+            fontWeight: "bold",
+            color: isDarkMode ? "#fff" : isPowered ? "#fff" : theme.text,
+            marginBottom: 4,
+          }}
+        >
+          {isPowered ? "Power ON" : "Standby"}
         </Text>
-        <Text className="text-sm text-white/80">
+        <Text
+          style={{
+            fontSize: scaledSize(14),
+            color: isDarkMode
+              ? "rgba(255,255,255,0.7)"
+              : isPowered
+              ? "rgba(255,255,255,0.9)"
+              : theme.textSecondary,
+          }}
+        >
           {deviceName} is {isPowered ? "running" : "idle"}
         </Text>
       </LinearGradient>
 
-      <ScrollView>
-        <View className="p-6">
+      <ScrollView contentContainerStyle={{ padding: 24 }}>
+        {/* --- MAIN METRICS CARD --- */}
+        <View style={styles.card}>
+          <Text
+            style={[
+              styles.detailLabel,
+              {
+                marginBottom: 12,
+                fontWeight: "bold",
+                textTransform: "uppercase",
+              },
+            ]}
+          >
+            Real-time Metrics
+          </Text>
+
           <View
-            className="p-5 rounded-3xl border mb-4"
             style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginBottom: 12,
             }}
           >
-            <DetailRow
-              label="Current Load"
-              value={isPowered ? "1,456 Watts" : "0 Watts"}
-              theme={theme}
-            />
-            <DetailRow label="Voltage" value="220.1 V" theme={theme} />
-            <DetailRow
-              label="Cost / Hour"
-              value={isPowered ? "₱ 18.20" : "₱ 0.00"}
-              theme={theme}
-            />
-          </View>
-
-          <View className="items-center my-8">
-            <TouchableOpacity
-              className={`w-[90px] h-[90px] rounded-full items-center justify-center ${
-                isPowered
-                  ? "bg-[#00ff99] border-0 shadow-lg shadow-[#00ff99]"
-                  : "bg-[#333] border-2 border-[#444]"
-              }`}
-              onPress={() => setShowConfirm(true)}
-              activeOpacity={0.9}
-            >
-              <MaterialIcons
-                name="power-settings-new"
-                size={36}
-                color={isPowered ? "#000" : "#666"}
-              />
-            </TouchableOpacity>
-            <Text
-              className="mt-4 text-xs font-bold uppercase tracking-widest"
-              style={{ color: theme.textSecondary }}
-            >
-              {isPowered ? "Tap to Cut Power" : "Tap to Restore Power"}
-            </Text>
-          </View>
-
-          <View className="flex-row justify-between items-center mb-4">
-            <Text className="text-xs font-bold uppercase tracking-widest text-[#888]">
-              UPCOMING SCHEDULES
-            </Text>
-            <TouchableOpacity onPress={() => setShowSchedule(true)}>
-              <Text className="text-xs font-semibold text-[#00ff99]">
-                Add New
+            <View>
+              <Text style={styles.detailLabel}>Current Load</Text>
+              <Text style={styles.detailValue}>
+                {isPowered ? "1,456 W" : "0 W"}
               </Text>
-            </TouchableOpacity>
+            </View>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={styles.detailLabel}>Voltage</Text>
+              <Text style={styles.detailValue}>220.1 V</Text>
+            </View>
           </View>
 
-          {}
-          {schedules.map((item) => (
-            <View
-              key={item.id}
-              className="flex-row items-center justify-between p-4 rounded-xl border mb-3"
+          <View
+            style={{
+              height: 1,
+              backgroundColor: theme.cardBorder,
+              marginVertical: 12,
+            }}
+          />
+
+          <View
+            style={{ flexDirection: "row", justifyContent: "space-between" }}
+          >
+            <View>
+              <Text style={styles.detailLabel}>Est. Cost/Hr</Text>
+              <Text
+                style={[styles.detailValue, { color: theme.buttonPrimary }]}
+              >
+                {isPowered ? "₱ 18.20" : "₱ 0.00"}
+              </Text>
+            </View>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={styles.detailLabel}>Daily Usage</Text>
+              <Text style={styles.detailValue}>4.2 kWh</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* --- SECONDARY DETAILS --- */}
+        <View style={{ flexDirection: "row", gap: 12, marginBottom: 30 }}>
+          <View
+            style={[
+              styles.card,
+              { flex: 1, marginBottom: 0, alignItems: "center" },
+            ]}
+          >
+            <MaterialIcons
+              name="timer"
+              size={20}
+              color={theme.textSecondary}
+              style={{ marginBottom: 8 }}
+            />
+            <Text style={styles.detailLabel}>Runtime</Text>
+            <Text style={styles.detailValue}>
+              {isPowered ? "5h 20m" : "0h 0m"}
+            </Text>
+          </View>
+
+          <View
+            style={[
+              styles.card,
+              { flex: 1, marginBottom: 0, alignItems: "center" },
+            ]}
+          >
+            <MaterialIcons
+              name="wifi"
+              size={20}
+              color={theme.textSecondary}
+              style={{ marginBottom: 8 }}
+            />
+            <Text style={styles.detailLabel}>Signal</Text>
+            <Text style={styles.detailValue}>-42 dBm</Text>
+          </View>
+        </View>
+
+        {/* --- POWER BUTTON --- */}
+        <View style={{ alignItems: "center", marginBottom: 30 }}>
+          <TouchableOpacity
+            style={styles.powerBtn}
+            onPress={() => setShowConfirm(true)}
+            activeOpacity={0.9}
+          >
+            <MaterialIcons
+              name="power-settings-new"
+              size={40}
+              color={isPowered ? "#fff" : theme.textSecondary}
+            />
+          </TouchableOpacity>
+          <Text
+            style={{
+              marginTop: 12,
+              fontSize: scaledSize(12),
+              fontWeight: "bold",
+              textTransform: "uppercase",
+              letterSpacing: 1.5,
+              color: theme.textSecondary,
+            }}
+          >
+            {isPowered ? "Tap to Cut Power" : "Tap to Restore Power"}
+          </Text>
+        </View>
+
+        {/* --- SCHEDULES --- */}
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 12,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: scaledSize(12),
+              fontWeight: "bold",
+              textTransform: "uppercase",
+              letterSpacing: 1,
+              color: theme.textSecondary,
+            }}
+          >
+            Upcoming Schedules
+          </Text>
+          <TouchableOpacity onPress={() => setShowSchedule(true)}>
+            <Text
               style={{
-                backgroundColor: theme.card,
-                borderColor: theme.cardBorder,
+                color: theme.buttonPrimary,
+                fontWeight: "bold",
+                fontSize: scaledSize(12),
               }}
             >
-              <View>
+              + Add New
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {schedules.map((item) => (
+          <View
+            key={item.id}
+            style={[
+              styles.card,
+              {
+                marginBottom: 10,
+                padding: 16,
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              },
+            ]}
+          >
+            <View>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: 4,
+                }}
+              >
+                <MaterialIcons
+                  name="schedule"
+                  size={16}
+                  color={theme.textSecondary}
+                  style={{ marginRight: 6 }}
+                />
                 <Text
-                  className="text-base font-bold"
-                  style={{ color: theme.text }}
+                  style={{
+                    fontSize: scaledSize(18),
+                    fontWeight: "bold",
+                    color: theme.text,
+                  }}
                 >
                   {item.time}
                 </Text>
-                <Text
-                  className="text-xs mt-0.5"
-                  style={{ color: theme.textSecondary }}
-                >
-                  {item.action ? "Auto-ON" : "Auto-OFF"} • Daily
-                </Text>
               </View>
-              <Switch
-                value={item.active}
-                onValueChange={() => toggleScheduleActive(item.id)}
-                trackColor={{ true: "#00ff99", false: "#333" }}
-                thumbColor="#fff"
-              />
+              <Text
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(12),
+                }}
+              >
+                {item.action ? "Auto-ON" : "Auto-OFF"} •{" "}
+                {item.days.every((d) => d) ? "Everyday" : "Custom"}
+              </Text>
             </View>
-          ))}
-        </View>
+
+            <CustomSwitch
+              value={item.active}
+              onToggle={() => toggleScheduleActive(item.id)}
+              theme={theme}
+            />
+          </View>
+        ))}
+
+        <View style={{ height: 40 }} />
       </ScrollView>
 
-      {}
+      {/* --- CONFIRMATION MODAL (EXACT COPY OF SETTINGS MODAL) --- */}
       <Modal visible={showConfirm} transparent animationType="fade">
-        <View className="flex-1 bg-black/80 justify-center items-center">
-          <View
-            className="w-[80%] max-w-[300px] p-5 rounded-3xl items-center border"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
-          >
-            <MaterialIcons
-              name={isPowered ? "power-off" : "power"}
-              size={40}
-              color={isPowered ? "#ff4444" : "#00ff99"}
-              style={{ marginBottom: 15 }}
-            />
-            <Text
-              className="text-lg font-bold mb-2"
-              style={{ color: theme.text }}
-            >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {/* ICON REMOVED to match Settings */}
+            <Text style={styles.modalTitle}>
               {isPowered ? "Turn Off Device?" : "Restore Power?"}
             </Text>
-            <Text
-              className="text-xs text-center mb-6 leading-5"
-              style={{ color: theme.textSecondary }}
-            >
+            <Text style={styles.modalBody}>
               {isPowered
-                ? "This will physically cut power to the outlet."
-                : "This will reactivate the outlet relay."}
+                ? "This will physically cut power to the outlet immediately."
+                : "This will reactivate the outlet relay and resume power flow."}
             </Text>
-            <View className="flex-row gap-2.5 w-full">
+            <View style={styles.modalBtnRow}>
               <TouchableOpacity
-                className="flex-1 p-3 rounded-lg border items-center"
-                style={{ borderColor: theme.cardBorder }}
+                style={styles.modalBtnCancel}
                 onPress={() => setShowConfirm(false)}
               >
-                <Text style={{ color: theme.text }}>Cancel</Text>
+                <Text style={[styles.modalBtnText, { color: theme.text }]}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className="flex-1 p-3 rounded-lg border items-center"
-                style={{
-                  backgroundColor: isPowered ? "#ff4444" : "#00ff99",
-                  borderColor: isPowered ? "#ff4444" : "#00ff99",
-                }}
+                style={[
+                  styles.modalBtnConfirm,
+                  {
+                    backgroundColor: isPowered
+                      ? theme.buttonDangerText
+                      : theme.buttonPrimary,
+                  },
+                ]}
                 onPress={confirmToggle}
               >
-                <Text
-                  className="font-bold"
-                  style={{ color: isPowered ? "#fff" : "#000" }}
+                <View
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
                 >
-                  Confirm
-                </Text>
+                  <Text style={[styles.modalBtnText, { color: "#fff" }]}>
+                    Confirm
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {}
-      <Modal visible={showSchedule} transparent animationType="slide">
-        <View className="flex-1 bg-black/80 justify-center items-center">
-          <View
-            className="w-[80%] max-w-[320px] p-4 rounded-3xl items-center border"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
-          >
-            <Text
-              className="text-base font-bold mb-4"
-              style={{ color: theme.text }}
-            >
-              Set Schedule
-            </Text>
+      {/* --- SCHEDULE MODAL (Adapted Style) --- */}
+      <Modal visible={showSchedule} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Set Schedule</Text>
 
-            <View className="mb-4 items-center">
+            <View
+              style={{ marginBottom: 20, width: "100%", alignItems: "center" }}
+            >
               <TextInput
-                className="text-3xl font-bold py-1 px-4 rounded-xl border text-center min-w-[100px]"
                 style={{
+                  fontSize: scaledSize(32),
+                  fontWeight: "bold",
                   color: theme.text,
-                  borderColor: theme.cardBorder,
-                  backgroundColor: theme.background,
+                  textAlign: "center",
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.cardBorder,
+                  paddingBottom: 8,
+                  minWidth: 120,
                 }}
                 value={scheduleTime}
                 onChangeText={setScheduleTime}
                 keyboardType="numeric"
                 maxLength={5}
+                placeholder="00:00"
+                placeholderTextColor={theme.textSecondary}
               />
             </View>
 
-            <View className="flex-row justify-between w-full mb-4 px-1">
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                width: "100%",
+                marginBottom: 24,
+              }}
+            >
               {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => (
                 <TouchableOpacity
                   key={index}
                   onPress={() => toggleDay(index)}
-                  className="w-7 h-7 rounded-full justify-center items-center"
                   style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 15,
+                    alignItems: "center",
+                    justifyContent: "center",
                     backgroundColor: selectedDays[index]
-                      ? "#00ff99"
+                      ? theme.buttonPrimary
                       : theme.background,
+                    borderWidth: selectedDays[index] ? 0 : 1,
+                    borderColor: theme.cardBorder,
                   }}
                 >
                   <Text
-                    className="text-[10px] font-bold"
                     style={{
-                      color: selectedDays[index] ? "#000" : theme.textSecondary,
+                      fontSize: 10,
+                      fontWeight: "bold",
+                      color: selectedDays[index] ? "#fff" : theme.textSecondary,
                     }}
                   >
                     {day}
@@ -340,73 +637,105 @@ export default function DeviceControlScreen() {
             </View>
 
             <TouchableOpacity
-              className="flex-row justify-between items-center w-full p-3 rounded-xl border mb-5"
               style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                width: "100%",
+                padding: 12,
+                borderRadius: 12,
                 backgroundColor: theme.background,
+                borderWidth: 1,
                 borderColor: theme.cardBorder,
+                marginBottom: 24,
               }}
               onPress={() => setIsActionOn(!isActionOn)}
-              activeOpacity={0.8}
             >
               <Text
-                className="font-semibold text-xs"
-                style={{ color: theme.text }}
-              >
-                Action: {isActionOn ? "Turn ON" : "Turn OFF"}
-              </Text>
-              <View
-                className="w-9 h-5 rounded-full border justify-center"
                 style={{
-                  borderColor: isActionOn ? "#00ff99" : "#555",
-                  backgroundColor: isActionOn ? "rgba(0,255,153,0.1)" : "#333",
+                  color: theme.text,
+                  fontWeight: "500",
+                  fontSize: scaledSize(12),
                 }}
               >
-                <View
-                  className="w-3 h-3 rounded-full absolute"
-                  style={{
-                    backgroundColor: isActionOn ? "#00ff99" : "#fff",
-                    right: isActionOn ? 2 : undefined,
-                    left: isActionOn ? undefined : 2,
-                  }}
-                />
-              </View>
+                Action:{" "}
+                <Text style={{ fontWeight: "bold" }}>
+                  {isActionOn ? "Turn ON" : "Turn OFF"}
+                </Text>
+              </Text>
+              <CustomSwitch
+                value={isActionOn}
+                onToggle={() => setIsActionOn(!isActionOn)}
+                theme={theme}
+              />
             </TouchableOpacity>
 
-            <View className="flex-row gap-3 w-full">
+            <View style={styles.modalBtnRow}>
               <TouchableOpacity
-                className="flex-1 p-3 rounded-xl border items-center"
-                style={{ borderColor: theme.cardBorder }}
+                style={styles.modalBtnCancel}
                 onPress={() => setShowSchedule(false)}
               >
-                <Text style={{ color: theme.text }}>Cancel</Text>
+                <Text style={[styles.modalBtnText, { color: theme.text }]}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className="flex-1 p-3 rounded-xl border items-center"
-                style={{
-                  backgroundColor: theme.primary,
-                  borderColor: theme.primary,
-                }}
+                style={[
+                  styles.modalBtnConfirm,
+                  { backgroundColor: theme.buttonPrimary },
+                ]}
                 onPress={saveSchedule}
               >
-                <Text className="font-bold text-black">Save</Text>
+                <View
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={[styles.modalBtnText, { color: "#fff" }]}>
+                    Save
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
-function DetailRow({ label, value, theme }) {
+// Reused CustomSwitch from SettingsScreen
+function CustomSwitch({ value, onToggle, theme }) {
   return (
-    <View className="flex-row justify-between mb-3 last:mb-0">
-      <Text className="text-sm" style={{ color: theme.textSecondary }}>
-        {label}
-      </Text>
-      <Text className="text-sm font-semibold" style={{ color: theme.text }}>
-        {value}
-      </Text>
-    </View>
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onToggle}
+      style={{
+        width: 42,
+        height: 26,
+        borderRadius: 16,
+        backgroundColor: value ? theme.buttonPrimary : theme.buttonNeutral,
+        padding: 2,
+        justifyContent: "center",
+        alignItems: value ? "flex-end" : "flex-start",
+      }}
+    >
+      <View
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          backgroundColor: "#FFFFFF",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 2.5,
+          elevation: 2,
+        }}
+      />
+    </TouchableOpacity>
   );
 }

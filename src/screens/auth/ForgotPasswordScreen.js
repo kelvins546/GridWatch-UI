@@ -2,28 +2,31 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TextInput,
   TouchableOpacity,
   ScrollView,
   Modal,
   ActivityIndicator,
   StatusBar,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
+import { useTheme } from "../../context/ThemeContext";
 
 const ALLOWED_EMAIL_REGEX =
   /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
 
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation();
+  const { theme, fontScale } = useTheme();
+  const scaledSize = (size) => size * fontScale;
 
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
   const [touched, setTouched] = useState(false);
   const [emailError, setEmailError] = useState(null);
 
@@ -32,11 +35,12 @@ export default function ForgotPasswordScreen() {
   const [timer, setTimer] = useState(120);
   const [canResend, setCanResend] = useState(false);
 
-  const [alertVisible, setAlertVisible] = useState(false);
-  const [alertConfig, setAlertConfig] = useState({
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalConfig, setModalConfig] = useState({
     type: "error",
     title: "",
     message: "",
+    onPress: null,
   });
 
   const inputRefs = useRef([]);
@@ -53,9 +57,9 @@ export default function ForgotPasswordScreen() {
     return () => clearInterval(interval);
   }, [otpModalVisible, timer]);
 
-  const showAlert = (type, title, message) => {
-    setAlertConfig({ type, title, message });
-    setAlertVisible(true);
+  const showModal = (type, title, message, onPress = null) => {
+    setModalConfig({ type, title, message, onPress });
+    setModalVisible(true);
   };
 
   const validateEmail = (value) => {
@@ -76,11 +80,9 @@ export default function ForgotPasswordScreen() {
     setTouched(true);
     const error = validateEmail(email);
     setEmailError(error);
-
     if (error) return;
 
     setIsLoading(true);
-
     setTimeout(() => {
       setIsLoading(false);
       setOtpModalVisible(true);
@@ -92,9 +94,8 @@ export default function ForgotPasswordScreen() {
 
   const handleVerify = async () => {
     const token = otp.join("");
-
     if (token.length < 6) {
-      showAlert(
+      showModal(
         "error",
         "Incomplete Code",
         "Please enter the full 6-digit code."
@@ -103,18 +104,16 @@ export default function ForgotPasswordScreen() {
     }
 
     setIsLoading(true);
-
     setTimeout(() => {
       setIsLoading(false);
-
       if (token === "123456") {
         setOtpModalVisible(false);
         navigation.navigate("ResetPassword", { email: email });
       } else {
-        showAlert(
+        showModal(
           "error",
           "Verification Failed",
-          "The code is incorrect. For demo purposes, use '123456'."
+          "The code is incorrect. Use '123456'."
         );
       }
     }, 1500);
@@ -128,110 +127,258 @@ export default function ForgotPasswordScreen() {
     if (text.length === 0 && index > 0) inputRefs.current[index - 1]?.focus();
   };
 
+  const handleResend = () => {
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+      setTimer(120);
+      setCanResend(false);
+    }, 1000);
+  };
+
   const formatTime = (seconds) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
 
+  // --- STYLES (MATCHING SIGNUP SCREEN EXACTLY) ---
+  const styles = StyleSheet.create({
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.8)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    // Standard Modal (Alerts)
+    modalContainer: {
+      borderWidth: 1,
+      padding: 20, // p-5
+      borderRadius: 16, // rounded-2xl
+      width: 288, // w-72 (Standard)
+      alignItems: "center",
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+    },
+    // OTP Modal (Exception - Wider)
+    otpModalContainer: {
+      borderWidth: 1,
+      padding: 24,
+      borderRadius: 20,
+      width: "85%",
+      maxWidth: 300, // Wider for inputs
+      alignItems: "center",
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+    },
+    modalTitle: {
+      fontWeight: "bold",
+      marginBottom: 8,
+      textAlign: "center",
+      color: theme.text,
+      fontSize: scaledSize(18),
+    },
+    modalBody: {
+      textAlign: "center",
+      marginBottom: 24,
+      lineHeight: 20,
+      color: theme.textSecondary,
+      fontSize: scaledSize(12),
+    },
+    modalButton: {
+      width: "100%",
+      height: 40,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // OTP Inputs (Matching Signup)
+    otpInput: {
+      width: 42,
+      height: 50,
+      borderRadius: 10,
+      textAlign: "center",
+      fontSize: scaledSize(20),
+      fontWeight: "bold",
+      borderWidth: 1,
+      backgroundColor: theme.buttonNeutral,
+      borderColor: theme.cardBorder,
+      color: theme.text,
+      marginHorizontal: 1, // Tight spacing
+    },
+  });
+
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView
+      className="flex-1"
+      style={{ backgroundColor: theme.background }}
+    >
+      <StatusBar
+        barStyle={theme.statusBarStyle}
+        backgroundColor={theme.background}
+      />
 
       {isLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#00ff99" />
-          <Text style={styles.loadingText}>Processing...</Text>
+        <View className="absolute z-50 w-full h-full bg-black/70 justify-center items-center">
+          <ActivityIndicator size="large" color={theme.buttonPrimary} />
+          <Text className="mt-4 font-bold" style={{ color: theme.text }}>
+            Processing...
+          </Text>
         </View>
       )}
 
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
+          showsVerticalScrollIndicator={false}
         >
-          <MaterialIcons name="arrow-back" size={18} color="#888" />
-          <Text style={{ color: "#888", marginLeft: 5 }}>Back to Login</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.iconContainer}>
-          <MaterialIcons name="lock-reset" size={40} color="#00ff99" />
-        </View>
-
-        <Text style={styles.title}>Reset Password</Text>
-        <Text style={styles.desc}>
-          Enter your email address and we will send you a 6-digit verification
-          code.
-        </Text>
-
-        <View style={styles.inputGroup}>
-          <View
-            style={{ flexDirection: "row", justifyContent: "space-between" }}
-          >
-            <Text
-              style={[
-                styles.label,
-                touched && emailError ? { color: "#ff4444" } : {},
-              ]}
-            >
-              Registered Email
-            </Text>
-            {touched && emailError && (
-              <Text style={styles.errorText}>{emailError}</Text>
-            )}
-          </View>
-
-          <View
-            style={[
-              styles.inputWrapper,
-              touched && emailError ? { borderColor: "#ff4444" } : {},
-            ]}
-          >
-            <MaterialIcons
-              name="email"
-              size={20}
-              color={touched && emailError ? "#ff4444" : "#666"}
-              style={{ marginRight: 12 }}
-            />
-            <TextInput
-              style={styles.inputField}
-              placeholder="natasha@example.com"
-              placeholderTextColor="#555"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={handleEmailChange}
-            />
-          </View>
-        </View>
-
-        <TouchableOpacity onPress={handleSendOtp}>
-          <LinearGradient
-            colors={["#0055ff", "#00ff99"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.btnPrimary}
-          >
-            <Text style={styles.btnText}>SEND CODE</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </ScrollView>
-
-      {}
-      <Modal animationType="fade" transparent={true} visible={otpModalVisible}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalIcon}>
-              <MaterialIcons name="mark-email-read" size={24} color="#00ff99" />
+          <View className="p-[30px]">
+            {/* Header Icon Section */}
+            <View className="items-center mb-10">
+              <View
+                className="w-20 h-20 rounded-full items-center justify-center mb-6"
+                style={{
+                  backgroundColor: `${theme.buttonPrimary}15`,
+                  borderWidth: 1,
+                  borderColor: `${theme.buttonPrimary}30`,
+                }}
+              >
+                <MaterialIcons
+                  name="lock-reset"
+                  size={40}
+                  color={theme.buttonPrimary}
+                />
+              </View>
+              <Text
+                className="font-bold text-2xl mb-2"
+                style={{ color: theme.text }}
+              >
+                Reset Password
+              </Text>
+              <Text
+                className="text-center text-sm"
+                style={{ color: theme.textSecondary }}
+              >
+                Enter your email address and we will send you a 6-digit
+                verification code.
+              </Text>
             </View>
+
+            {/* Email Input */}
+            <View className="mb-8">
+              <View className="flex-row justify-between items-center mb-2">
+                <Text
+                  className="text-[11px] font-bold uppercase"
+                  style={{
+                    color:
+                      touched && emailError
+                        ? theme.buttonDangerText
+                        : theme.textSecondary,
+                  }}
+                >
+                  Registered Email
+                </Text>
+                {touched && emailError && (
+                  <Text
+                    className="text-[10px] italic"
+                    style={{ color: theme.buttonDangerText }}
+                  >
+                    {emailError}
+                  </Text>
+                )}
+              </View>
+
+              <View
+                className="flex-row items-center rounded-xl px-4 py-2.5 border"
+                style={{
+                  backgroundColor: theme.buttonNeutral,
+                  borderColor: theme.cardBorder,
+                }}
+              >
+                <MaterialIcons
+                  name="email"
+                  size={20}
+                  color={
+                    touched && emailError
+                      ? theme.buttonDangerText
+                      : theme.textSecondary
+                  }
+                  style={{ marginRight: 12 }}
+                />
+                <TextInput
+                  className="flex-1 text-sm"
+                  style={{ color: theme.text }}
+                  placeholder="natasha@example.com"
+                  placeholderTextColor={theme.textSecondary}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onChangeText={handleEmailChange}
+                />
+              </View>
+            </View>
+
+            {/* Send Code Button */}
+            <TouchableOpacity onPress={handleSendOtp} activeOpacity={0.8}>
+              <View
+                className="p-4 rounded-2xl items-center shadow-sm"
+                style={{ backgroundColor: theme.buttonPrimary }}
+              >
+                <Text
+                  className="font-bold text-[15px]"
+                  style={{ color: theme.buttonPrimaryText }}
+                >
+                  SEND CODE
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Centered Back to Login Button */}
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              className="mt-8 items-center justify-center flex-row"
+            >
+              <MaterialIcons
+                name="arrow-back"
+                size={scaledSize(18)}
+                color={theme.textSecondary}
+              />
+              <Text
+                className="font-medium text-sm ml-2"
+                style={{ color: theme.textSecondary }}
+              >
+                Back to Login
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* --- OTP MODAL (MATCHING SIGNUP EXCEPTION) --- */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={otpModalVisible}
+        onRequestClose={() => setOtpModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.otpModalContainer}>
             <Text style={styles.modalTitle}>Verify Email</Text>
-            <Text style={styles.modalDescSmall}>
-              Enter 123456 to simulate success.
+            <Text style={styles.modalBody}>
+              Enter the 6-digit code. (Use 123456)
             </Text>
 
-            <View style={styles.otpContainer}>
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 1,
+                marginBottom: 20,
+                justifyContent: "center",
+              }}
+            >
               {otp.map((digit, index) => (
                 <TextInput
                   key={index}
@@ -241,88 +388,112 @@ export default function ForgotPasswordScreen() {
                   keyboardType="number-pad"
                   value={digit}
                   onChangeText={(text) => handleOtpChange(text, index)}
+                  placeholder="-"
+                  placeholderTextColor={theme.textSecondary}
                 />
               ))}
             </View>
 
             <TouchableOpacity
-              style={{ width: "100%", marginBottom: 15 }}
               onPress={handleVerify}
+              style={{ width: "100%", marginBottom: 12 }}
             >
-              <LinearGradient
-                colors={["#0055ff", "#00ff99"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.modalBtnSmall}
+              <View
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: theme.buttonPrimary },
+                ]}
               >
-                <Text style={styles.btnTextBlack}>VERIFY CODE</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: 15,
-              }}
-            >
-              <Text style={{ color: "#666", fontSize: 11 }}>
-                Didn't receive code?{" "}
-              </Text>
-              <TouchableOpacity disabled={!canResend} onPress={handleSendOtp}>
                 <Text
                   style={{
-                    color: canResend ? "#00ff99" : "#444",
+                    color: theme.buttonPrimaryText,
                     fontWeight: "bold",
-                    fontSize: 11,
+                    fontSize: scaledSize(12),
+                    textTransform: "uppercase",
+                    letterSpacing: 1,
                   }}
                 >
-                  {canResend ? "Resend" : `Resend in ${formatTime(timer)}`}
+                  VERIFY
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Centered Bottom Layout like Signup */}
+            <View style={{ width: "100%", alignItems: "center", gap: 12 }}>
+              <TouchableOpacity disabled={!canResend} onPress={handleResend}>
+                <Text
+                  style={{
+                    fontSize: scaledSize(12),
+                    fontWeight: "bold",
+                    color: canResend
+                      ? theme.buttonPrimary
+                      : theme.textSecondary,
+                  }}
+                >
+                  {canResend ? "Resend Code" : `Resend in ${formatTime(timer)}`}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setOtpModalVisible(false)}>
+                <Text
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(12),
+                    textDecorationLine: "underline",
+                  }}
+                >
+                  Cancel
                 </Text>
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity onPress={() => setOtpModalVisible(false)}>
-              <Text style={{ color: "#888", fontSize: 12 }}>Cancel</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {}
-      <Modal animationType="fade" transparent={true} visible={alertVisible}>
+      {/* --- STANDARD ALERT MODAL --- */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => {
+          if (modalConfig.type === "error") setModalVisible(false);
+        }}
+      >
         <View style={styles.modalOverlay}>
-          <View style={styles.alertCard}>
-            <MaterialIcons
-              name={
-                alertConfig.type === "success"
-                  ? "check-circle"
-                  : "error-outline"
-              }
-              size={36}
-              color={alertConfig.type === "success" ? "#00ff99" : "#ff4444"}
-              style={{ marginBottom: 12 }}
-            />
-            <Text style={styles.modalTitleSmall}>{alertConfig.title}</Text>
-            <Text style={styles.modalDescSmall}>{alertConfig.message}</Text>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>{modalConfig.title}</Text>
+            <Text style={styles.modalBody}>{modalConfig.message}</Text>
+
             <TouchableOpacity
               style={{ width: "100%" }}
-              onPress={() => setAlertVisible(false)}
+              onPress={() => {
+                setModalVisible(false);
+                if (modalConfig.onPress) modalConfig.onPress();
+              }}
             >
-              <LinearGradient
-                colors={
-                  alertConfig.type === "success"
-                    ? ["#0055ff", "#00ff99"]
-                    : ["#ff4444", "#ff8800"]
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.modalBtnSmall}
+              <View
+                style={[
+                  styles.modalButton,
+                  {
+                    backgroundColor:
+                      modalConfig.type === "success"
+                        ? theme.buttonPrimary
+                        : theme.buttonDangerText,
+                  },
+                ]}
               >
-                <Text style={styles.btnTextBlack}>
-                  {alertConfig.type === "success" ? "OK" : "TRY AGAIN"}
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontWeight: "bold",
+                    fontSize: scaledSize(12),
+                    textTransform: "uppercase",
+                    letterSpacing: 1,
+                  }}
+                >
+                  {modalConfig.type === "success" ? "CONTINUE" : "TRY AGAIN"}
                 </Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -330,152 +501,3 @@ export default function ForgotPasswordScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0f0f0f" },
-  header: { padding: 24 },
-  backBtn: { flexDirection: "row", alignItems: "center" },
-  content: { paddingHorizontal: 30, paddingBottom: 40 },
-  loadingOverlay: {
-    position: "absolute",
-    zIndex: 50,
-    width: "100%",
-    height: "100%",
-    backgroundColor: "rgba(0,0,0,0.8)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: { color: "#fff", marginTop: 15, fontWeight: "bold" },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(0,255,153,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "rgba(0,255,153,0.2)",
-  },
-  title: { fontSize: 24, fontWeight: "800", color: "#fff", marginBottom: 10 },
-  desc: { fontSize: 14, color: "#888", lineHeight: 22, marginBottom: 40 },
-  inputGroup: { marginBottom: 30 },
-  label: {
-    fontSize: 11,
-    color: "#888",
-    fontWeight: "700",
-    textTransform: "uppercase",
-    marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 10,
-    color: "#ff4444",
-    fontStyle: "italic",
-    marginRight: 4,
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#222",
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#333",
-  },
-  inputField: { flex: 1, color: "#fff", fontSize: 14 },
-  btnPrimary: { padding: 16, borderRadius: 16, alignItems: "center" },
-  btnText: {
-    fontWeight: "700",
-    fontSize: 13,
-    color: "#000",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  btnTextBlack: {
-    fontWeight: "700",
-    fontSize: 12,
-    color: "#000",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.85)",
-  },
-  modalCard: {
-    width: "80%",
-    maxWidth: 300,
-    backgroundColor: "#1a1a1a",
-    padding: 20,
-    borderRadius: 20,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#333",
-  },
-  alertCard: {
-    width: "70%",
-    maxWidth: 260,
-    backgroundColor: "#1a1a1a",
-    padding: 20,
-    borderRadius: 18,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#333",
-  },
-  modalIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "rgba(0,255,153,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 8,
-  },
-  modalTitleSmall: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 6,
-    textAlign: "center",
-  },
-  modalDesc: {
-    fontSize: 13,
-    color: "#888",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  modalDescSmall: {
-    fontSize: 12,
-    color: "#999",
-    textAlign: "center",
-    marginBottom: 18,
-    lineHeight: 16,
-  },
-  otpContainer: { flexDirection: "row", gap: 6, marginBottom: 20 },
-  otpInput: {
-    width: 38,
-    height: 44,
-    backgroundColor: "#222",
-    borderWidth: 1,
-    borderColor: "#333",
-    borderRadius: 8,
-    color: "#fff",
-    textAlign: "center",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  modalBtnSmall: {
-    padding: 12,
-    borderRadius: 10,
-    alignItems: "center",
-    width: "100%",
-  },
-});

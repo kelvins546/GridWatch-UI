@@ -16,12 +16,14 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../context/ThemeContext";
 
 export default function ProviderSetupScreen() {
   const navigation = useNavigation();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, fontScale } = useTheme();
+
+  // Helper for font scaling
+  const scaledSize = (size) => size * (fontScale || 1);
 
   const [selectedId, setSelectedId] = useState("meralco");
   const [customRate, setCustomRate] = useState("");
@@ -32,6 +34,11 @@ export default function ProviderSetupScreen() {
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  // Theme-based colors
+  const activeColor = theme.buttonPrimary; // Green
+  const dangerColor = isDarkMode ? "#ff4444" : "#c62828";
+
+  // --- FULL PROVIDER LIST ---
   const providers = [
     {
       id: "meralco",
@@ -680,11 +687,8 @@ export default function ProviderSetupScreen() {
 
   const handleRateChange = (text) => {
     const cleaned = text.replace(/[^0-9.]/g, "");
-
     if ((cleaned.match(/\./g) || []).length > 1) return;
-
     setCustomRate(cleaned);
-
     const val = parseFloat(cleaned);
 
     if (cleaned !== "" && !isNaN(val)) {
@@ -750,7 +754,7 @@ export default function ProviderSetupScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
+      {/* ERROR MODAL (No Gradient) */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -766,17 +770,21 @@ export default function ProviderSetupScreen() {
             }}
           >
             <View className="mb-3 bg-red-500/10 p-3 rounded-full">
-              <MaterialIcons name="error-outline" size={32} color="#ef4444" />
+              <MaterialIcons
+                name="error-outline"
+                size={scaledSize(32)}
+                color={dangerColor}
+              />
             </View>
             <Text
               className="text-lg font-bold mb-2 text-center"
-              style={{ color: theme.text }}
+              style={{ color: theme.text, fontSize: scaledSize(18) }}
             >
               Invalid Rate
             </Text>
             <Text
               className="text-xs text-center mb-5 leading-4"
-              style={{ color: theme.textSecondary }}
+              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
             >
               {errorMessage}
             </Text>
@@ -784,31 +792,37 @@ export default function ProviderSetupScreen() {
               className="w-full"
               onPress={() => setErrorModalVisible(false)}
             >
-              <LinearGradient
-                colors={["#ef4444", "#b91c1c"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              <View
                 className="p-3 rounded-xl items-center"
+                style={{ backgroundColor: dangerColor }}
               >
-                <Text className="font-bold text-xs text-white uppercase tracking-wider">
+                <Text
+                  className="font-bold text-xs text-white uppercase tracking-wider"
+                  style={{ fontSize: scaledSize(12) }}
+                >
                   OKAY
                 </Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
+      {/* HEADER */}
       <View
         className="flex-row items-center px-6 py-5 border-b"
         style={{ borderBottomColor: theme.cardBorder }}
       >
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <MaterialIcons name="close" size={24} color={theme.textSecondary} />
+          <MaterialIcons
+            name="close"
+            size={scaledSize(24)}
+            color={theme.textSecondary}
+          />
         </TouchableOpacity>
         <Text
           className="flex-1 text-center text-base font-bold"
-          style={{ color: theme.text }}
+          style={{ color: theme.text, fontSize: scaledSize(16) }}
         >
           Select Utility Provider
         </Text>
@@ -829,13 +843,13 @@ export default function ProviderSetupScreen() {
           >
             <MaterialIcons
               name="search"
-              size={20}
+              size={scaledSize(20)}
               color={theme.textSecondary}
               style={{ marginRight: 10 }}
             />
             <TextInput
               className="flex-1 text-sm font-medium"
-              style={{ color: theme.text }}
+              style={{ color: theme.text, fontSize: scaledSize(14) }}
               placeholder="Search provider..."
               placeholderTextColor={theme.textSecondary}
               value={searchQuery}
@@ -846,7 +860,7 @@ export default function ProviderSetupScreen() {
               <TouchableOpacity onPress={() => setSearchQuery("")}>
                 <MaterialIcons
                   name="cancel"
-                  size={18}
+                  size={scaledSize(18)}
                   color={theme.textSecondary}
                 />
               </TouchableOpacity>
@@ -863,7 +877,7 @@ export default function ProviderSetupScreen() {
             {!isSearching && (
               <Text
                 className="text-center text-xs mb-6 leading-5 px-2.5"
-                style={{ color: theme.textSecondary }}
+                style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
               >
                 Choose your local electricity distributor to sync rates
                 automatically.
@@ -880,6 +894,8 @@ export default function ProviderSetupScreen() {
                     onPress={() => handleSelect(item.id)}
                     theme={theme}
                     isDarkMode={isDarkMode}
+                    activeColor={activeColor}
+                    scaledSize={scaledSize}
                   />
                 ))}
               </View>
@@ -887,7 +903,10 @@ export default function ProviderSetupScreen() {
               <View>
                 <Text
                   className="text-xs font-bold uppercase tracking-widest mb-3 mt-2.5"
-                  style={{ color: theme.textSecondary }}
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(10),
+                  }}
                 >
                   Major Providers
                 </Text>
@@ -899,12 +918,17 @@ export default function ProviderSetupScreen() {
                     onPress={() => handleSelect(item.id)}
                     theme={theme}
                     isDarkMode={isDarkMode}
+                    activeColor={activeColor}
+                    scaledSize={scaledSize}
                   />
                 ))}
 
                 <Text
                   className="text-xs font-bold uppercase tracking-widest mb-3 mt-5"
-                  style={{ color: theme.textSecondary }}
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(10),
+                  }}
                 >
                   Cooperatives
                 </Text>
@@ -916,6 +940,8 @@ export default function ProviderSetupScreen() {
                     onPress={() => handleSelect(item.id)}
                     theme={theme}
                     isDarkMode={isDarkMode}
+                    activeColor={activeColor}
+                    scaledSize={scaledSize}
                   />
                 ))}
 
@@ -925,7 +951,7 @@ export default function ProviderSetupScreen() {
                 >
                   <Text
                     className="text-xs font-bold"
-                    style={{ color: theme.primary }}
+                    style={{ color: theme.primary, fontSize: scaledSize(12) }}
                   >
                     {showAll
                       ? "Show Less"
@@ -937,7 +963,7 @@ export default function ProviderSetupScreen() {
 
             <Text
               className="text-xs font-bold uppercase tracking-widest mb-3 mt-8"
-              style={{ color: theme.textSecondary }}
+              style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
             >
               Manual Configuration
             </Text>
@@ -946,7 +972,7 @@ export default function ProviderSetupScreen() {
               style={{
                 backgroundColor: theme.card,
                 borderColor:
-                  selectedId === "manual" ? "#0055ff" : theme.cardBorder,
+                  selectedId === "manual" ? activeColor : theme.cardBorder,
                 borderWidth: selectedId === "manual" ? 2 : 1,
               }}
               onPress={() => handleSelect("manual")}
@@ -954,25 +980,39 @@ export default function ProviderSetupScreen() {
             >
               <View className="flex-row items-center mb-1">
                 <View className="w-11 h-11 rounded-lg justify-center items-center mr-4 bg-[#222]">
-                  <MaterialIcons name="edit" size={20} color="#fff" />
+                  <MaterialIcons
+                    name="edit"
+                    size={scaledSize(20)}
+                    color="#fff"
+                  />
                 </View>
                 <View className="flex-1">
                   <Text
                     className="text-sm font-bold mb-0.5"
-                    style={{ color: theme.text }}
+                    style={{ color: theme.text, fontSize: scaledSize(14) }}
                   >
                     Set Custom Rate
                   </Text>
                   <Text
                     className="text-xs"
-                    style={{ color: theme.textSecondary }}
+                    style={{
+                      color: theme.textSecondary,
+                      fontSize: scaledSize(12),
+                    }}
                   >
                     Enter your own value
                   </Text>
                 </View>
                 {selectedId === "manual" && (
-                  <View className="bg-blue-600 w-6 h-6 rounded-full justify-center items-center">
-                    <MaterialIcons name="check" size={16} color="#fff" />
+                  <View
+                    className="w-6 h-6 rounded-full justify-center items-center"
+                    style={{ backgroundColor: activeColor }}
+                  >
+                    <MaterialIcons
+                      name="check"
+                      size={scaledSize(16)}
+                      color="#000"
+                    />
                   </View>
                 )}
               </View>
@@ -983,26 +1023,31 @@ export default function ProviderSetupScreen() {
                 >
                   <Text
                     className="text-xs font-semibold mb-2"
-                    style={{ color: theme.text }}
+                    style={{ color: theme.text, fontSize: scaledSize(12) }}
                   >
                     ₱ per kWh
                   </Text>
                   <View
                     className="flex-row items-center rounded-xl px-4 py-3 border"
                     style={{
-                      backgroundColor: isDarkMode ? "#0f0f0f" : "#f5f5f5",
-                      borderColor: realtimeError ? "#ef4444" : theme.cardBorder,
+                      backgroundColor: theme.buttonNeutral,
+                      borderColor: realtimeError
+                        ? dangerColor
+                        : theme.cardBorder,
                     }}
                   >
                     <Text
                       className="text-lg font-bold mr-2"
-                      style={{ color: theme.textSecondary }}
+                      style={{
+                        color: theme.text, // UPDATED to theme.text for White request
+                        fontSize: scaledSize(18),
+                      }}
                     >
                       ₱
                     </Text>
                     <TextInput
                       className="flex-1 text-lg font-bold"
-                      style={{ color: theme.text }}
+                      style={{ color: theme.text, fontSize: scaledSize(18) }}
                       placeholder="0.00"
                       placeholderTextColor={theme.textSecondary}
                       keyboardType="decimal-pad"
@@ -1010,9 +1055,11 @@ export default function ProviderSetupScreen() {
                       onChangeText={handleRateChange}
                     />
                   </View>
-                  {}
                   {realtimeError && (
-                    <Text className="text-xs text-red-500 mt-2 font-medium ml-1">
+                    <Text
+                      className="text-xs mt-2 font-medium ml-1"
+                      style={{ color: dangerColor, fontSize: scaledSize(10) }}
+                    >
                       {realtimeError}
                     </Text>
                   )}
@@ -1026,16 +1073,18 @@ export default function ProviderSetupScreen() {
               disabled={isButtonDisabled}
               style={{ opacity: isButtonDisabled ? 0.5 : 1 }}
             >
-              <LinearGradient
-                colors={["#0055ff", "#00ff99"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              {/* SOLID COLOR BUTTON (No Gradient) */}
+              <View
                 className="flex-1 justify-center items-center"
+                style={{ backgroundColor: activeColor }}
               >
-                <Text className="text-black font-bold text-sm uppercase tracking-wider">
+                <Text
+                  className="text-white font-bold text-sm uppercase tracking-wider"
+                  style={{ fontSize: scaledSize(12) }}
+                >
                   Confirm Selection
                 </Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -1044,7 +1093,15 @@ export default function ProviderSetupScreen() {
   );
 }
 
-function ProviderCard({ item, isSelected, onPress, theme, isDarkMode }) {
+function ProviderCard({
+  item,
+  isSelected,
+  onPress,
+  theme,
+  isDarkMode,
+  activeColor,
+  scaledSize,
+}) {
   const [status, setStatus] = useState("loading");
 
   return (
@@ -1052,12 +1109,12 @@ function ProviderCard({ item, isSelected, onPress, theme, isDarkMode }) {
       className="flex-row items-center p-4 rounded-2xl border mb-3"
       style={{
         backgroundColor: theme.card,
-        borderColor: isSelected ? "#0055ff" : theme.cardBorder,
+        borderColor: isSelected ? activeColor : theme.cardBorder,
         borderWidth: isSelected ? 2 : 1,
         ...(isSelected && {
           backgroundColor: isDarkMode
-            ? "rgba(0, 85, 255, 0.15)"
-            : "rgba(0, 85, 255, 0.05)",
+            ? "rgba(0, 255, 153, 0.1)" // Subtle Green tint
+            : "rgba(0, 166, 81, 0.05)",
         }),
       }}
       onPress={onPress}
@@ -1067,7 +1124,7 @@ function ProviderCard({ item, isSelected, onPress, theme, isDarkMode }) {
         {status === "loading" && (
           <ActivityIndicator
             size="small"
-            color="#0055ff"
+            color={activeColor}
             style={{ position: "absolute" }}
           />
         )}
@@ -1091,7 +1148,7 @@ function ProviderCard({ item, isSelected, onPress, theme, isDarkMode }) {
         {status === "error" && (
           <MaterialIcons
             name="bolt"
-            size={24}
+            size={scaledSize(24)}
             color="#ccc"
             style={{ position: "absolute" }}
           />
@@ -1099,20 +1156,32 @@ function ProviderCard({ item, isSelected, onPress, theme, isDarkMode }) {
       </View>
 
       <View className="flex-1">
-        <Text className="text-sm font-bold mb-1" style={{ color: theme.text }}>
+        <Text
+          className="text-sm font-bold mb-1"
+          style={{ color: theme.text, fontSize: scaledSize(14) }}
+        >
           {item.name}
         </Text>
-        <Text className="text-xs" style={{ color: theme.textSecondary }}>
+        <Text
+          className="text-xs"
+          style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+        >
           Rate:{" "}
-          <Text className="font-semibold" style={{ color: theme.primary }}>
+          <Text
+            className="font-semibold"
+            style={{ color: theme.primary, fontSize: scaledSize(12) }}
+          >
             ₱ {item.rate} / kWh
           </Text>
         </Text>
       </View>
 
       {isSelected && (
-        <View className="bg-blue-600 w-6 h-6 rounded-full justify-center items-center ml-2">
-          <MaterialIcons name="check" size={16} color="#fff" />
+        <View
+          className="w-6 h-6 rounded-full justify-center items-center ml-2"
+          style={{ backgroundColor: activeColor }}
+        >
+          <MaterialIcons name="check" size={scaledSize(16)} color="#000" />
         </View>
       )}
     </TouchableOpacity>

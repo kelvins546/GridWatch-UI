@@ -8,18 +8,28 @@ import {
   TextInput,
   Modal,
   Dimensions,
-  Switch,
+  Platform,
+  StyleSheet,
+  UIManager,
+  LayoutAnimation,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 const { width } = Dimensions.get("window");
 
 export default function LimitDetailScreen() {
   const navigation = useNavigation();
-  const { theme, fontScale } = useTheme();
+  const { theme, fontScale, isDarkMode } = useTheme();
 
   const scaledSize = (size) => size * fontScale;
 
@@ -60,6 +70,11 @@ export default function LimitDetailScreen() {
     setModalVisible(true);
   };
 
+  const handleToggleAutoOff = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setAutoOff(!autoOff);
+  };
+
   const handleModalClose = () => {
     setModalVisible(false);
     if (modalContent.redirect) {
@@ -73,79 +88,174 @@ export default function LimitDetailScreen() {
     }
   };
 
+  // --- STYLES ---
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    backButton: {
+      position: "absolute",
+      top: Platform.OS === "android" ? 40 : 50,
+      left: 20,
+      zIndex: 10,
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    backText: {
+      color: "#fff",
+      marginLeft: 8,
+      fontSize: scaledSize(16),
+      fontWeight: "600",
+      textShadowColor: "rgba(0,0,0,0.3)",
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 3,
+    },
+    // Standard Card Style
+    card: {
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+      borderWidth: 1,
+      borderRadius: 20,
+      padding: 20,
+      marginBottom: 16,
+    },
+    detailLabel: {
+      color: theme.textSecondary,
+      fontSize: scaledSize(12), // Increased from 11
+      fontWeight: "700",
+      textTransform: "uppercase",
+      marginBottom: 10,
+      letterSpacing: 1,
+    },
+    // Input Style
+    inputContainer: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 5,
+      width: "100%",
+    },
+    input: {
+      flex: 1,
+      backgroundColor: theme.background,
+      borderWidth: 1,
+      borderColor: theme.cardBorder,
+      borderRadius: 12,
+      paddingVertical: 0,
+      paddingHorizontal: 12,
+      color: theme.text,
+      fontSize: scaledSize(16), // Increased from 14 for better readability
+      fontWeight: "600",
+      height: 44,
+    },
+    addButton: {
+      justifyContent: "center",
+      alignItems: "center",
+      borderRadius: 12,
+      paddingHorizontal: 18,
+      height: 44,
+      backgroundColor: "#ffaa00",
+    },
+    addButtonText: {
+      color: "#000",
+      fontWeight: "800",
+      fontSize: scaledSize(14),
+      textTransform: "uppercase",
+    },
+    turnOffButton: {
+      width: "100%",
+      padding: 16,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.cardBorder,
+      backgroundColor: theme.card,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 10,
+    },
+    // --- MODAL STYLES (Matched Exactly) ---
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.8)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContainer: {
+      borderWidth: 1,
+      padding: 20,
+      borderRadius: 16,
+      width: 288, // w-72
+      alignItems: "center",
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+    },
+    modalTitle: {
+      fontWeight: "bold",
+      marginBottom: 8,
+      textAlign: "center",
+      color: theme.text,
+      fontSize: scaledSize(18),
+    },
+    modalBody: {
+      textAlign: "center",
+      marginBottom: 24,
+      lineHeight: 22,
+      color: theme.textSecondary,
+      fontSize: scaledSize(14), // Increased from 12 for better balance
+    },
+    modalButtonPrimary: {
+      width: "100%",
+      height: 40, // h-10
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.buttonPrimary,
+    },
+  });
+
   return (
-    <View style={{ flex: 1, backgroundColor: "#1a1a1a" }}>
-      <StatusBar barStyle="light-content" backgroundColor="#b37400" />
+    <View style={styles.container}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent={true}
+      />
 
-      <LinearGradient
-        colors={["#b37400", "#1a1a1a"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={{
-          paddingTop: 100,
-          paddingBottom: 30,
-          alignItems: "center",
-        }}
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => navigation.goBack()}
       >
-        <View
-          style={{
-            position: "absolute",
-            top: 50,
-            left: 24,
-            width: "100%",
-            zIndex: 10,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <TouchableOpacity
-            style={{ flexDirection: "row", alignItems: "center", opacity: 0.8 }}
-            onPress={() => navigation.goBack()}
-          >
-            <MaterialIcons
-              name="arrow-back"
-              size={scaledSize(18)}
-              color="#fff"
-            />
-            <Text
-              style={{
-                color: "#fff",
-                fontSize: scaledSize(14),
-                fontWeight: "500",
-                marginLeft: 5,
-              }}
-            >
-              Back
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <MaterialIcons name="arrow-back" size={24} color="#fff" />
+        <Text style={styles.backText}>Back</Text>
+      </TouchableOpacity>
 
+      {/* Hero Section */}
+      <LinearGradient
+        colors={["#ffaa00", theme.background]}
+        style={{ paddingTop: 120, paddingBottom: 40, alignItems: "center" }}
+      >
         <View
           style={{
             width: 80,
             height: 80,
-            backgroundColor: "rgba(0, 0, 0, 0.3)",
             borderRadius: 40,
-            justifyContent: "center",
+            backgroundColor: "rgba(0,0,0,0.2)",
             alignItems: "center",
-            marginBottom: 15,
+            justifyContent: "center",
             borderWidth: 2,
-            borderColor: "rgba(255, 200, 0, 0.3)",
+            borderColor: "rgba(255,255,255,0.2)",
+            marginBottom: 16,
           }}
         >
-          <MaterialIcons
-            name="timelapse"
-            size={scaledSize(40)}
-            color="#ffcc00"
-          />
+          <MaterialIcons name="timelapse" size={40} color="#fff" />
         </View>
         <Text
           style={{
             fontSize: scaledSize(24),
-            fontWeight: "800",
-            marginBottom: 5,
-            color: "#ffcc00",
+            fontWeight: "900",
+            color: "#fff",
+            marginBottom: 6,
           }}
         >
           Usage Limit Hit
@@ -153,41 +263,17 @@ export default function LimitDetailScreen() {
         <Text
           style={{
             fontSize: scaledSize(14),
-            opacity: 0.9,
-            color: "#fff",
+            color: "rgba(255,255,255,0.9)",
           }}
         >
           Smart TV exceeded daily budget
         </Text>
       </LinearGradient>
 
-      <ScrollView
-        style={{ flex: 1, paddingHorizontal: 24 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View
-          style={{
-            backgroundColor: "#222",
-            borderWidth: 1,
-            borderColor: "#333",
-            borderRadius: 20,
-            padding: 20,
-            marginBottom: 16,
-            width: "100%",
-          }}
-        >
-          <Text
-            style={{
-              textAlign: "left",
-              fontSize: scaledSize(11),
-              color: "#888",
-              fontWeight: "700",
-              marginBottom: 10,
-              textTransform: "uppercase",
-            }}
-          >
-            Daily Consumption
-          </Text>
+      <ScrollView contentContainerStyle={{ padding: 24 }}>
+        {/* --- DAILY CONSUMPTION CARD --- */}
+        <View style={styles.card}>
+          <Text style={styles.detailLabel}>Daily Consumption</Text>
 
           <View
             style={{
@@ -201,7 +287,7 @@ export default function LimitDetailScreen() {
               style={{
                 fontSize: scaledSize(32),
                 fontWeight: "800",
-                color: "#fff",
+                color: theme.text,
               }}
             >
               ₱ 45.50
@@ -209,7 +295,7 @@ export default function LimitDetailScreen() {
             <Text
               style={{
                 fontSize: scaledSize(14),
-                color: "#888",
+                color: theme.textSecondary,
                 fontWeight: "600",
                 paddingBottom: 6,
               }}
@@ -221,7 +307,7 @@ export default function LimitDetailScreen() {
           <View
             style={{
               height: 12,
-              backgroundColor: "#333",
+              backgroundColor: isDarkMode ? "#333" : "#e0e0e0",
               borderRadius: 6,
               overflow: "hidden",
               marginBottom: 8,
@@ -238,7 +324,7 @@ export default function LimitDetailScreen() {
           <Text
             style={{
               textAlign: "right",
-              fontSize: scaledSize(12),
+              fontSize: scaledSize(14), // Increased from 12
               color: "#ff4444",
               fontWeight: "700",
             }}
@@ -252,170 +338,105 @@ export default function LimitDetailScreen() {
               justifyContent: "space-between",
               marginTop: 15,
               borderTopWidth: 1,
-              borderTopColor: "#333",
+              borderTopColor: theme.cardBorder,
               paddingTop: 15,
             }}
           >
-            <Text style={{ fontSize: scaledSize(12), color: "#aaa" }}>
+            <Text
+              style={{
+                fontSize: scaledSize(13), // Increased from 12
+                color: theme.textSecondary,
+              }}
+            >
               Duration: 6h 30m
             </Text>
-            <Text style={{ fontSize: scaledSize(12), color: "#aaa" }}>
+            <Text
+              style={{
+                fontSize: scaledSize(13), // Increased from 12
+                color: theme.textSecondary,
+              }}
+            >
               Avg: 120 Watts
             </Text>
           </View>
         </View>
 
-        {}
+        {/* --- AUTO OFF TOGGLE CARD --- */}
         <View
-          style={{
-            backgroundColor: "#222",
-            borderWidth: 1,
-            borderColor: "#333",
-            borderRadius: 20,
-            padding: 22,
-            marginBottom: 16,
-            width: "100%",
-            flexDirection: "row",
-            alignItems: "center",
-          }}
+          style={[
+            styles.card,
+            { flexDirection: "row", alignItems: "center", paddingVertical: 16 },
+          ]}
         >
           <MaterialIcons
             name="settings-power"
             size={scaledSize(32)}
-            color="#888"
+            color={theme.icon}
           />
           <View style={{ flex: 1, marginLeft: 18 }}>
             <Text
               style={{
                 fontSize: scaledSize(16),
                 fontWeight: "700",
-                color: "#fff",
+                color: theme.text,
                 marginBottom: 4,
               }}
             >
               {autoOff ? "Auto-Off Enabled" : "Auto-Off Disabled"}
             </Text>
-            <Text style={{ fontSize: scaledSize(12), color: "#888" }}>
+            <Text
+              style={{
+                fontSize: scaledSize(13), // Increased from 12
+                color: theme.textSecondary,
+              }}
+            >
               {autoOff
                 ? "Device will turn off in 5 mins."
                 : "Manual control active."}
             </Text>
           </View>
 
-          <Switch
-            trackColor={{ false: "#666", true: theme.buttonPrimary }}
-            thumbColor="#FFFFFF"
-            ios_backgroundColor="#3e3e3e"
-            onValueChange={() => setAutoOff(!autoOff)}
+          <CustomSwitch
             value={autoOff}
-            style={{ transform: [{ scaleX: 1.2 }, { scaleY: 1.2 }] }}
+            onToggle={handleToggleAutoOff}
+            theme={theme}
           />
         </View>
 
-        <View
-          style={{
-            backgroundColor: "#222",
-            borderWidth: 1,
-            borderColor: "#333",
-            borderRadius: 20,
-            padding: 20,
-            marginBottom: 16,
-            width: "100%",
-          }}
-        >
-          <Text
-            style={{
-              textAlign: "left",
-              fontSize: scaledSize(11),
-              color: "#ffcc00",
-              fontWeight: "700",
-              marginBottom: 10,
-              textTransform: "uppercase",
-            }}
-          >
+        {/* --- EXTEND BUDGET CARD --- */}
+        <View style={styles.card}>
+          <Text style={[styles.detailLabel, { color: "#ffaa00" }]}>
             Extend Budget (Pesos)
           </Text>
 
-          <View
-            style={{
-              flexDirection: "row",
-              gap: 8,
-              marginTop: 5,
-              width: "100%",
-            }}
-          >
+          <View style={styles.inputContainer}>
             <TextInput
-              style={{
-                flex: 1,
-                backgroundColor: "#111",
-                borderWidth: 1,
-                borderColor: "#444",
-                borderRadius: 12,
-                paddingVertical: 0,
-                paddingHorizontal: 12,
-                color: "#fff",
-                fontSize: scaledSize(14),
-                fontWeight: "600",
-                height: 44,
-              }}
+              style={styles.input}
               placeholder="Amount (e.g. 20)"
-              placeholderTextColor="#666"
+              placeholderTextColor={theme.textSecondary}
               keyboardType="numeric"
               value={amount}
               onChangeText={setAmount}
             />
 
             <TouchableOpacity onPress={handleExtension} activeOpacity={0.8}>
-              <LinearGradient
-                colors={["#ffcc00", "#ffaa00"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{
-                  justifyContent: "center",
-                  alignItems: "center",
-                  borderRadius: 12,
-                  paddingHorizontal: 18,
-                  height: 44,
-                }}
-              >
-                <Text
-                  style={{
-                    color: "#000",
-                    fontWeight: "800",
-                    fontSize: scaledSize(14),
-                    textTransform: "uppercase",
-                  }}
-                >
-                  ADD
-                </Text>
-              </LinearGradient>
+              <View style={styles.addButton}>
+                <Text style={styles.addButtonText}>ADD</Text>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
 
-        <TouchableOpacity
-          style={{
-            width: "100%",
-            padding: 16,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: "#444",
-            backgroundColor: "#222",
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            marginTop: 10,
-          }}
-          onPress={handleTurnOff}
-        >
+        {/* --- TURN OFF BUTTON --- */}
+        <TouchableOpacity style={styles.turnOffButton} onPress={handleTurnOff}>
           <MaterialIcons
             name="power-settings-new"
             size={scaledSize(24)}
-            color="#fff"
+            color={theme.text}
           />
           <Text
             style={{
-              color: "#fff",
+              color: theme.text,
               fontWeight: "600",
               fontSize: scaledSize(16),
               marginLeft: 8,
@@ -426,13 +447,13 @@ export default function LimitDetailScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={{ marginTop: 20, alignItems: "center" }}
+          style={{ marginTop: 24, alignItems: "center" }}
           onPress={() => navigation.goBack()}
         >
           <Text
             style={{
-              fontSize: scaledSize(12),
-              color: "#666",
+              fontSize: scaledSize(14), // Increased from 12
+              color: theme.textSecondary,
               textDecorationLine: "underline",
             }}
           >
@@ -443,86 +464,69 @@ export default function LimitDetailScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
+      {/* --- SUCCESS MODAL --- */}
       <Modal
         animationType="fade"
         transparent={true}
         visible={modalVisible}
         onRequestClose={handleModalClose}
       >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0, 0, 0, 0.8)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "#1a1a1a",
-              borderWidth: 1,
-              borderColor: "#333",
-              paddingVertical: 24,
-              paddingHorizontal: 20,
-              borderRadius: 18,
-              width: 250,
-              alignItems: "center",
-              elevation: 5,
-            }}
-          >
-            {}
-            <Text
-              style={{
-                fontSize: scaledSize(17),
-                fontWeight: "700",
-                color: "#fff",
-                marginBottom: 8,
-              }}
-            >
-              {modalContent.title}
-            </Text>
-            <Text
-              style={{
-                fontSize: scaledSize(12),
-                color: "#bbb",
-                marginBottom: 20,
-                textAlign: "center",
-                lineHeight: 18,
-              }}
-            >
-              {modalContent.msg}
-            </Text>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>{modalContent.title}</Text>
+            <Text style={styles.modalBody}>{modalContent.msg}</Text>
 
             <TouchableOpacity
               onPress={handleModalClose}
-              style={{ width: "100%" }}
+              style={styles.modalButtonPrimary}
               activeOpacity={0.8}
             >
-              <LinearGradient
-                colors={["#0055ff", "#00ff99"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              <Text
                 style={{
-                  width: "100%",
-                  paddingVertical: 12,
-                  borderRadius: 12,
-                  alignItems: "center",
+                  color: "#fff",
+                  fontWeight: "bold",
+                  fontSize: scaledSize(12),
                 }}
               >
-                <Text
-                  style={{
-                    color: "#000",
-                    fontWeight: "700",
-                    fontSize: scaledSize(13),
-                  }}
-                >
-                  Okay, Got it
-                </Text>
-              </LinearGradient>
+                Okay, Got it
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
     </View>
+  );
+}
+
+// Reused CustomSwitch Component
+function CustomSwitch({ value, onToggle, theme }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onToggle}
+      style={{
+        width: 42,
+        height: 26,
+        borderRadius: 16,
+        backgroundColor: value ? theme.buttonPrimary : theme.buttonNeutral,
+        padding: 2,
+        justifyContent: "center",
+        alignItems: value ? "flex-end" : "flex-start",
+      }}
+    >
+      <View
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          backgroundColor: "#FFFFFF",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 2.5,
+          elevation: 2,
+        }}
+      />
+    </TouchableOpacity>
   );
 }

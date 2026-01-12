@@ -1,4 +1,6 @@
-import React, { createContext, useState, useContext } from "react";
+import React, { createContext, useState, useContext, useEffect } from "react";
+import { useColorScheme, Dimensions } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const baseFontSizes = {
   xs: 12,
@@ -19,9 +21,7 @@ const themes = {
     text: "#FFFFFF",
     textSecondary: "#D0D2D6",
     icon: "#D0D2D6",
-
     statusOffline: "#9DA3AE",
-
     primary: "#FFD700",
     statusBarStyle: "light-content",
     buttonPrimary: "#00A651",
@@ -38,12 +38,10 @@ const themes = {
     text: "#000000",
     textSecondary: "#1F1F1F",
     icon: "#1F1F1F",
-
     statusOffline: "#5F6672",
-
-    primary: "#007A3B",
+    primary: "#007A3B", // Deeper Green for primary elements
     statusBarStyle: "dark-content",
-    buttonPrimary: "#00A651",
+    buttonPrimary: "#008744", // Slightly darker, less vibrating green
     buttonPrimaryText: "#ffffff",
     buttonNeutral: "#e4e6eb",
     buttonNeutralText: "#000000",
@@ -55,12 +53,51 @@ const themes = {
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const systemScheme = useColorScheme();
+
+  const [isDarkMode, setIsDarkMode] = useState(systemScheme === "dark");
   const [fontScale, setFontScale] = useState(1);
+  const [isAdvancedMode, setIsAdvancedMode] = useState(true);
 
-  const toggleTheme = () => setIsDarkMode((prev) => !prev);
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const storedTheme = await AsyncStorage.getItem("themePreference");
+        if (storedTheme !== null) {
+          setIsDarkMode(storedTheme === "dark");
+        } else {
+          setIsDarkMode(systemScheme === "dark");
+        }
+
+        const storedMode = await AsyncStorage.getItem("homeMode");
+        if (storedMode !== null) {
+          setIsAdvancedMode(storedMode === "advanced");
+        }
+
+        const { width } = Dimensions.get("window");
+        if (width < 360) setFontScale(0.85);
+        else if (width > 500) setFontScale(1.1);
+      } catch (error) {
+        console.log("Error loading preferences:", error);
+      }
+    };
+
+    loadPreferences();
+  }, [systemScheme]);
+
+  const toggleTheme = async () => {
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+    await AsyncStorage.setItem("themePreference", newMode ? "dark" : "light");
+  };
+
+  const toggleAdvancedMode = async () => {
+    const newMode = !isAdvancedMode;
+    setIsAdvancedMode(newMode);
+    await AsyncStorage.setItem("homeMode", newMode ? "advanced" : "simple");
+  };
+
   const updateFontScale = (scale) => setFontScale(scale);
-
   const scaledSize = (size) => size * fontScale;
 
   const typography = {
@@ -90,6 +127,8 @@ export const ThemeProvider = ({ children }) => {
         fontScale,
         updateFontScale,
         scaledSize,
+        isAdvancedMode,
+        toggleAdvancedMode,
       }}
     >
       {children}

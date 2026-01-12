@@ -23,20 +23,20 @@ export default function DisconnectedScreen() {
 
   const pulseAnim = useRef(new Animated.Value(0)).current;
 
-  const redColor = isDarkMode ? "#ff4444" : "#c62828";
-  const greenColor = isDarkMode ? "#00ff99" : "#00995e";
+  // --- 1. UPDATED COLORS TO NEUTRAL/GRAY ---
+  const offlineColor = theme.textSecondary;
+  const offlineBg = theme.buttonNeutral;
+  const offlineBorder = theme.cardBorder;
 
-  const redBg = isDarkMode
-    ? "rgba(255, 68, 68, 0.1)"
-    : "rgba(198, 40, 40, 0.1)";
-
-  const greenBg = isDarkMode
+  // Safety Note remains Green to indicate "Protection Active"
+  const safeColor = theme.buttonPrimary;
+  const safeBg = isDarkMode
     ? "rgba(0, 255, 153, 0.05)"
     : "rgba(0, 153, 94, 0.05)";
-
-  const greenBorder = isDarkMode
+  const safeBorder = isDarkMode
     ? "rgba(0, 255, 153, 0.15)"
     : "rgba(0, 153, 94, 0.15)";
+  // ----------------------------------------
 
   useEffect(() => {
     Animated.loop(
@@ -63,7 +63,7 @@ export default function DisconnectedScreen() {
 
   const opacity = pulseAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.5, 0],
+    outputRange: [0.3, 0], // Reduced opacity for subtle gray pulse
   });
 
   return (
@@ -104,12 +104,13 @@ export default function DisconnectedScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.content}>
+          {/* --- GRAY OFFLINE ICON --- */}
           <View style={styles.iconContainer}>
             <Animated.View
               style={[
                 styles.pulseRing,
                 {
-                  borderColor: redColor,
+                  borderColor: offlineColor,
                   transform: [{ scale }],
                   opacity: opacity,
                 },
@@ -119,40 +120,39 @@ export default function DisconnectedScreen() {
               style={[
                 styles.iconCircle,
                 {
-                  backgroundColor: redBg,
-                  borderColor: isDarkMode
-                    ? "rgba(255, 68, 68, 0.2)"
-                    : "rgba(198, 40, 40, 0.2)",
+                  backgroundColor: offlineBg,
+                  borderColor: offlineBorder,
                 },
               ]}
             >
-              <MaterialIcons name="cloud-off" size={48} color={redColor} />
+              <MaterialIcons name="cloud-off" size={48} color={offlineColor} />
             </View>
           </View>
 
           <Text style={[styles.statusTitle, { color: theme.text }]}>
-            Hub Unreachable
+            Hub Offline
           </Text>
 
           <Text style={[styles.statusDesc, { color: theme.textSecondary }]}>
-            Request failed. {hubName || "GridWatch Hub"} is not responding to
-            commands.
+            Request failed. {hubName || "GridWatch Hub"} is currently
+            unreachable.
           </Text>
 
           <Text style={[styles.lastUpdate, { color: theme.textSecondary }]}>
             Last Connection: {lastSeen || "Unknown"}
           </Text>
 
+          {/* --- SAFETY NOTE (Kept Green) --- */}
           <View
             style={[
               styles.safetyNote,
               {
-                backgroundColor: greenBg,
-                borderColor: greenBorder,
+                backgroundColor: safeBg,
+                borderColor: safeBorder,
               },
             ]}
           >
-            <MaterialIcons name="security" size={24} color={greenColor} />
+            <MaterialIcons name="security" size={24} color={safeColor} />
             <Text style={[styles.safetyText, { color: theme.textSecondary }]}>
               Critical features like Short Circuit & Overload Protection run
               locally on the hardware, so you are fully protected even while
@@ -201,16 +201,13 @@ export default function DisconnectedScreen() {
           <TouchableOpacity
             style={[
               styles.retryBtn,
-              { backgroundColor: isDarkMode ? "#fff" : "#000" },
+              { backgroundColor: theme.buttonPrimary }, // Use Primary color for main action
             ]}
             activeOpacity={0.9}
             onPress={() => navigation.goBack()}
           >
             <Text
-              style={[
-                styles.retryBtnText,
-                { color: isDarkMode ? "#000" : "#fff" },
-              ]}
+              style={[styles.retryBtnText, { color: theme.buttonPrimaryText }]}
             >
               Return to Device
             </Text>
@@ -224,12 +221,7 @@ export default function DisconnectedScreen() {
 function StepItem({ num, text, theme }) {
   return (
     <View style={styles.stepItem}>
-      <View
-        style={[
-          styles.stepNum,
-          { backgroundColor: theme.textSecondary + "20" },
-        ]}
-      >
+      <View style={[styles.stepNum, { backgroundColor: theme.buttonNeutral }]}>
         <Text style={[styles.stepNumText, { color: theme.text }]}>{num}</Text>
       </View>
       <Text style={[styles.stepText, { color: theme.textSecondary }]}>

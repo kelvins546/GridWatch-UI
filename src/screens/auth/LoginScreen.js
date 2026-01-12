@@ -12,6 +12,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -23,7 +24,8 @@ const ALLOWED_EMAIL_REGEX =
 
 export default function LoginScreen() {
   const navigation = useNavigation();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, fontScale } = useTheme();
+  const scaledSize = (size) => size * fontScale;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -103,6 +105,54 @@ export default function LoginScreen() {
     }, 2000);
   };
 
+  // --- STANDARD MODAL STYLES ---
+  const styles = StyleSheet.create({
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.8)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContainer: {
+      borderWidth: 1,
+      padding: 20, // Standard p-5
+      borderRadius: 16, // Standard rounded-2xl
+      width: 288, // Standard w-72
+      alignItems: "center",
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+    },
+    modalTitle: {
+      fontWeight: "bold",
+      marginBottom: 8,
+      textAlign: "center",
+      color: theme.text,
+      fontSize: scaledSize(18),
+    },
+    modalBody: {
+      textAlign: "center",
+      marginBottom: 24,
+      lineHeight: 20,
+      color: theme.textSecondary,
+      fontSize: scaledSize(12),
+    },
+    modalButton: {
+      width: "100%",
+      height: 40, // Standard h-10
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.buttonDangerText, // Red for Error
+    },
+    modalButtonText: {
+      color: "#fff",
+      fontWeight: "bold",
+      fontSize: scaledSize(12),
+      textTransform: "uppercase",
+      letterSpacing: 1,
+    },
+  });
+
   return (
     <SafeAreaView
       className="flex-1"
@@ -131,7 +181,7 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View className="p-[30px]">
-            {}
+            {/* Logo Section */}
             <View className="items-center mb-10">
               <Animated.View
                 style={{
@@ -171,7 +221,7 @@ export default function LoginScreen() {
               </Text>
             </View>
 
-            {}
+            {/* Inputs */}
             <InputGroup
               label="Email Address"
               icon="email"
@@ -209,10 +259,7 @@ export default function LoginScreen() {
                 className="flex-row items-center rounded-xl px-4 py-2.5 border"
                 style={{
                   backgroundColor: theme.buttonNeutral,
-                  borderColor:
-                    touched.password && errors.password
-                      ? theme.buttonDangerText
-                      : theme.cardBorder,
+                  borderColor: theme.cardBorder,
                 }}
               >
                 <MaterialIcons
@@ -255,7 +302,7 @@ export default function LoginScreen() {
               </Text>
             </TouchableOpacity>
 
-            {}
+            {/* Login Button */}
             <TouchableOpacity onPress={handleLogin} activeOpacity={0.8}>
               <View
                 className="p-4 rounded-2xl items-center shadow-sm"
@@ -274,7 +321,6 @@ export default function LoginScreen() {
               <Text style={{ color: theme.textSecondary }}>
                 Don't have an account?{" "}
               </Text>
-              {}
               <TouchableOpacity
                 onPress={() => navigation.navigate("AuthSelection")}
               >
@@ -297,55 +343,23 @@ export default function LoginScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {}
+      {/* --- STANDARD ERROR MODAL --- */}
       <Modal
         animationType="fade"
         transparent={true}
         visible={errorModalVisible}
         onRequestClose={() => setErrorModalVisible(false)}
       >
-        <View className="flex-1 justify-center items-center bg-black/80">
-          <View
-            className="w-[80%] max-w-[320px] border p-8 rounded-2xl items-center"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
-          >
-            <View
-              className="mb-4 p-4 rounded-full"
-              style={{ backgroundColor: theme.buttonDanger }}
-            >
-              <MaterialIcons
-                name="error-outline"
-                size={40}
-                color={theme.buttonDangerText}
-              />
-            </View>
-            <Text
-              className="text-xl font-bold mb-2 text-center"
-              style={{ color: theme.text }}
-            >
-              Login Failed
-            </Text>
-            <Text
-              className="text-xs text-center mb-6 leading-5"
-              style={{ color: theme.textSecondary }}
-            >
-              {errorMessage}
-            </Text>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Login Failed</Text>
+            <Text style={styles.modalBody}>{errorMessage}</Text>
+
             <TouchableOpacity
-              className="w-full"
+              style={styles.modalButton}
               onPress={() => setErrorModalVisible(false)}
             >
-              <View
-                className="p-3 rounded-xl items-center"
-                style={{ backgroundColor: theme.buttonDangerText }}
-              >
-                <Text className="font-bold text-sm text-white uppercase tracking-wider">
-                  TRY AGAIN
-                </Text>
-              </View>
+              <Text style={styles.modalButtonText}>TRY AGAIN</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -387,7 +401,7 @@ function InputGroup({
         className="flex-row items-center rounded-xl px-4 py-2.5 border"
         style={{
           backgroundColor: theme.buttonNeutral,
-          borderColor: error ? theme.buttonDangerText : theme.cardBorder,
+          borderColor: theme.cardBorder,
         }}
       >
         <MaterialIcons

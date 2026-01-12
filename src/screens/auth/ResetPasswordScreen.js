@@ -2,22 +2,26 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TextInput,
   TouchableOpacity,
   ScrollView,
   Modal,
   ActivityIndicator,
   StatusBar,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { useTheme } from "../../context/ThemeContext";
 
 export default function ResetPasswordScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { theme, isDarkMode, fontScale } = useTheme();
+
+  const scaledSize = (size) => size * (fontScale || 1);
   const userEmail = route.params?.email || "your account";
 
   const [password, setPassword] = useState("");
@@ -26,7 +30,6 @@ export default function ResetPasswordScreen() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
-
   const [modalVisible, setModalVisible] = useState(false);
   const [modalConfig, setModalConfig] = useState({
     type: "success",
@@ -48,20 +51,12 @@ export default function ResetPasswordScreen() {
 
   const handleUpdatePassword = async () => {
     if (!password || !confirmPassword) {
-      showModal(
-        "error",
-        "Missing Fields",
-        "Please fill in both password fields."
-      );
+      showModal("error", "Missing Fields", "Please fill in both fields.");
       return;
     }
 
     if (!hasLength || !hasNumber || !hasUpper || !hasSpecial) {
-      showModal(
-        "error",
-        "Weak Password",
-        "Please follow all password requirements before proceeding."
-      );
+      showModal("error", "Weak Password", "Please follow all requirements.");
       return;
     }
 
@@ -71,176 +66,275 @@ export default function ResetPasswordScreen() {
     }
 
     setIsLoading(true);
-
     setTimeout(() => {
       setIsLoading(false);
       showModal(
         "success",
-        "Password Updated!",
-        "Successfully changed. Use your new password to log in.",
+        "Success!",
+        "Password updated. Please log in again.",
         () => navigation.reset({ index: 0, routes: [{ name: "Login" }] })
       );
     }, 1500);
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView
+      className="flex-1"
+      style={{ backgroundColor: theme.background }}
+    >
+      <StatusBar
+        barStyle={theme.statusBarStyle}
+        backgroundColor={theme.background}
+      />
 
       {isLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#00ff99" />
-          <Text style={styles.loadingText}>Updating Password...</Text>
+        <View className="absolute z-50 w-full h-full bg-black/70 justify-center items-center">
+          <ActivityIndicator size="large" color={theme.buttonPrimary} />
+          <Text className="mt-4 font-bold" style={{ color: theme.text }}>
+            Updating...
+          </Text>
         </View>
       )}
 
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-        >
-          <MaterialIcons name="arrow-back" size={18} color="#888" />
-          <Text style={{ color: "#888", marginLeft: 5 }}>Back</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.iconContainer}>
-          <MaterialIcons name="security" size={40} color="#00ff99" />
-        </View>
-
-        <Text style={styles.title}>New Password</Text>
-        <Text style={styles.desc}>
-          Identity verified. Please create a new strong password for{" "}
-          <Text style={{ color: "#fff" }}>{userEmail}</Text>.
-        </Text>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>New Password</Text>
-          <View style={[styles.inputWrapper, { marginBottom: 20 }]}>
-            <MaterialIcons
-              name="lock"
-              size={20}
-              color="#666"
-              style={{ marginRight: 12 }}
-            />
-            <TextInput
-              style={styles.inputField}
-              placeholder="Create new password"
-              placeholderTextColor="#555"
-              secureTextEntry={!showPass}
-              value={password}
-              onChangeText={setPassword}
-            />
-            <TouchableOpacity onPress={() => setShowPass(!showPass)}>
-              <MaterialIcons
-                name={showPass ? "visibility" : "visibility-off"}
-                size={20}
-                color="#666"
-              />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.label}>Confirm Password</Text>
-          <View style={styles.inputWrapper}>
-            <MaterialIcons
-              name="lock-outline"
-              size={20}
-              color="#666"
-              style={{ marginRight: 12 }}
-            />
-            <TextInput
-              style={styles.inputField}
-              placeholder="Re-enter password"
-              placeholderTextColor="#555"
-              secureTextEntry={!showConfirm}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-            />
-            <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)}>
-              <MaterialIcons
-                name={showConfirm ? "visibility" : "visibility-off"}
-                size={20}
-                color="#666"
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {}
-        {password.length > 0 && (
-          <View style={styles.requirementsBox}>
-            <Text style={styles.reqTitle}>PASSWORD REQUIREMENTS</Text>
-            <RequirementRow met={hasLength} text="At least 8 characters" />
-            <RequirementRow met={hasUpper} text="At least 1 uppercase letter" />
-            <RequirementRow met={hasNumber} text="Contains at least 1 number" />
-            <RequirementRow
-              met={hasSpecial}
-              text="At least 1 special character"
-            />
-            <RequirementRow met={isMatch} text="Passwords match" />
-          </View>
-        )}
-
-        <TouchableOpacity
-          onPress={handleUpdatePassword}
-          style={{ marginTop: 20 }}
-        >
-          <LinearGradient
-            colors={["#0055ff", "#00ff99"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.btnPrimary}
-          >
-            <Text style={styles.btnText}>RESET PASSWORD</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </ScrollView>
-
-      {}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => {
-          if (modalConfig.type === "error") setModalVisible(false);
-        }}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <MaterialIcons
-              name={
-                modalConfig.type === "success"
-                  ? "check-circle"
-                  : "error-outline"
-              }
-              size={40}
-              color={modalConfig.type === "success" ? "#00ff99" : "#ff4444"}
-              style={{ marginBottom: 15 }}
-            />
-            <Text style={styles.modalTitleSmall}>{modalConfig.title}</Text>
-            <Text style={styles.modalDescSmall}>{modalConfig.message}</Text>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="p-[30px]">
+            {/* Header */}
             <TouchableOpacity
-              style={{ width: "100%" }}
+              onPress={() => navigation.goBack()}
+              className="mb-6 flex-row items-center"
+            >
+              <MaterialIcons
+                name="arrow-back"
+                size={scaledSize(20)}
+                color={theme.textSecondary}
+              />
+              <Text
+                className="ml-2 font-medium"
+                style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+              >
+                Back
+              </Text>
+            </TouchableOpacity>
+
+            <View className="items-center mb-8">
+              <View
+                className="w-20 h-20 rounded-full items-center justify-center mb-4"
+                style={{ backgroundColor: `${theme.buttonPrimary}15` }}
+              >
+                <MaterialIcons
+                  name="security"
+                  size={40}
+                  color={theme.buttonPrimary}
+                />
+              </View>
+              <Text
+                className="font-bold text-2xl mb-2"
+                style={{ color: theme.text }}
+              >
+                New Password
+              </Text>
+              <Text
+                className="text-center text-sm"
+                style={{ color: theme.textSecondary }}
+              >
+                Create a strong password for{" "}
+                <Text style={{ color: theme.text, fontWeight: "bold" }}>
+                  {userEmail}
+                </Text>
+              </Text>
+            </View>
+
+            {/* Form */}
+            <View className="mb-6">
+              <Text
+                className="text-[11px] font-bold uppercase mb-2"
+                style={{ color: theme.textSecondary }}
+              >
+                New Password
+              </Text>
+              <View
+                className="flex-row items-center rounded-xl px-4 py-2.5 border mb-5"
+                style={{
+                  backgroundColor: theme.buttonNeutral,
+                  borderColor: theme.cardBorder,
+                }}
+              >
+                <MaterialIcons
+                  name="lock"
+                  size={20}
+                  color={theme.textSecondary}
+                  className="mr-3"
+                />
+                <TextInput
+                  className="flex-1 text-sm"
+                  style={{ color: theme.text, marginLeft: 10 }}
+                  placeholder="New Password"
+                  placeholderTextColor={theme.textSecondary}
+                  secureTextEntry={!showPass}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <TouchableOpacity onPress={() => setShowPass(!showPass)}>
+                  <MaterialIcons
+                    name={showPass ? "visibility" : "visibility-off"}
+                    size={20}
+                    color={theme.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <Text
+                className="text-[11px] font-bold uppercase mb-2"
+                style={{ color: theme.textSecondary }}
+              >
+                Confirm Password
+              </Text>
+              <View
+                className="flex-row items-center rounded-xl px-4 py-2.5 border"
+                style={{
+                  backgroundColor: theme.buttonNeutral,
+                  borderColor: theme.cardBorder,
+                }}
+              >
+                <MaterialIcons
+                  name="lock-outline"
+                  size={20}
+                  color={theme.textSecondary}
+                  className="mr-3"
+                />
+                <TextInput
+                  className="flex-1 text-sm"
+                  style={{ color: theme.text, marginLeft: 10 }}
+                  placeholder="Confirm Password"
+                  placeholderTextColor={theme.textSecondary}
+                  secureTextEntry={!showConfirm}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                />
+                <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)}>
+                  <MaterialIcons
+                    name={showConfirm ? "visibility" : "visibility-off"}
+                    size={20}
+                    color={theme.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Requirements Box */}
+            {password.length > 0 && (
+              <View
+                className="p-4 rounded-xl border mb-6"
+                style={{
+                  backgroundColor: theme.card,
+                  borderColor: theme.cardBorder,
+                }}
+              >
+                <Text
+                  className="text-[10px] font-bold uppercase mb-3"
+                  style={{ color: theme.textSecondary }}
+                >
+                  Password Requirements
+                </Text>
+                <RequirementRow
+                  met={hasLength}
+                  text="At least 8 characters"
+                  theme={theme}
+                />
+                <RequirementRow
+                  met={hasUpper}
+                  text="At least 1 uppercase letter"
+                  theme={theme}
+                />
+                <RequirementRow
+                  met={hasNumber}
+                  text="Contains at least 1 number"
+                  theme={theme}
+                />
+                <RequirementRow
+                  met={hasSpecial}
+                  text="At least 1 special character"
+                  theme={theme}
+                />
+                <RequirementRow
+                  met={isMatch}
+                  text="Passwords match"
+                  theme={theme}
+                />
+              </View>
+            )}
+
+            <TouchableOpacity
+              onPress={handleUpdatePassword}
+              activeOpacity={0.8}
+            >
+              <View
+                className="p-4 rounded-2xl items-center shadow-sm"
+                style={{ backgroundColor: theme.buttonPrimary }}
+              >
+                <Text
+                  className="font-bold text-[15px]"
+                  style={{ color: theme.buttonPrimaryText }}
+                >
+                  RESET PASSWORD
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* COMPACT TIGHT MODAL */}
+      <Modal animationType="fade" transparent={true} visible={modalVisible}>
+        <View className="flex-1 justify-center items-center bg-black/80">
+          <View
+            className="w-[70%] max-w-[260px] border p-5 rounded-2xl items-center"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            }}
+          >
+            {/* NO ICONS AS PER SETTINGS */}
+            <Text
+              className="text-lg font-bold mb-1 text-center"
+              style={{ color: theme.text }}
+            >
+              {modalConfig.title}
+            </Text>
+            <Text
+              className="text-xs text-center mb-5 leading-5"
+              style={{ color: theme.textSecondary }}
+            >
+              {modalConfig.message}
+            </Text>
+
+            <TouchableOpacity
+              style={{ width: "50%" }}
               onPress={() => {
                 setModalVisible(false);
                 if (modalConfig.onPress) modalConfig.onPress();
               }}
             >
-              <LinearGradient
-                colors={
-                  modalConfig.type === "success"
-                    ? ["#0055ff", "#00ff99"]
-                    : ["#ff4444", "#ff8800"]
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.modalBtnSmall}
+              <View
+                className="p-3 rounded-xl items-center"
+                style={{
+                  backgroundColor:
+                    modalConfig.type === "success"
+                      ? theme.buttonPrimary
+                      : theme.buttonDangerText,
+                }}
               >
-                <Text style={styles.btnTextBlack}>
+                <Text className="font-bold text-xs text-white uppercase tracking-wider">
                   {modalConfig.type === "success" ? "OK" : "TRY AGAIN"}
                 </Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -249,135 +343,20 @@ export default function ResetPasswordScreen() {
   );
 }
 
-function RequirementRow({ met, text }) {
+function RequirementRow({ met, text, theme }) {
   return (
-    <View
-      style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}
-    >
+    <View className="flex-row items-center mb-1.5">
       <MaterialIcons
         name={met ? "check-circle" : "radio-button-unchecked"}
         size={14}
-        color={met ? "#00ff99" : "#555"}
-        style={{ marginRight: 8 }}
+        color={met ? theme.buttonPrimary : theme.textSecondary}
       />
-      <Text style={{ fontSize: 12, color: met ? "#00ff99" : "#555" }}>
+      <Text
+        className="ml-2 text-[12px]"
+        style={{ color: met ? theme.buttonPrimary : theme.textSecondary }}
+      >
         {text}
       </Text>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0f0f0f" },
-  header: { padding: 24 },
-  backBtn: { flexDirection: "row", alignItems: "center" },
-  content: { paddingHorizontal: 30, paddingBottom: 40 },
-  loadingOverlay: {
-    position: "absolute",
-    zIndex: 50,
-    width: "100%",
-    height: "100%",
-    backgroundColor: "rgba(0,0,0,0.8)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: { color: "#fff", marginTop: 15, fontWeight: "bold" },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(0,255,153,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "rgba(0,255,153,0.2)",
-  },
-  title: { fontSize: 24, fontWeight: "800", color: "#fff", marginBottom: 10 },
-  desc: { fontSize: 14, color: "#888", lineHeight: 22, marginBottom: 30 },
-  inputGroup: { marginBottom: 10 },
-  label: {
-    fontSize: 11,
-    color: "#888",
-    fontWeight: "700",
-    textTransform: "uppercase",
-    marginBottom: 8,
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#222",
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#333",
-  },
-  inputField: { flex: 1, color: "#fff", fontSize: 14 },
-  requirementsBox: {
-    backgroundColor: "#1a1a1a",
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#333",
-    marginBottom: 20,
-  },
-  reqTitle: {
-    fontSize: 11,
-    color: "#888",
-    fontWeight: "bold",
-    textTransform: "uppercase",
-    marginBottom: 10,
-  },
-  btnPrimary: { padding: 16, borderRadius: 16, alignItems: "center" },
-  btnText: {
-    fontWeight: "700",
-    fontSize: 13,
-    color: "#000",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  btnTextBlack: {
-    fontWeight: "700",
-    fontSize: 13,
-    color: "#000",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.85)",
-  },
-  modalCard: {
-    width: "75%",
-    maxWidth: 280,
-    backgroundColor: "#1a1a1a",
-    paddingVertical: 25,
-    paddingHorizontal: 20,
-    borderRadius: 18,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#333",
-  },
-  modalTitleSmall: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  modalDescSmall: {
-    fontSize: 13,
-    color: "#999",
-    textAlign: "center",
-    marginBottom: 20,
-    lineHeight: 18,
-  },
-  modalBtnSmall: {
-    padding: 12,
-    borderRadius: 10,
-    alignItems: "center",
-    width: "100%",
-  },
-});

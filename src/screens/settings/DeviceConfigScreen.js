@@ -39,24 +39,27 @@ export default function DeviceConfigScreen() {
     setIsOnline(!isOnline);
   };
 
-  let statusDetailText = isOnline
-    ? "Online • Stable"
-    : "Offline • Check Connection";
+  // --- UPDATED STATUS LOGIC ---
+  let statusDetailText = "Offline • Check Connection";
+  let statusColor = theme.textSecondary; // GRAY for Offline
+  let statusBg = theme.buttonNeutral; // GRAY BG for Offline
+  let statusIcon = "wifi-off";
 
-  let statusColor = isOnline ? theme.buttonPrimary : "#ff4444";
-  let statusBg = isOnline
-    ? isDarkMode
-      ? "rgba(0, 255, 153, 0.1)"
-      : "rgba(0, 153, 94, 0.1)"
-    : "rgba(255, 68, 68, 0.1)";
-  let statusIcon = isOnline ? "router" : "wifi-off";
+  if (isOnline) {
+    statusDetailText = "Online • Stable";
+    statusColor = theme.buttonPrimary; // GREEN for Online
+    // Subtle Green BG based on Theme
+    statusBg = isDarkMode ? "rgba(0, 255, 153, 0.1)" : "rgba(0, 166, 81, 0.1)";
+    statusIcon = "router";
+  }
 
   if (isRestarting) {
     statusDetailText = "System Rebooting...";
-    statusColor = "#FFC107";
+    statusColor = "#FFC107"; // Amber
     statusBg = "rgba(255, 193, 7, 0.15)";
     statusIcon = "hourglass-top";
   }
+  // ----------------------------
 
   const [modalState, setModalState] = useState({
     visible: false,
@@ -201,6 +204,7 @@ export default function DeviceConfigScreen() {
         backgroundColor={theme.background}
       />
 
+      {/* HEADER */}
       <View
         className="flex-row items-center justify-between px-6 py-5 border-b"
         style={{
@@ -235,6 +239,7 @@ export default function DeviceConfigScreen() {
 
       <ScrollView>
         <View className="p-6">
+          {/* STATUS CIRCLE */}
           <View
             className="items-center py-5 border-b mb-5"
             style={{ borderBottomColor: theme.cardBorder }}
@@ -246,7 +251,10 @@ export default function DeviceConfigScreen() {
             >
               <View
                 className="w-20 h-20 rounded-full border-2 justify-center items-center mb-4"
-                style={{ borderColor: statusColor, backgroundColor: statusBg }}
+                style={{
+                  borderColor: isOnline ? statusColor : theme.cardBorder, // Neutral border for offline
+                  backgroundColor: statusBg,
+                }}
               >
                 <MaterialIcons
                   name={statusIcon}
@@ -275,6 +283,7 @@ export default function DeviceConfigScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* SYSTEM INFO */}
           <Text
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
@@ -330,6 +339,7 @@ export default function DeviceConfigScreen() {
             </View>
           </View>
 
+          {/* NETWORK CONNECTION */}
           <Text
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
@@ -384,6 +394,7 @@ export default function DeviceConfigScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* OUTLET CONFIGURATION */}
           <Text
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
@@ -442,6 +453,7 @@ export default function DeviceConfigScreen() {
             />
           </TouchableOpacity>
 
+          {/* ADVANCED ACTIONS */}
           <Text
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
@@ -490,7 +502,7 @@ export default function DeviceConfigScreen() {
         </View>
       </ScrollView>
 
-      {}
+      {/* MODAL */}
       <Modal
         transparent
         visible={modalState.visible}

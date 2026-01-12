@@ -27,6 +27,18 @@ export default function BudgetDetailScreen() {
 
   const [pushNotifications, setPushNotifications] = useState(true);
 
+  // --- SIMULATION DATA ---
+  const globalBudget = 3000; // Your Global Goal
+  const otherDevicesLimit = 1500; // Total limits of ALL OTHER devices
+  const currentDeviceLimit = parseFloat(limit) || 0;
+  const totalAllocated = otherDevicesLimit + currentDeviceLimit;
+
+  // Logic: Does this specific device push the total over the global goal?
+  const isOverAllocated = totalAllocated > globalBudget;
+
+  const primaryColor = isDarkMode ? theme.buttonPrimary : "#00995e";
+  const dangerColor = isDarkMode ? theme.buttonDangerText : "#cc0000";
+
   const usedAmount = 1450.75;
   const numericLimit = parseFloat(limit) || 0;
 
@@ -59,7 +71,6 @@ export default function BudgetDetailScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
       <View
         className="flex-row items-center justify-between px-6 py-5 border-b"
         style={{
@@ -145,7 +156,7 @@ export default function BudgetDetailScreen() {
             Set Limit (Pesos)
           </Text>
           <View
-            className="flex-row items-center justify-between p-5 rounded-[20px] border mb-8"
+            className="flex-row items-center justify-between p-5 rounded-[20px] border mb-4"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
@@ -196,6 +207,51 @@ export default function BudgetDetailScreen() {
               />
             </TouchableOpacity>
           </View>
+
+          {/* --- [ADDED] BUDGET HEALTH WARNING --- */}
+          <View
+            className="p-3 rounded-xl border mb-8"
+            style={{
+              backgroundColor: isOverAllocated
+                ? isDarkMode
+                  ? "rgba(255,68,68,0.1)"
+                  : "rgba(255,200,200,0.3)"
+                : isDarkMode
+                ? "rgba(0,153,94,0.1)"
+                : "rgba(200,255,220,0.3)",
+              borderColor: isOverAllocated ? dangerColor : primaryColor,
+            }}
+          >
+            <View className="flex-row items-center">
+              <MaterialIcons
+                name={isOverAllocated ? "warning" : "check-circle"}
+                size={16}
+                color={isOverAllocated ? dangerColor : primaryColor}
+              />
+              <Text
+                className="font-bold ml-2"
+                style={{
+                  color: isOverAllocated ? dangerColor : primaryColor,
+                  fontSize: scaledSize(12),
+                }}
+              >
+                {isOverAllocated ? "Exceeds Global Goal" : "Within Global Goal"}
+              </Text>
+            </View>
+            <Text
+              style={{
+                color: theme.textSecondary,
+                fontSize: scaledSize(11),
+                marginTop: 4,
+                lineHeight: 16,
+              }}
+            >
+              {isOverAllocated
+                ? `This limit combined with others (₱${otherDevicesLimit}) exceeds your global goal of ₱${globalBudget}.`
+                : "This limit fits safely within your overall budget goal."}
+            </Text>
+          </View>
+          {/* ------------------------------------- */}
 
           <Text
             className="font-bold uppercase tracking-widest mb-3"

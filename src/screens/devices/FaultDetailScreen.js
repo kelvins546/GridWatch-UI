@@ -6,22 +6,35 @@ import {
   ScrollView,
   StatusBar,
   Modal,
+  Platform,
+  StyleSheet,
+  UIManager,
+  LayoutAnimation,
+  ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 export default function FaultDetailScreen() {
   const navigation = useNavigation();
-  const { theme } = useTheme();
+  const { theme, fontScale, isDarkMode } = useTheme();
+  const scaledSize = (size) => size * fontScale;
 
   const [checks, setChecks] = useState([false, false, false]);
   const [showModal, setShowModal] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
 
   const toggleCheck = (index) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     const newChecks = [...checks];
     newChecks[index] = !newChecks[index];
     setChecks(newChecks);
@@ -36,197 +49,405 @@ export default function FaultDetailScreen() {
     setTimeout(() => {
       setIsResetting(false);
       setShowModal(true);
-    }, 1500);
+    }, 2000);
   };
 
-  return (
-    <SafeAreaView
-      className="flex-1"
-      style={{ backgroundColor: theme.background }}
-      edges={["top", "left", "right"]}
-    >
-      <StatusBar barStyle="light-content" backgroundColor="#ff4444" />
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    backButton: {
+      position: "absolute",
+      top: Platform.OS === "android" ? 40 : 50,
+      left: 20,
+      zIndex: 10,
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    backText: {
+      color: "#fff",
+      marginLeft: 8,
+      fontSize: scaledSize(16),
+      fontWeight: "600",
+    },
+    // --- ADOPTED BOXING LAYOUT ---
+    card: {
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+      borderWidth: 1,
+      borderRadius: 20,
+      padding: 20,
+      marginBottom: 16,
+    },
+    detailLabel: {
+      color: theme.textSecondary,
+      fontSize: scaledSize(12),
+      fontWeight: "bold",
+      textTransform: "uppercase",
+      letterSpacing: 1,
+    },
+    detailValue: {
+      fontSize: scaledSize(15),
+      fontWeight: "600",
+      color: theme.text,
+    },
+    sectionTitle: {
+      fontSize: scaledSize(12),
+      fontWeight: "bold",
+      color: theme.textSecondary,
+      marginBottom: 12,
+      marginTop: 8,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+    },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 6,
+      borderWidth: 2,
+      marginRight: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    resetBtn: {
+      width: "100%",
+      paddingVertical: 16,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 10,
+      flexDirection: "row",
+    },
+    // --- MODAL STYLES ---
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.8)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContainer: {
+      borderWidth: 1,
+      padding: 20,
+      borderRadius: 16,
+      width: 288,
+      alignItems: "center",
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+    },
+    loaderOverlay: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.7)",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 50,
+    },
+  });
 
-      <View className="absolute top-12 left-6 z-10">
-        <TouchableOpacity
-          className="flex-row items-center gap-1.5"
-          onPress={() => navigation.goBack()}
-        >
-          <MaterialIcons name="arrow-back" size={18} color="#fff" />
-          <Text className="text-white text-sm font-medium">Back</Text>
-        </TouchableOpacity>
-      </View>
+  return (
+    <View style={styles.container}>
+      <StatusBar
+        barStyle="light-content"
+        translucent
+        backgroundColor="transparent"
+      />
+
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => navigation.goBack()}
+      >
+        <MaterialIcons name="arrow-back" size={24} color="#fff" />
+        <Text style={styles.backText}>Back</Text>
+      </TouchableOpacity>
 
       <LinearGradient
         colors={["#ff4444", theme.background]}
-        className="pt-24 pb-8 items-center"
+        style={{ paddingTop: 120, paddingBottom: 40, alignItems: "center" }}
       >
-        <View className="w-20 h-20 rounded-full bg-black/20 items-center justify-center border-2 border-white/20 mb-4">
+        <View
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            backgroundColor: "rgba(0,0,0,0.2)",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 2,
+            borderColor: "rgba(255,255,255,0.2)",
+            marginBottom: 16,
+          }}
+        >
           <MaterialIcons name="flash-off" size={40} color="#fff" />
         </View>
-        <Text className="text-2xl font-extrabold text-white mb-1.5">
+        <Text
+          style={{
+            fontSize: scaledSize(24),
+            fontWeight: "900",
+            color: "#fff",
+            marginBottom: 6,
+          }}
+        >
           Power Cutoff Active
         </Text>
-        <Text className="text-sm text-white/90">
+        <Text
+          style={{ fontSize: scaledSize(14), color: "rgba(255,255,255,0.9)" }}
+        >
           Safety Protection Triggered
         </Text>
       </LinearGradient>
 
-      <ScrollView>
-        <View className="p-6">
+      <ScrollView contentContainerStyle={{ padding: 24 }}>
+        {/* --- MAIN INCIDENT BOX --- */}
+        <View style={styles.card}>
+          <Text style={[styles.detailLabel, { marginBottom: 12 }]}>
+            Incident Report
+          </Text>
           <View
-            className="p-5 rounded-3xl border mb-5"
             style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginBottom: 12,
             }}
           >
-            <DetailRow label="Device Name" value="Outlet 3" theme={theme} />
-            <DetailRow
-              label="Fault Type"
-              value="Short Circuit Detected"
-              valueColor="#ff4444"
-              theme={theme}
-            />
-            <DetailRow
-              label="Time of Incident"
-              value="Today, 10:42 AM"
-              theme={theme}
-            />
-            <DetailRow
-              label="Peak Current"
-              value="45.2 Amps (Limit: 15A)"
-              theme={theme}
-            />
-          </View>
-
-          <Text className="text-xs font-bold text-neutral-500 mb-3 tracking-widest">
-            REQUIRED SAFETY CHECKS
-          </Text>
-
-          <CheckItem
-            text="I have unplugged the faulty appliance connected to Outlet 3."
-            checked={checks[0]}
-            onPress={() => toggleCheck(0)}
-            theme={theme}
-          />
-          <CheckItem
-            text="I have inspected the outlet for any visible burn marks or smoke."
-            checked={checks[1]}
-            onPress={() => toggleCheck(1)}
-            theme={theme}
-          />
-          <CheckItem
-            text="I understand that resetting power to a faulty circuit can be dangerous."
-            checked={checks[2]}
-            onPress={() => toggleCheck(2)}
-            theme={theme}
-          />
-
-          <View className="mt-4">
-            <TouchableOpacity
-              className="w-full py-4 rounded-2xl items-center"
-              style={{
-                backgroundColor: allChecked ? "#ff4444" : "#333",
-              }}
-              disabled={!allChecked || isResetting}
-              onPress={handleReset}
-            >
-              <Text className="text-white font-bold uppercase tracking-widest text-sm">
-                {isResetting
-                  ? "Resetting..."
-                  : allChecked
-                  ? "RESET OUTLET POWER"
-                  : "Complete Checks to Reset"}
+            <View>
+              <Text style={styles.detailLabel}>Affected Device</Text>
+              <Text style={styles.detailValue}>Outlet 3</Text>
+            </View>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={styles.detailLabel}>Status</Text>
+              <Text style={[styles.detailValue, { color: "#ff4444" }]}>
+                TRIPPED
               </Text>
-            </TouchableOpacity>
+            </View>
           </View>
-
-          <Text className="text-xs text-neutral-500 text-center mt-6">
-            GridWatch System ID: GW-SAFE-9921
-          </Text>
-        </View>
-      </ScrollView>
-
-      <Modal visible={showModal} transparent animationType="fade">
-        <View className="flex-1 bg-black/80 justify-center items-center">
           <View
-            className="w-72 p-8 rounded-3xl items-center border"
             style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
+              height: 1,
+              backgroundColor: theme.cardBorder,
+              marginVertical: 12,
             }}
+          />
+          <View
+            style={{ flexDirection: "row", justifyContent: "space-between" }}
+          >
+            <View>
+              <Text style={styles.detailLabel}>Peak Current</Text>
+              <Text style={styles.detailValue}>45.2 A</Text>
+            </View>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={styles.detailLabel}>Time of Fault</Text>
+              <Text style={styles.detailValue}>10:42 AM</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* --- ADOPTED SMALLER BOXES --- */}
+        <View style={{ flexDirection: "row", gap: 12, marginBottom: 20 }}>
+          <View
+            style={[
+              styles.card,
+              { flex: 1, marginBottom: 0, alignItems: "center" },
+            ]}
           >
             <MaterialIcons
-              name="check-circle"
-              size={48}
-              color="#00ff99"
-              style={{ marginBottom: 15 }}
+              name="bolt"
+              size={20}
+              color={theme.textSecondary}
+              style={{ marginBottom: 8 }}
+            />
+            <Text style={styles.detailLabel}>Fault Type</Text>
+            <Text style={[styles.detailValue, { fontSize: scaledSize(13) }]}>
+              Short Circuit
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.card,
+              { flex: 1, marginBottom: 0, alignItems: "center" },
+            ]}
+          >
+            <MaterialIcons
+              name="history"
+              size={20}
+              color={theme.textSecondary}
+              style={{ marginBottom: 8 }}
+            />
+            <Text style={styles.detailLabel}>Last Active</Text>
+            <Text style={styles.detailValue}>10:41 AM</Text>
+          </View>
+        </View>
+
+        <Text style={styles.sectionTitle}>Required Safety Checks</Text>
+
+        <CheckItem
+          text="I have unplugged the faulty appliance connected to Outlet 3."
+          checked={checks[0]}
+          onPress={() => toggleCheck(0)}
+          theme={theme}
+          styles={styles}
+          scaledSize={scaledSize}
+        />
+        <CheckItem
+          text="I have inspected the outlet for any visible burn marks or smoke."
+          checked={checks[1]}
+          onPress={() => toggleCheck(1)}
+          theme={theme}
+          styles={styles}
+          scaledSize={scaledSize}
+        />
+        <CheckItem
+          text="I understand that resetting power to a faulty circuit can be dangerous."
+          checked={checks[2]}
+          onPress={() => toggleCheck(2)}
+          theme={theme}
+          styles={styles}
+          scaledSize={scaledSize}
+        />
+
+        <View style={{ marginTop: 16 }}>
+          <TouchableOpacity
+            style={[
+              styles.resetBtn,
+              {
+                backgroundColor: allChecked ? "#ff4444" : theme.cardBorder,
+                opacity: allChecked ? 1 : 0.5,
+              },
+            ]}
+            disabled={!allChecked || isResetting}
+            onPress={handleReset}
+          >
+            <MaterialIcons
+              name="power-settings-new"
+              size={scaledSize(22)}
+              color="#fff"
             />
             <Text
-              className="text-lg font-bold mb-2.5"
-              style={{ color: theme.text }}
+              style={[
+                styles.resetBtnText,
+                {
+                  marginLeft: 10,
+                  color: "#fff",
+                  fontWeight: "bold",
+                  fontSize: scaledSize(14),
+                },
+              ]}
+            >
+              {isResetting ? "RESTORING..." : "RESET OUTLET POWER"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text
+          style={{
+            fontSize: scaledSize(10),
+            color: theme.textSecondary,
+            textAlign: "center",
+            marginTop: 24,
+          }}
+        >
+          GridWatch System ID: GW-SAFE-9921
+        </Text>
+      </ScrollView>
+
+      {isResetting && (
+        <View style={styles.loaderOverlay}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text
+            style={{
+              color: "#fff",
+              marginTop: 16,
+              fontSize: scaledSize(14),
+              fontWeight: "600",
+            }}
+          >
+            Restoring Power...
+          </Text>
+        </View>
+      )}
+
+      <Modal visible={showModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text
+              style={{
+                fontWeight: "bold",
+                marginBottom: 8,
+                textAlign: "center",
+                color: theme.text,
+                fontSize: scaledSize(18),
+              }}
             >
               Power Restored
             </Text>
             <Text
-              className="text-xs text-center mb-6 leading-5"
-              style={{ color: theme.textSecondary }}
+              style={{
+                textAlign: "center",
+                marginBottom: 24,
+                lineHeight: 20,
+                color: theme.textSecondary,
+                fontSize: scaledSize(12),
+              }}
             >
               Safety protocols verified. Power has been safely restored to
               Outlet 3.
             </Text>
             <TouchableOpacity
-              className="w-full py-3.5 rounded-xl border items-center"
-              style={{ borderColor: theme.text }}
+              style={{
+                width: "100%",
+                height: 40,
+                borderRadius: 12,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: theme.buttonPrimary,
+              }}
               onPress={() => navigation.navigate("MainApp", { screen: "Home" })}
             >
-              <Text className="font-bold text-sm" style={{ color: theme.text }}>
+              <Text
+                style={{
+                  fontWeight: "bold",
+                  fontSize: scaledSize(12),
+                  color: "#fff",
+                }}
+              >
                 Return to Dashboard
               </Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
-  );
-}
-
-function DetailRow({ label, value, valueColor, theme }) {
-  return (
-    <View className="flex-row justify-between mb-3 last:mb-0">
-      <Text className="text-sm" style={{ color: theme.textSecondary }}>
-        {label}
-      </Text>
-      <Text
-        className="text-sm font-semibold"
-        style={{ color: valueColor || theme.text }}
-      >
-        {value}
-      </Text>
     </View>
   );
 }
 
-function CheckItem({ text, checked, onPress, theme }) {
+function CheckItem({ text, checked, onPress, theme, styles, scaledSize }) {
   return (
     <TouchableOpacity
-      className="flex-row mb-4 pr-2.5"
+      style={{ flexDirection: "row", marginBottom: 16, paddingRight: 10 }}
       onPress={onPress}
       activeOpacity={0.7}
     >
       <View
-        className="w-5 h-5 rounded-md border-2 mr-4 items-center justify-center"
-        style={{
-          borderColor: checked ? "#00ff99" : "#444",
-          backgroundColor: checked ? "#00ff99" : "transparent",
-        }}
+        style={[
+          styles.checkbox,
+          {
+            borderColor: checked ? "#00ff99" : theme.textSecondary,
+            backgroundColor: checked ? "#00ff99" : "transparent",
+          },
+        ]}
       >
-        {checked && <MaterialIcons name="check" size={14} color="#000" />}
+        {checked && <MaterialIcons name="check" size={16} color="#000" />}
       </View>
       <Text
-        className="text-sm flex-1 leading-5"
-        style={{ color: theme.textSecondary }}
+        style={{
+          flex: 1,
+          fontSize: scaledSize(13),
+          color: theme.text,
+          lineHeight: 20,
+        }}
       >
         {text}
       </Text>

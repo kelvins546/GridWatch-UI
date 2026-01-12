@@ -12,30 +12,38 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import * as ImagePicker from "expo-image-picker";
 
 export default function ProfileSettingsScreen() {
   const navigation = useNavigation();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, fontScale } = useTheme();
 
+  // Helper for font scaling
+  const scaledSize = (size) => size * (fontScale || 1);
+
+  // --- STATE MANAGEMENT ---
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [unitNumber, setUnitNumber] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState(null);
 
+  // Location Fields (Added from Signup)
+  const [unitNumber, setUnitNumber] = useState("");
+  const [region, setRegion] = useState("");
+  const [city, setCity] = useState("");
+  const [zipCode, setZipCode] = useState("");
+  const [streetAddress, setStreetAddress] = useState("");
+
+  const [avatarUrl, setAvatarUrl] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
 
-  const [initialData, setInitialData] = useState({
-    fullName: "",
-    unitNumber: "",
-    avatarUrl: null,
-  });
+  const [initialData, setInitialData] = useState({});
 
+  // Password Fields
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
 
@@ -58,21 +66,35 @@ export default function ProfileSettingsScreen() {
     setIsLoading(true);
 
     setTimeout(() => {
+      // Mock Data (Simulating DB fetch)
       const demoData = {
         full_name: "Kelvin Manalad",
         email: "kelvin.manalad@example.com",
-        unit_location: "Unit 402, Tower 1",
+        unit_number: "Unit 402",
+        region: "Metro Manila",
+        city: "Caloocan City",
+        zip_code: "1400",
+        street_address: "#173 Rainbow Village, Brgy 173",
         avatar_url: null,
       };
 
       setFullName(demoData.full_name);
       setEmail(demoData.email);
-      setUnitNumber(demoData.unit_location);
+      setUnitNumber(demoData.unit_number);
+      setRegion(demoData.region);
+      setCity(demoData.city);
+      setZipCode(demoData.zip_code);
+      setStreetAddress(demoData.street_address);
       setAvatarUrl(demoData.avatar_url);
 
+      // Save initial state to check for changes later
       setInitialData({
         fullName: demoData.full_name,
-        unitNumber: demoData.unit_location,
+        unitNumber: demoData.unit_number,
+        region: demoData.region,
+        city: demoData.city,
+        zipCode: demoData.zip_code,
+        streetAddress: demoData.street_address,
         avatarUrl: demoData.avatar_url,
       });
       setIsLoading(false);
@@ -107,10 +129,23 @@ export default function ProfileSettingsScreen() {
   const hasUnsavedChanges = () => {
     const nameChanged = fullName !== initialData.fullName;
     const unitChanged = unitNumber !== initialData.unitNumber;
+    const regionChanged = region !== initialData.region;
+    const cityChanged = city !== initialData.city;
+    const zipChanged = zipCode !== initialData.zipCode;
+    const streetChanged = streetAddress !== initialData.streetAddress;
     const passwordTyped = currentPassword.length > 0 || newPassword.length > 0;
     const imageChanged = selectedImage !== null;
 
-    return nameChanged || unitChanged || passwordTyped || imageChanged;
+    return (
+      nameChanged ||
+      unitChanged ||
+      regionChanged ||
+      cityChanged ||
+      zipChanged ||
+      streetChanged ||
+      passwordTyped ||
+      imageChanged
+    );
   };
 
   const handleBackPress = () => {
@@ -144,11 +179,11 @@ export default function ProfileSettingsScreen() {
   };
 
   const handleSave = async () => {
-    if (!fullName.trim() || !unitNumber.trim()) {
+    if (!fullName.trim() || !city.trim() || !streetAddress.trim()) {
       showModal(
         "error",
         "Missing Information",
-        "Full Name and Unit Number cannot be empty."
+        "Name, City, and Address fields cannot be empty."
       );
       return;
     }
@@ -168,9 +203,14 @@ export default function ProfileSettingsScreen() {
     setIsLoading(true);
 
     setTimeout(() => {
+      // Update Initial Data (Simulate Save)
       setInitialData({
         fullName,
         unitNumber,
+        region,
+        city,
+        zipCode,
+        streetAddress,
         avatarUrl: selectedImage ? selectedImage.uri : avatarUrl,
       });
       setCurrentPassword("");
@@ -188,7 +228,6 @@ export default function ProfileSettingsScreen() {
   };
 
   const performDeactivate = () => {
-    console.log("Account Deactivated");
     setModalConfig((prev) => ({ ...prev, visible: false }));
     navigation.reset({
       index: 0,
@@ -209,6 +248,8 @@ export default function ProfileSettingsScreen() {
   };
 
   const initials = fullName ? fullName.substring(0, 2).toUpperCase() : "US";
+  const displayImageUri = selectedImage ? selectedImage.uri : avatarUrl;
+
   const dangerColor = isDarkMode ? "#ff4444" : "#c62828";
   const dangerBg = isDarkMode
     ? "rgba(255, 68, 68, 0.05)"
@@ -217,8 +258,6 @@ export default function ProfileSettingsScreen() {
     ? "rgba(255, 68, 68, 0.3)"
     : "rgba(198, 40, 40, 0.2)";
 
-  const displayImageUri = selectedImage ? selectedImage.uri : avatarUrl;
-
   if (isLoading && !modalConfig.visible) {
     return (
       <View
@@ -226,9 +265,10 @@ export default function ProfileSettingsScreen() {
           flex: 1,
           backgroundColor: theme.background,
           justifyContent: "center",
+          alignItems: "center",
         }}
       >
-        <ActivityIndicator size="large" color={theme.primary} />
+        <ActivityIndicator size="large" color={theme.buttonPrimary} />
       </View>
     );
   }
@@ -244,6 +284,7 @@ export default function ProfileSettingsScreen() {
         backgroundColor={theme.background}
       />
 
+      {/* HEADER */}
       <View
         className="flex-row items-center justify-between px-6 py-5 border-b"
         style={{
@@ -257,23 +298,26 @@ export default function ProfileSettingsScreen() {
         >
           <MaterialIcons
             name="arrow-back"
-            size={18}
+            size={scaledSize(18)}
             color={theme.textSecondary}
           />
           <Text
-            className="text-sm font-medium"
-            style={{ color: theme.textSecondary }}
+            className="font-medium"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
           >
             Back
           </Text>
         </TouchableOpacity>
-        <Text className="text-base font-bold" style={{ color: theme.text }}>
+        <Text
+          className="font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(16) }}
+        >
           Edit Profile
         </Text>
         <TouchableOpacity onPress={handleSave}>
           <Text
-            className="text-sm font-semibold"
-            style={{ color: theme.primary }}
+            className="font-semibold"
+            style={{ color: theme.buttonPrimary, fontSize: scaledSize(14) }}
           >
             Save
           </Text>
@@ -282,6 +326,7 @@ export default function ProfileSettingsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="p-6 pb-10">
+          {/* PROFILE IMAGE SECTION (No Gradient) */}
           <View className="items-center mb-8">
             <View className="relative w-24 h-24 mb-4">
               {displayImageUri ? (
@@ -290,26 +335,35 @@ export default function ProfileSettingsScreen() {
                   style={{ width: "100%", height: "100%", borderRadius: 50 }}
                 />
               ) : (
-                <LinearGradient
-                  colors={
-                    isDarkMode ? ["#0055ff", "#00ff99"] : ["#0055ff", "#00995e"]
-                  }
+                <View
                   className="w-full h-full rounded-full justify-center items-center"
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
+                  style={{ backgroundColor: theme.buttonNeutral }}
                 >
-                  <Text className="text-4xl font-bold text-gray-900">
+                  <Text
+                    className="font-bold"
+                    style={{
+                      fontSize: scaledSize(36),
+                      color: theme.textSecondary,
+                    }}
+                  >
                     {initials}
                   </Text>
-                </LinearGradient>
+                </View>
               )}
 
               <TouchableOpacity
                 onPress={pickImage}
-                className="absolute bottom-0 right-0 bg-white w-8 h-8 rounded-full justify-center items-center border-[3px]"
-                style={{ borderColor: theme.background }}
+                className="absolute bottom-0 right-0 w-8 h-8 rounded-full justify-center items-center border-[3px]"
+                style={{
+                  backgroundColor: theme.card,
+                  borderColor: theme.background,
+                }}
               >
-                <MaterialIcons name="camera-alt" size={16} color="#000" />
+                <MaterialIcons
+                  name="camera-alt"
+                  size={scaledSize(14)}
+                  color={theme.text}
+                />
               </TouchableOpacity>
             </View>
             <View
@@ -324,79 +378,158 @@ export default function ProfileSettingsScreen() {
               }}
             >
               <Text
-                className="text-xs font-semibold tracking-wider"
-                style={{ color: theme.primary }}
+                className="font-semibold tracking-wider"
+                style={{ color: theme.buttonPrimary, fontSize: scaledSize(10) }}
               >
                 HOME ADMIN
               </Text>
             </View>
           </View>
 
+          {/* PERSONAL INFORMATION */}
           <Text
-            className="text-xs font-bold uppercase tracking-widest mb-3"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
           >
             Personal Information
           </Text>
           <InputGroup
             label="Full Name"
+            icon="person"
+            placeholder="Enter your name"
             value={fullName}
             onChangeText={setFullName}
             theme={theme}
+            scaledSize={scaledSize}
           />
           <InputGroup
             label="Email Address"
+            icon="email"
+            placeholder="email@example.com"
             value={email}
             theme={theme}
-            disabled
+            scaledSize={scaledSize}
+            disabled // Email is typically not editable
           />
+
+          {/* LOCATION DETAILS (Added from Signup) */}
+          <Text
+            className="font-bold uppercase tracking-widest mb-3 mt-5"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
+          >
+            Location Details
+          </Text>
           <InputGroup
             label="Unit Number"
+            icon="apartment"
+            placeholder="Unit 101"
             value={unitNumber}
             onChangeText={setUnitNumber}
             theme={theme}
+            scaledSize={scaledSize}
+          />
+          <InputGroup
+            label="Region / Province"
+            icon="map"
+            placeholder="Metro Manila"
+            value={region}
+            onChangeText={setRegion}
+            theme={theme}
+            scaledSize={scaledSize}
+          />
+          <View className="flex-row gap-3">
+            <View className="flex-1">
+              <InputGroup
+                label="City / Municipality"
+                icon="location-city"
+                placeholder="Caloocan"
+                value={city}
+                onChangeText={setCity}
+                theme={theme}
+                scaledSize={scaledSize}
+              />
+            </View>
+            <View className="flex-[0.7]">
+              <InputGroup
+                label="Zip Code"
+                icon="markunread-mailbox"
+                placeholder="1400"
+                value={zipCode}
+                onChangeText={(text) => {
+                  // Only allow numbers
+                  if (/^\d*$/.test(text)) setZipCode(text);
+                }}
+                maxLength={4}
+                keyboardType="number-pad"
+                theme={theme}
+                scaledSize={scaledSize}
+              />
+            </View>
+          </View>
+          <InputGroup
+            label="Full Address"
+            icon="home"
+            placeholder="Street, Barangay, Village"
+            value={streetAddress}
+            onChangeText={setStreetAddress}
+            theme={theme}
+            scaledSize={scaledSize}
           />
 
+          {/* SECURITY SECTION */}
           <Text
-            className="text-xs font-bold uppercase tracking-widest mb-3 mt-5"
-            style={{ color: theme.textSecondary }}
+            className="font-bold uppercase tracking-widest mb-3 mt-5"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
           >
             Security
           </Text>
 
           <InputGroup
             label="Current Password"
+            icon="lock"
             placeholder="Required to change password"
             isPassword
+            showPassword={showCurrentPass}
+            togglePassword={() => setShowCurrentPass(!showCurrentPass)}
             theme={theme}
             value={currentPassword}
             onChangeText={setCurrentPassword}
+            scaledSize={scaledSize}
           />
           <InputGroup
             label="New Password"
+            icon="lock-outline"
             placeholder="Enter new password"
             isPassword
+            showPassword={showNewPass}
+            togglePassword={() => setShowNewPass(!showNewPass)}
             theme={theme}
             value={newPassword}
             onChangeText={setNewPassword}
+            scaledSize={scaledSize}
           />
 
+          {/* DEACTIVATE ACCOUNT SECTION */}
           <View
             className="border rounded-2xl p-5 mt-8"
             style={{ backgroundColor: dangerBg, borderColor: dangerBorder }}
           >
             <View className="flex-row items-center gap-2 mb-1.5">
-              <MaterialIcons name="warning" size={18} color={dangerColor} />
+              <MaterialIcons
+                name="warning"
+                size={scaledSize(18)}
+                color={dangerColor}
+              />
               <Text
-                className="text-sm font-bold"
-                style={{ color: dangerColor }}
+                className="font-bold"
+                style={{ color: dangerColor, fontSize: scaledSize(14) }}
               >
                 Deactivate Account
               </Text>
             </View>
             <Text
-              className="text-xs leading-5 mb-4"
-              style={{ color: theme.textSecondary }}
+              className="leading-5 mb-4"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
             >
               This will disable your access and disconnect all linked hubs. This
               action cannot be undone.
@@ -407,8 +540,8 @@ export default function ProfileSettingsScreen() {
               onPress={confirmDeactivate}
             >
               <Text
-                className="font-semibold text-xs"
-                style={{ color: dangerColor }}
+                className="font-semibold"
+                style={{ color: dangerColor, fontSize: scaledSize(12) }}
               >
                 Deactivate Account
               </Text>
@@ -417,7 +550,7 @@ export default function ProfileSettingsScreen() {
         </View>
       </ScrollView>
 
-      {}
+      {/* CUSTOM MODAL */}
       <CustomModal
         visible={modalConfig.visible}
         type={modalConfig.type}
@@ -429,47 +562,93 @@ export default function ProfileSettingsScreen() {
         cancelText={modalConfig.cancelText}
         theme={theme}
         isDarkMode={isDarkMode}
+        scaledSize={scaledSize}
       />
     </SafeAreaView>
   );
 }
 
+// REUSABLE INPUT GROUP (Adapted from Signup, added scaling)
 function InputGroup({
   label,
-  value,
-  onChangeText,
+  icon,
   placeholder,
   isPassword,
+  showPassword,
+  togglePassword,
+  value,
+  onChangeText,
+  error,
+  maxLength,
+  keyboardType,
   disabled,
   theme,
+  scaledSize,
 }) {
   return (
-    <View className="mb-4">
+    <View className="mb-3">
       <Text
-        className="text-xs mb-1.5 font-medium"
-        style={{ color: theme.textSecondary }}
+        className="font-bold uppercase mb-1.5 ml-1"
+        style={{
+          color: error ? theme.buttonDangerText : theme.textSecondary,
+          fontSize: scaledSize(10),
+        }}
       >
         {label}
       </Text>
-      <TextInput
-        className="w-full border rounded-xl p-3.5 text-sm"
+      <View
+        className="flex-row items-center rounded-xl px-4 h-14 border"
         style={{
-          backgroundColor: theme.card,
-          borderColor: theme.cardBorder,
-          color: theme.text,
-          opacity: disabled ? 0.5 : 1,
+          backgroundColor: theme.buttonNeutral,
+          borderColor: error ? theme.buttonDangerText : theme.cardBorder,
+          opacity: disabled ? 0.6 : 1,
         }}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={theme.textSecondary}
-        secureTextEntry={isPassword}
-        editable={!disabled}
-      />
+      >
+        <MaterialIcons
+          name={icon}
+          size={scaledSize(20)}
+          color={theme.textSecondary}
+          style={{ marginRight: 10 }}
+        />
+        <TextInput
+          className="flex-1 h-full"
+          style={{ color: theme.text, fontSize: scaledSize(14) }}
+          placeholder={placeholder}
+          placeholderTextColor={theme.textSecondary}
+          secureTextEntry={isPassword && !showPassword}
+          value={value}
+          onChangeText={onChangeText}
+          maxLength={maxLength}
+          keyboardType={keyboardType}
+          editable={!disabled}
+        />
+
+        {isPassword && (
+          <TouchableOpacity onPress={togglePassword}>
+            <MaterialIcons
+              name={showPassword ? "visibility" : "visibility-off"}
+              size={scaledSize(18)}
+              color={theme.textSecondary}
+            />
+          </TouchableOpacity>
+        )}
+      </View>
+      {error && (
+        <Text
+          className="italic mt-1 ml-1"
+          style={{
+            color: theme.buttonDangerText,
+            fontSize: scaledSize(10),
+          }}
+        >
+          {error}
+        </Text>
+      )}
     </View>
   );
 }
 
+// CUSTOM MODAL (Removed Gradients)
 function CustomModal({
   visible,
   type,
@@ -481,20 +660,20 @@ function CustomModal({
   cancelText,
   theme,
   isDarkMode,
+  scaledSize,
 }) {
   let icon = "check-circle";
-  let iconColor = theme.primary;
-  let buttonColor = ["#0055ff", isDarkMode ? "#00ff99" : "#00995e"];
+  let iconColor = theme.buttonPrimary;
+  let buttonBg = theme.buttonPrimary;
 
   if (type === "error") {
     icon = "error-outline";
     iconColor = "#ff4444";
-    buttonColor = ["#ff4444", "#ff8800"];
+    buttonBg = "#ff4444";
   } else if (type === "confirm" || type === "delete") {
     icon = type === "delete" ? "report-problem" : "help-outline";
     iconColor = type === "delete" ? "#ff4444" : "#ffaa00";
-    buttonColor =
-      type === "delete" ? ["#ff4444", "#cc0000"] : ["#0055ff", "#00ff99"];
+    buttonBg = type === "delete" ? "#ff4444" : theme.buttonPrimary;
   }
 
   return (
@@ -506,7 +685,7 @@ function CustomModal({
     >
       <View className="flex-1 bg-black/80 justify-center items-center z-50">
         <View
-          className="border p-6 rounded-2xl w-72 items-center"
+          className="border p-6 rounded-2xl w-[75%] max-w-[280px] items-center"
           style={{
             backgroundColor: theme.card,
             borderColor: theme.cardBorder,
@@ -514,19 +693,19 @@ function CustomModal({
         >
           <MaterialIcons
             name={icon}
-            size={48}
+            size={scaledSize(48)}
             color={iconColor}
             style={{ marginBottom: 15 }}
           />
           <Text
-            className="text-lg font-bold mb-2.5 text-center"
-            style={{ color: theme.text }}
+            className="font-bold mb-2.5 text-center"
+            style={{ color: theme.text, fontSize: scaledSize(18) }}
           >
             {title}
           </Text>
           <Text
-            className="text-xs text-center mb-6 leading-5"
-            style={{ color: theme.textSecondary }}
+            className="text-center mb-6 leading-5"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(13) }}
           >
             {msg}
           </Text>
@@ -539,8 +718,8 @@ function CustomModal({
                 onPress={onCancel}
               >
                 <Text
-                  className="font-bold text-xs"
-                  style={{ color: theme.text }}
+                  className="font-bold"
+                  style={{ color: theme.text, fontSize: scaledSize(12) }}
                 >
                   {cancelText}
                 </Text>
@@ -548,19 +727,19 @@ function CustomModal({
             )}
 
             <TouchableOpacity
-              className="flex-1 rounded-lg h-10 justify-center items-center overflow-hidden"
+              className="flex-1 rounded-lg h-10 justify-center items-center"
+              style={{ backgroundColor: buttonBg }}
               onPress={onConfirm}
             >
-              <LinearGradient
-                colors={buttonColor}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                className="w-full h-full justify-center items-center"
+              <Text
+                className="font-bold"
+                style={{
+                  color: isDarkMode ? "#000" : "#fff",
+                  fontSize: scaledSize(12),
+                }}
               >
-                <Text className="text-black font-bold text-xs">
-                  {confirmText}
-                </Text>
-              </LinearGradient>
+                {confirmText}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

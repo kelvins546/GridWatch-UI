@@ -21,6 +21,7 @@ import {
 } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 
+// Enable LayoutAnimation for Android
 if (
   Platform.OS === "android" &&
   UIManager.setLayoutAnimationEnabledExperimental
@@ -31,13 +32,23 @@ if (
 export default function SettingsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { isDarkMode, toggleTheme, theme, fontScale } = useTheme();
+
+  const {
+    isDarkMode,
+    toggleTheme,
+    theme,
+    fontScale,
+    isAdvancedMode,
+    toggleAdvancedMode,
+  } = useTheme();
 
   const scaledSize = (size) => size * (fontScale || 1);
 
   const [isLoading, setIsLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [advancedModeModalVisible, setAdvancedModeModalVisible] =
+    useState(false);
 
   const [userData, setUserData] = useState({
     fullName: "User",
@@ -109,6 +120,18 @@ export default function SettingsScreen() {
     toggleTheme();
   };
 
+  const requestToggleAdvancedMode = () => {
+    setAdvancedModeModalVisible(true);
+  };
+
+  const confirmToggleAdvancedMode = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    toggleAdvancedMode();
+    setAdvancedModeModalVisible(false);
+    // REDIRECT TO HOME IMMEDIATELY
+    navigation.navigate("Home");
+  };
+
   if (isLoading) {
     return (
       <View
@@ -166,7 +189,7 @@ export default function SettingsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="p-6 pb-10">
-          {}
+          {/* Profile Section */}
           <TouchableOpacity
             className="flex-row items-center mb-8"
             onPress={() => navigation.navigate("ProfileSettings")}
@@ -218,7 +241,7 @@ export default function SettingsScreen() {
             />
           </TouchableOpacity>
 
-          {}
+          {/* --- SECTION 1: UTILITY --- */}
           <Text
             className="font-bold uppercase tracking-widest mb-3 mt-2"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -303,7 +326,7 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {}
+          {/* --- SECTION 2: PREFERENCES --- */}
           <Text
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -311,160 +334,191 @@ export default function SettingsScreen() {
             Preferences
           </Text>
 
-          <SettingsRow
-            icon="notifications"
-            title="Notifications"
-            onPress={() => navigation.navigate("NotificationSettings")}
-            theme={theme}
-            scaledSize={scaledSize}
-          />
-
-          {}
+          {/* ADVANCED MODE TOGGLE */}
           <View
-            className="rounded-xl border mb-3 overflow-hidden"
+            className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
             }}
           >
-            <View className="p-4 flex-row justify-between items-center h-[72px]">
-              <View className="flex-row items-center">
-                <MaterialIcons
-                  name="widgets"
-                  size={scaledSize(22)}
-                  color={theme.icon}
-                />
+            <View className="flex-row items-center">
+              <MaterialIcons
+                name="tune"
+                size={scaledSize(22)}
+                color={theme.icon}
+              />
+              <View>
                 <Text
                   className="font-medium ml-3"
                   style={{ color: theme.text, fontSize: scaledSize(14) }}
                 >
-                  Home Screen Widgets
+                  Advanced Mode
                 </Text>
-              </View>
-              {}
-              <CustomSwitch
-                value={widgetsEnabled}
-                onToggle={handleToggleWidgets}
-                theme={theme}
-              />
-            </View>
-
-            {widgetsEnabled && (
-              <View
-                className="border-t p-4 bg-black/5 dark:bg-white/5"
-                style={{ borderColor: theme.cardBorder }}
-              >
                 <Text
-                  className="uppercase font-bold mb-3"
+                  className="mt-0.5 ml-3"
                   style={{
                     color: theme.textSecondary,
-                    fontSize: scaledSize(10),
+                    fontSize: scaledSize(11),
                   }}
                 >
-                  Preview: Monthly Budget Card
+                  {isAdvancedMode
+                    ? "Full detailed dashboard"
+                    : "Simplified view"}
                 </Text>
+              </View>
+            </View>
+            <CustomSwitch
+              value={isAdvancedMode}
+              onToggle={requestToggleAdvancedMode}
+              theme={theme}
+            />
+          </View>
 
+          <SettingsRow
+            icon="notifications"
+            title="Notifications & Text"
+            onPress={() => navigation.navigate("NotificationSettings")}
+            theme={theme}
+            scaledSize={scaledSize}
+          />
+
+          {/* Widgets Config - ONLY IN ADVANCED MODE */}
+          {isAdvancedMode && (
+            <View
+              className="rounded-xl border mb-3 overflow-hidden"
+              style={{
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+              }}
+            >
+              <View className="p-4 flex-row justify-between items-center h-[72px]">
+                <View className="flex-row items-center">
+                  <MaterialIcons
+                    name="widgets"
+                    size={scaledSize(22)}
+                    color={theme.icon}
+                  />
+                  <Text
+                    className="font-medium ml-3"
+                    style={{ color: theme.text, fontSize: scaledSize(14) }}
+                  >
+                    Home Screen Widgets
+                  </Text>
+                </View>
+                <CustomSwitch
+                  value={widgetsEnabled}
+                  onToggle={handleToggleWidgets}
+                  theme={theme}
+                />
+              </View>
+
+              {widgetsEnabled && (
                 <View
-                  className="p-5 rounded-2xl border"
-                  style={{
-                    backgroundColor: "#18181b",
-                    borderColor: isDarkMode ? "#333" : "#eee",
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 12,
-                    elevation: 5,
-                  }}
+                  className="border-t p-4 bg-black/5 dark:bg-white/5"
+                  style={{ borderColor: theme.cardBorder }}
                 >
-                  <View className="flex-row justify-between items-start mb-2">
-                    <View>
-                      <Text
-                        className="font-bold uppercase tracking-widest mb-1 text-zinc-500"
-                        style={{ fontSize: scaledSize(10) }}
-                      >
-                        Total Spending
-                      </Text>
-                      <Text
-                        className="font-extrabold text-white"
-                        style={{ fontSize: scaledSize(30) }}
-                      >
-                        ₱ 1,450.75
-                      </Text>
-                    </View>
-                    <Image
-                      source={require("../../../assets/GridWatch-logo.png")}
-                      style={{ width: 22, height: 22, opacity: 0.8 }}
-                    />
-                  </View>
+                  <Text
+                    className="uppercase font-bold mb-3"
+                    style={{
+                      color: theme.textSecondary,
+                      fontSize: scaledSize(10),
+                    }}
+                  >
+                    Preview: Monthly Budget Card
+                  </Text>
 
-                  <View className="mb-4">
-                    <View className="h-1.5 w-full bg-zinc-800 rounded-full mb-2 overflow-hidden">
-                      <View
-                        className="h-full w-[48%]"
-                        style={{ backgroundColor: theme.buttonPrimary }}
+                  <View
+                    className="p-5 rounded-2xl border"
+                    style={{
+                      backgroundColor: "#18181b",
+                      borderColor: isDarkMode ? "#333" : "#eee",
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 12,
+                      elevation: 5,
+                    }}
+                  >
+                    <View className="flex-row justify-between items-start mb-2">
+                      <View>
+                        <Text
+                          className="font-bold uppercase tracking-widest mb-1 text-zinc-500"
+                          style={{ fontSize: scaledSize(10) }}
+                        >
+                          Total Spending
+                        </Text>
+                        <Text
+                          className="font-extrabold text-white"
+                          style={{ fontSize: scaledSize(30) }}
+                        >
+                          ₱ 1,450.75
+                        </Text>
+                      </View>
+                      <Image
+                        source={require("../../../assets/GridWatch-logo.png")}
+                        style={{ width: 22, height: 22, opacity: 0.8 }}
                       />
                     </View>
-                    <Text
-                      className="font-bold"
-                      style={{
-                        color: theme.buttonPrimary,
-                        fontSize: scaledSize(9),
-                      }}
-                    >
-                      48% of Budget Used
-                    </Text>
-                  </View>
 
-                  <View className="flex-row border-t border-zinc-800 pt-4">
-                    <StatItem
-                      label="Daily Avg"
-                      value="₱ 120.50"
-                      icon="trending-up"
-                      theme={theme}
-                      isDarkMode={true}
-                      forceWhiteText={true}
-                      scaledSize={scaledSize}
-                    />
-                    <View className="w-[1px] h-8 mx-4 bg-zinc-800" />
-                    <StatItem
-                      label="Forecast"
-                      value="₱ 3,615.00"
-                      icon="insights"
-                      color="#ffaa00"
-                      theme={theme}
-                      isDarkMode={true}
-                      forceWhiteText={true}
-                      scaledSize={scaledSize}
-                    />
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  className="mt-4 rounded-xl overflow-hidden"
-                  onPress={handleAddWidget}
-                  disabled={widgetInstalled || isAddingWidget}
-                  style={{
-                    backgroundColor: widgetInstalled
-                      ? isDarkMode
-                        ? "#333"
-                        : "#ccc"
-                      : theme.buttonPrimary,
-                  }}
-                >
-                  <View className="py-3 items-center justify-center flex-row">
-                    {isAddingWidget ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <MaterialIcons
-                          name={
-                            widgetInstalled
-                              ? "check-circle"
-                              : "add-to-home-screen"
-                          }
-                          size={scaledSize(18)}
-                          color="#fff"
+                    <View className="mb-4">
+                      <View className="h-1.5 w-full bg-zinc-800 rounded-full mb-2 overflow-hidden">
+                        <View
+                          className="h-full w-[48%]"
+                          style={{ backgroundColor: theme.buttonPrimary }}
                         />
+                      </View>
+                      <Text
+                        className="font-bold"
+                        style={{
+                          color: theme.buttonPrimary,
+                          fontSize: scaledSize(9),
+                        }}
+                      >
+                        48% of Budget Used
+                      </Text>
+                    </View>
+
+                    <View className="flex-row border-t border-zinc-800 pt-4">
+                      <StatItem
+                        label="Daily Avg"
+                        value="₱ 120.50"
+                        icon="trending-up"
+                        theme={theme}
+                        isDarkMode={true}
+                        forceWhiteText={true}
+                        scaledSize={scaledSize}
+                      />
+                      <View className="w-[1px] h-8 mx-4 bg-zinc-800" />
+                      <StatItem
+                        label="Forecast"
+                        value="₱ 3,615.00"
+                        icon="insights"
+                        color="#ffaa00"
+                        theme={theme}
+                        isDarkMode={true}
+                        forceWhiteText={true}
+                        scaledSize={scaledSize}
+                      />
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    className="mt-4 rounded-xl overflow-hidden"
+                    onPress={handleAddWidget}
+                    disabled={widgetInstalled || isAddingWidget}
+                    style={{
+                      backgroundColor: widgetInstalled
+                        ? isDarkMode
+                          ? "#333"
+                          : "#ccc"
+                        : theme.buttonPrimary,
+                    }}
+                  >
+                    <View className="py-3 items-center justify-center flex-row">
+                      {isAddingWidget ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
                         <Text
                           className="font-bold ml-2"
                           style={{ color: "#fff", fontSize: scaledSize(12) }}
@@ -473,25 +527,25 @@ export default function SettingsScreen() {
                             ? "WIDGET INSTALLED"
                             : "INSTALL WIDGET"}
                         </Text>
-                      </>
-                    )}
-                  </View>
-                </TouchableOpacity>
+                      )}
+                    </View>
+                  </TouchableOpacity>
 
-                <Text
-                  className="text-center mt-3"
-                  style={{
-                    color: theme.textSecondary,
-                    fontSize: scaledSize(10),
-                  }}
-                >
-                  This widget will be added to your phone's home screen.
-                </Text>
-              </View>
-            )}
-          </View>
+                  <Text
+                    className="text-center mt-3"
+                    style={{
+                      color: theme.textSecondary,
+                      fontSize: scaledSize(10),
+                    }}
+                  >
+                    This widget will be added to your phone's home screen.
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
 
-          {}
+          {/* Dark Mode Config */}
           <View
             className="p-4 rounded-xl mb-6 flex-row justify-between items-center border h-[72px]"
             style={{
@@ -512,7 +566,6 @@ export default function SettingsScreen() {
                 Dark Mode
               </Text>
             </View>
-            {}
             <CustomSwitch
               value={isDarkMode}
               onToggle={handleToggleTheme}
@@ -520,7 +573,7 @@ export default function SettingsScreen() {
             />
           </View>
 
-          {}
+          {/* --- SECTION 3: SUPPORT --- */}
           <Text
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -544,7 +597,7 @@ export default function SettingsScreen() {
             scaledSize={scaledSize}
           />
 
-          {}
+          {/* LOGOUT */}
           <TouchableOpacity
             className="mt-8 p-4 rounded-xl border items-center"
             style={{
@@ -563,7 +616,71 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
 
-      {}
+      {/* --- Advanced Mode Modal (No Icon) --- */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={advancedModeModalVisible}
+        onRequestClose={() => setAdvancedModeModalVisible(false)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/80">
+          <View
+            className="border p-5 rounded-2xl w-72 items-center"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            }}
+          >
+            {/* ICON REMOVED */}
+            <Text
+              className="font-bold mb-2 text-center"
+              style={{ color: theme.text, fontSize: scaledSize(18) }}
+            >
+              {isAdvancedMode
+                ? "Disable Advanced Mode?"
+                : "Enable Advanced Mode?"}
+            </Text>
+            <Text
+              className="text-center mb-6 leading-5"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+            >
+              {isAdvancedMode
+                ? "Switching to Simple Mode will simplify the dashboard and hide detailed analytics."
+                : "Advanced Mode enables detailed charts, per-device analytics, and complex automation tools."}
+            </Text>
+            <View className="flex-row gap-2.5 w-full">
+              <TouchableOpacity
+                className="flex-1 rounded-xl h-10 justify-center items-center border"
+                style={{ borderColor: theme.textSecondary }}
+                onPress={() => setAdvancedModeModalVisible(false)}
+              >
+                <Text
+                  className="font-bold"
+                  style={{ color: theme.text, fontSize: scaledSize(12) }}
+                >
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 rounded-xl h-10 justify-center items-center overflow-hidden"
+                style={{ backgroundColor: theme.buttonPrimary }}
+                onPress={confirmToggleAdvancedMode}
+              >
+                <View className="w-full h-full justify-center items-center">
+                  <Text
+                    className="font-bold"
+                    style={{ color: "white", fontSize: scaledSize(12) }}
+                  >
+                    {isAdvancedMode ? "Disable" : "Enable"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Logout Modal (No Icon) */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -578,7 +695,6 @@ export default function SettingsScreen() {
               borderColor: theme.cardBorder,
             }}
           >
-            {}
             <Text
               className="font-bold mb-2"
               style={{ color: theme.text, fontSize: scaledSize(18) }}
@@ -619,53 +735,6 @@ export default function SettingsScreen() {
                 </View>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </Modal>
-
-      {}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={successModalVisible}
-        onRequestClose={() => setSuccessModalVisible(false)}
-      >
-        <View className="flex-1 justify-center items-center bg-black/80">
-          <View
-            className="border p-5 rounded-2xl w-72 items-center"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
-          >
-            {}
-            <Text
-              className="font-bold mb-2"
-              style={{ color: theme.text, fontSize: scaledSize(18) }}
-            >
-              Widget Added
-            </Text>
-            <Text
-              className="text-center mb-6 leading-5"
-              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
-            >
-              The GridWatch Budget Tracker has been successfully added to your
-              Home Screen.
-            </Text>
-            <TouchableOpacity
-              className="w-full rounded-xl h-10 justify-center items-center overflow-hidden"
-              onPress={() => setSuccessModalVisible(false)}
-              style={{ backgroundColor: theme.buttonPrimary }}
-            >
-              <View className="w-full h-full justify-center items-center">
-                <Text
-                  className="font-bold uppercase tracking-wide"
-                  style={{ color: "white", fontSize: scaledSize(12) }}
-                >
-                  Great
-                </Text>
-              </View>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>

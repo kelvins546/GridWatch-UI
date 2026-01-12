@@ -73,7 +73,7 @@ export default function AuthSelectionScreen() {
       )}
 
       <View className="flex-1 justify-center px-8">
-        {}
+        {/* Logo Section */}
         <View className="items-center mb-12">
           <Animated.View
             style={{
@@ -113,9 +113,9 @@ export default function AuthSelectionScreen() {
           </Text>
         </View>
 
-        {}
+        {/* Buttons Section */}
         <View>
-          {}
+          {/* Email Login */}
           <TouchableOpacity
             onPress={() => navigation.navigate("Signup")}
             activeOpacity={0.8}
@@ -198,7 +198,7 @@ export default function AuthSelectionScreen() {
         </Text>
       </View>
 
-      {}
+      {/* Success Modal (Updated to Match Specs) */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -207,40 +207,42 @@ export default function AuthSelectionScreen() {
       >
         <View style={styles.modalOverlay}>
           <View
-            style={[
-              styles.modalCard,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            ]}
+            // FIXED: Width [70%], Max Width [260px], p-4, rounded-2xl
+            className="w-[70%] max-w-[260px] p-4 rounded-2xl items-center border"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            }}
           >
-            <MaterialIcons
-              name="check-circle"
-              size={40}
-              color={theme.buttonPrimary}
-              style={{ marginBottom: 15 }}
-            />
-            <Text style={[styles.modalTitleSmall, { color: theme.text }]}>
+            {/* ICON REMOVED */}
+
+            {/* FIXED: mb-1 for Title */}
+            <Text
+              className="text-lg font-bold text-center mb-1"
+              style={{ color: theme.text }}
+            >
               Welcome!
             </Text>
+            {/* FIXED: mb-4 for Description */}
             <Text
-              style={[styles.modalDescSmall, { color: theme.textSecondary }]}
+              className="text-xs text-center mb-4 leading-4"
+              style={{ color: theme.textSecondary }}
             >
               Successfully authenticated with Google.
             </Text>
+
+            {/* FIXED: Button centered and 50% width */}
             <TouchableOpacity
-              style={{ width: "100%" }}
+              className="w-[50%] self-center"
               onPress={navigateToHubSetup}
             >
               <View
-                style={[
-                  styles.modalBtnSmall,
-                  { backgroundColor: theme.buttonPrimary },
-                ]}
+                className="p-3 rounded-xl items-center"
+                style={{ backgroundColor: theme.buttonPrimary }}
               >
                 <Text
-                  style={[
-                    styles.btnTextBlack,
-                    { color: theme.buttonPrimaryText },
-                  ]}
+                  className="font-bold text-[13px]"
+                  style={{ color: theme.buttonPrimaryText }}
                 >
                   CONTINUE
                 </Text>

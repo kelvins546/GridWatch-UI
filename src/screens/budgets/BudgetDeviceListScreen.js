@@ -6,6 +6,7 @@ import {
   ScrollView,
   StatusBar,
   Animated,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -26,42 +27,58 @@ export default function BudgetDeviceListScreen() {
       id: "ac",
       name: "Air Conditioner",
       icon: "ac-unit",
-      status: "₱ 1,450 / ₱ 2,000 (Monthly)",
+      currentLoad: "₱ 1,450",
+      limit: "₱ 2,000",
+      statusText: "72% Used",
       type: "good",
     },
     {
       id: "tv",
       name: "Smart TV",
       icon: "tv",
-      status: "Over Limit (113%)",
+      currentLoad: "₱ 452",
+      limit: "₱ 400",
+      statusText: "Over Limit (113%)",
       type: "warn",
     },
     {
       id: "fridge",
       name: "Refrigerator",
       icon: "kitchen",
-      status: "No Limit Set",
+      currentLoad: "₱ 850",
+      limit: "No Limit",
+      statusText: "Running Normal",
       type: "neutral",
     },
     {
       id: "outlet",
       name: "Outlet 3",
       icon: "power-off",
-      status: "Offline - Short Circuit",
+      currentLoad: "₱ 0.00",
+      limit: "₱ 500",
+      statusText: "Offline - Short Circuit",
       type: "critical",
-      isLocked: true,
+      // Removed isLocked: true so it can be clicked
     },
     {
       id: "fan",
       name: "Electric Fan",
       icon: "mode-fan-off",
-      status: "Standby",
+      currentLoad: "₱ 120",
+      limit: "₱ 300",
+      statusText: "Standby",
       type: "neutral",
     },
   ];
 
   const handleDevicePress = (device) => {
-    if (device.id === "tv") {
+    if (device.type === "critical") {
+      // Redirect to Fault Detail for critical errors
+      navigation.navigate("FaultDetail", {
+        deviceName: device.name,
+        status: device.statusText,
+      });
+    } else if (device.id === "tv") {
       navigation.navigate("LimitDetail");
     } else {
       navigation.navigate("BudgetDetail", { deviceName: device.name });
@@ -70,8 +87,7 @@ export default function BudgetDeviceListScreen() {
 
   return (
     <SafeAreaView
-      className="flex-1"
-      style={{ backgroundColor: theme.background }}
+      style={{ flex: 1, backgroundColor: theme.background }}
       edges={["top", "left", "right"]}
     >
       <StatusBar
@@ -79,16 +95,21 @@ export default function BudgetDeviceListScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
+      {/* HEADER */}
       <View
-        className="flex-row items-center justify-between px-6 py-5 border-b"
         style={{
-          backgroundColor: theme.background,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingHorizontal: 24,
+          paddingVertical: 20,
+          borderBottomWidth: 1,
           borderBottomColor: theme.cardBorder,
+          backgroundColor: theme.background,
         }}
       >
         <TouchableOpacity
-          className="flex-row items-center"
+          style={{ flexDirection: "row", alignItems: "center" }}
           onPress={() => navigation.goBack()}
         >
           <MaterialIcons
@@ -97,15 +118,22 @@ export default function BudgetDeviceListScreen() {
             color={theme.textSecondary}
           />
           <Text
-            className="font-medium ml-1"
-            style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+            style={{
+              color: theme.textSecondary,
+              fontSize: scaledSize(14),
+              fontWeight: "500",
+              marginLeft: 4,
+            }}
           >
             Back
           </Text>
         </TouchableOpacity>
         <Text
-          className="font-bold"
-          style={{ color: theme.text, fontSize: scaledSize(16) }}
+          style={{
+            color: theme.text,
+            fontSize: scaledSize(16),
+            fontWeight: "bold",
+          }}
         >
           Budget Management
         </Text>
@@ -117,8 +145,12 @@ export default function BudgetDeviceListScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text
-          className="mb-6 leading-5"
-          style={{ color: theme.textSecondary, fontSize: scaledSize(13) }}
+          style={{
+            marginBottom: 24,
+            lineHeight: 20,
+            color: theme.textSecondary,
+            fontSize: scaledSize(13),
+          }}
         >
           Select a device from{" "}
           <Text style={{ fontWeight: "700", color: theme.buttonPrimary }}>
@@ -127,7 +159,7 @@ export default function BudgetDeviceListScreen() {
           to configure spending limits, automation rules, and alerts.
         </Text>
 
-        <View className="gap-3">
+        <View style={{ gap: 12 }}>
           {devices.map((device) => (
             <DeviceRow
               key={device.id}
@@ -149,7 +181,7 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
 
   const handlePressIn = () => {
     Animated.spring(scaleValue, {
-      toValue: 0.96,
+      toValue: 0.98,
       useNativeDriver: true,
     }).start();
   };
@@ -166,7 +198,7 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
 
   if (data.type === "good") {
     iconColor = theme.buttonPrimary;
-    iconBg = `${theme.buttonPrimary}22`;
+    iconBg = `${theme.buttonPrimary}22`; // Low opacity primary
     statusTextColor = iconColor;
   } else if (data.type === "warn") {
     iconColor = isDarkMode ? "#ffaa00" : "#b37400";
@@ -185,51 +217,93 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
   return (
     <TouchableOpacity
       activeOpacity={0.9}
-      onPress={!data.isLocked ? onPress : null}
-      onPressIn={!data.isLocked ? handlePressIn : null}
-      onPressOut={!data.isLocked ? handlePressOut : null}
+      // Always allow press if not explicitly locked (removed isLocked check for critical items)
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       style={{ marginBottom: 12 }}
     >
       <Animated.View
-        className="flex-row items-center justify-between p-4 rounded-2xl border"
         style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: 16,
+          borderRadius: 16,
+          borderWidth: 1,
           backgroundColor: theme.card,
           borderColor: theme.cardBorder,
           transform: [{ scale: scaleValue }],
           opacity: data.isLocked ? 0.6 : 1,
         }}
       >
-        <View className="flex-row items-center gap-4">
+        <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+          {/* ICON BOX */}
           <View
-            className="w-10 h-10 rounded-xl items-center justify-center"
-            style={{ backgroundColor: iconBg }}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: iconBg,
+              marginRight: 16,
+            }}
           >
             <MaterialIcons
               name={data.icon}
-              size={scaledSize(22)}
+              size={scaledSize(24)}
               color={iconColor}
             />
           </View>
 
-          <View className="gap-0.5">
+          {/* TEXT CONTENT */}
+          <View style={{ flex: 1, justifyContent: "center" }}>
             <Text
-              className="font-semibold"
-              style={{ color: theme.text, fontSize: scaledSize(14) }}
+              style={{
+                color: theme.text,
+                fontSize: scaledSize(15),
+                fontWeight: "700",
+                marginBottom: 4,
+              }}
             >
               {data.name}
             </Text>
+
+            {/* DETAILS ROW (Current / Limit) */}
+            <View style={{ flexDirection: "row", marginBottom: 2 }}>
+              <Text
+                style={{
+                  color: theme.text,
+                  fontWeight: "600",
+                  fontSize: scaledSize(12),
+                }}
+              >
+                {data.currentLoad}{" "}
+              </Text>
+              <Text
+                style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+              >
+                / {data.limit}
+              </Text>
+            </View>
+
             <Text
-              className="font-medium"
-              style={{ color: statusTextColor, fontSize: scaledSize(11) }}
+              style={{
+                color: statusTextColor,
+                fontSize: scaledSize(11),
+                fontWeight: "500",
+              }}
             >
-              {data.status}
+              {data.statusText}
             </Text>
           </View>
         </View>
 
+        {/* RIGHT ARROW / LOCK (Only show lock if explicitly isLocked) */}
         <MaterialIcons
           name={data.isLocked ? "lock" : "chevron-right"}
-          size={scaledSize(20)}
+          size={scaledSize(24)}
           color={theme.textSecondary}
         />
       </Animated.View>

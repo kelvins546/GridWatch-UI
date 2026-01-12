@@ -4,10 +4,10 @@
     "slug": "GridWatch",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/gridwatch_icon.png",
+    "icon": "./assets/gridwatch_icon2.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/gridwatch_icon.png",
+      "image": "./assets/gridwatch_icon2.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },

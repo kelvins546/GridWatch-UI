@@ -12,6 +12,7 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -213,7 +214,7 @@ export default function FamilyAccessScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
+      {/* Header */}
       <View
         className="flex-row items-center px-6 py-5 border-b"
         style={{ borderBottomColor: theme.cardBorder }}
@@ -236,7 +237,7 @@ export default function FamilyAccessScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="p-6">
-          {}
+          {/* Invite Section */}
           <Text
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -326,7 +327,9 @@ export default function FamilyAccessScreen() {
               style={{
                 backgroundColor: theme.buttonPrimary,
                 borderRadius: 12,
+                // FIXED: Returned to standard height and full width
                 height: scaledSize(48),
+                width: "100%",
                 justifyContent: "center",
                 alignItems: "center",
                 opacity: isInviting ? 0.7 : 1,
@@ -345,7 +348,7 @@ export default function FamilyAccessScreen() {
             </TouchableOpacity>
           </View>
 
-          {}
+          {/* Members / Pending Tabs */}
           <View
             className="flex-row mb-4 border-b"
             style={{ borderColor: theme.cardBorder }}
@@ -394,7 +397,7 @@ export default function FamilyAccessScreen() {
             </TouchableOpacity>
           </View>
 
-          {}
+          {/* List Content */}
           {activeTab === "members" ? (
             familyMembers.map((member) => (
               <View
@@ -537,9 +540,12 @@ export default function FamilyAccessScreen() {
         </View>
       </ScrollView>
 
-      {}
+      {/* Hub Selection Modal (Bottom Sheet) */}
       <Modal visible={showHubModal} transparent animationType="slide">
-        <View className="flex-1 justify-end bg-black/50">
+        <View
+          className="flex-1 justify-end"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
           <View
             className="rounded-t-3xl border-t p-6"
             style={{
@@ -566,7 +572,7 @@ export default function FamilyAccessScreen() {
               </TouchableOpacity>
             </View>
 
-            {}
+            {/* Grant All Toggle */}
             <TouchableOpacity
               onPress={() => setGrantAllAccess(!grantAllAccess)}
               className="flex-row items-center justify-between p-4 rounded-xl border mb-4"
@@ -699,9 +705,12 @@ export default function FamilyAccessScreen() {
         </View>
       </Modal>
 
-      {}
+      {/* Member Options Modal (Bottom Sheet) */}
       <Modal visible={showMemberOptions} transparent animationType="slide">
-        <View className="flex-1 justify-end bg-black/50">
+        <View
+          className="flex-1 justify-end"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
           <TouchableOpacity
             className="flex-1"
             onPress={() => setShowMemberOptions(false)}
@@ -788,9 +797,12 @@ export default function FamilyAccessScreen() {
         </View>
       </Modal>
 
-      {}
+      {/* Confirm Invite Modal - MATCHING INVITATION SCREEN */}
       <Modal visible={showConfirmModal} transparent animationType="fade">
-        <View className="flex-1 bg-black/80 justify-center items-center p-6">
+        <View
+          className="flex-1 justify-center items-center p-6"
+          style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
+        >
           <View
             className="w-[85%] max-w-[320px] p-5 rounded-2xl border items-center"
             style={{
@@ -798,7 +810,6 @@ export default function FamilyAccessScreen() {
               borderColor: theme.cardBorder,
             }}
           >
-            {}
             <Text
               className="font-bold mb-2 text-center"
               style={{ color: theme.text, fontSize: scaledSize(18) }}
@@ -849,9 +860,12 @@ export default function FamilyAccessScreen() {
         </View>
       </Modal>
 
-      {}
+      {/* Revoke Modal - MATCHING INVITATION SCREEN */}
       <Modal visible={showRevokeModal} transparent animationType="fade">
-        <View className="flex-1 bg-black/80 justify-center items-center p-6">
+        <View
+          className="flex-1 justify-center items-center p-6"
+          style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
+        >
           <View
             className="w-[85%] max-w-[320px] p-5 rounded-2xl border items-center"
             style={{
@@ -859,7 +873,6 @@ export default function FamilyAccessScreen() {
               borderColor: theme.cardBorder,
             }}
           >
-            {}
             <Text
               className="font-bold mb-2 text-center"
               style={{ color: theme.text, fontSize: scaledSize(18) }}
@@ -870,8 +883,7 @@ export default function FamilyAccessScreen() {
               className="text-center mb-6 leading-5"
               style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
             >
-              Are you sure you want to cancel this pending invitation? This
-              cannot be undone.
+              Are you sure you want to cancel this pending invitation?
             </Text>
             <View className="flex-row gap-3 w-full">
               <TouchableOpacity
@@ -903,9 +915,12 @@ export default function FamilyAccessScreen() {
         </View>
       </Modal>
 
-      {}
+      {/* Remove Member Modal - MATCHING INVITATION SCREEN */}
       <Modal visible={showRemoveMemberModal} transparent animationType="fade">
-        <View className="flex-1 bg-black/80 justify-center items-center p-6">
+        <View
+          className="flex-1 justify-center items-center p-6"
+          style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
+        >
           <View
             className="w-[85%] max-w-[320px] p-5 rounded-2xl border items-center"
             style={{
@@ -913,7 +928,6 @@ export default function FamilyAccessScreen() {
               borderColor: theme.cardBorder,
             }}
           >
-            {}
             <Text
               className="font-bold mb-2 text-center"
               style={{ color: theme.text, fontSize: scaledSize(18) }}
@@ -924,7 +938,7 @@ export default function FamilyAccessScreen() {
               className="text-center mb-6 leading-5"
               style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
             >
-              Are you sure you want to remove{" "}
+              Remove{" "}
               <Text style={{ fontWeight: "bold", color: theme.text }}>
                 {selectedMember?.name}
               </Text>
@@ -960,9 +974,12 @@ export default function FamilyAccessScreen() {
         </View>
       </Modal>
 
-      {}
+      {/* Error Modal - MATCHING INVITATION SCREEN */}
       <Modal visible={showErrorModal} transparent animationType="fade">
-        <View className="flex-1 bg-black/80 justify-center items-center p-6">
+        <View
+          className="flex-1 justify-center items-center p-6"
+          style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
+        >
           <View
             className="w-[85%] max-w-[320px] p-5 rounded-2xl border items-center"
             style={{
@@ -970,7 +987,6 @@ export default function FamilyAccessScreen() {
               borderColor: theme.cardBorder,
             }}
           >
-            {}
             <Text
               className="font-bold mb-2 text-center"
               style={{ color: theme.text, fontSize: scaledSize(18) }}
@@ -985,7 +1001,7 @@ export default function FamilyAccessScreen() {
             </Text>
             <TouchableOpacity
               onPress={() => setShowErrorModal(false)}
-              className="w-full py-3 rounded-xl items-center"
+              className="w-[50%] self-center py-3 rounded-xl items-center"
               style={{ backgroundColor: theme.buttonPrimary }}
             >
               <Text
