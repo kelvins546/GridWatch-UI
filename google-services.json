@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "559387586038",
+    "project_id": "gridwatch-9f80e",
+    "storage_bucket": "gridwatch-9f80e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:559387586038:android:bf8c46aa890c0e90aeabd7",
+        "android_client_info": {
+          "package_name": "com.gridwatch.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAsmqnXKMyGPJpJ4oam4ca0RYD-Zxq9tLE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

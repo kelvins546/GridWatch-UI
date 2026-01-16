@@ -59,18 +59,12 @@ export default function FaultDetailScreen() {
     },
     backButton: {
       position: "absolute",
-      top: Platform.OS === "android" ? 40 : 50,
-      left: 20,
+      top: Platform.OS === "android" ? 60 : 60, // UPDATED: Lowered to 60
+      left: 24, // UPDATED: Matched standard padding
       zIndex: 10,
-      flexDirection: "row",
-      alignItems: "center",
+      // Added background style directly to container or via style prop below
     },
-    backText: {
-      color: "#fff",
-      marginLeft: 8,
-      fontSize: scaledSize(16),
-      fontWeight: "600",
-    },
+    // backText removed
     // --- ADOPTED BOXING LAYOUT ---
     card: {
       backgroundColor: theme.card,
@@ -156,12 +150,19 @@ export default function FaultDetailScreen() {
         backgroundColor="transparent"
       />
 
+      {/* --- UPDATED BACK BUTTON --- */}
       <TouchableOpacity
-        style={styles.backButton}
+        style={[
+          styles.backButton,
+          {
+            padding: 4,
+            backgroundColor: "rgba(0,0,0,0.2)",
+            borderRadius: 20,
+          },
+        ]}
         onPress={() => navigation.goBack()}
       >
-        <MaterialIcons name="arrow-back" size={24} color="#fff" />
-        <Text style={styles.backText}>Back</Text>
+        <MaterialIcons name="arrow-back" size={scaledSize(24)} color="#fff" />
       </TouchableOpacity>
 
       <LinearGradient
@@ -194,7 +195,10 @@ export default function FaultDetailScreen() {
           Power Cutoff Active
         </Text>
         <Text
-          style={{ fontSize: scaledSize(14), color: "rgba(255,255,255,0.9)" }}
+          style={{
+            fontSize: scaledSize(14),
+            color: "rgba(255,255,255,0.9)",
+          }}
         >
           Safety Protection Triggered
         </Text>

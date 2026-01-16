@@ -197,7 +197,7 @@ export default function SimpleAnalyticsScreen() {
     headerText: {
       fontWeight: "bold",
       color: theme.text,
-      fontSize: scaledSize(16),
+      fontSize: scaledSize(18), // UPDATED TO 18
     },
     scrollContent: {
       paddingBottom: 100,

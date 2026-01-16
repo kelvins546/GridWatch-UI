@@ -18,7 +18,7 @@ import ResetPasswordScreen from "../screens/auth/ResetPasswordScreen";
 import HomeScreen from "../screens/home/HomeScreen";
 import SimpleHomeScreen from "../screens/home/SimpleHomeScreen";
 import AnalyticsScreen from "../screens/analytics/AnalyticsScreen";
-import SimpleAnalyticsScreen from "../screens/analytics/SimpleAnalyticsScreen"; // NEW IMPORT
+import SimpleAnalyticsScreen from "../screens/analytics/SimpleAnalyticsScreen";
 import BudgetManagerScreen from "../screens/budgets/BudgetManagerScreen";
 import SimpleBudgetManagerScreen from "../screens/budgets/SimpleBudgetManagerScreen";
 import SettingsScreen from "../screens/settings/SettingsScreen";
@@ -103,7 +103,7 @@ const HomeRoute = () => {
   return isAdvancedMode ? <HomeScreen /> : <SimpleHomeScreen />;
 };
 
-// Switches between Advanced and Simple Analytics (NEW)
+// Switches between Advanced and Simple Analytics
 const AnalyticsRoute = () => {
   const { isAdvancedMode } = useTheme();
   return isAdvancedMode ? <AnalyticsScreen /> : <SimpleAnalyticsScreen />;
@@ -165,7 +165,7 @@ function BottomTabNavigator() {
       />
       <Tab.Screen
         name="Insights"
-        component={AnalyticsRoute} // Updated to use Wrapper
+        component={AnalyticsRoute}
         options={{
           tabBarButton: (props) => <BounceTabButton {...props} />,
           tabBarIcon: ({ color }) => (
@@ -209,12 +209,15 @@ function BottomTabNavigator() {
   );
 }
 
-export default function AppNavigator() {
+// --- UPDATED APP NAVIGATOR ---
+// Now accepts 'initialSession' to determine start screen
+export default function AppNavigator({ initialSession }) {
   const { isDarkMode } = useTheme();
 
   return (
     <Stack.Navigator
-      initialRouteName="Landing"
+      // Logic: If session exists, go to MainApp. If not, go to Landing.
+      initialRouteName={initialSession ? "MainApp" : "Landing"}
       screenOptions={{
         headerShown: false,
         animation: "slide_from_right",

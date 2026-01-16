@@ -13,11 +13,19 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
+  Alert, // Added Alert for Google errors
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+// 1. Import Supabase
+import { supabase } from "../../lib/supabase";
+// 2. Import Google Sign In
+import {
+  GoogleSignin,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 
 const ALLOWED_EMAIL_REGEX =
   /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
@@ -39,6 +47,15 @@ export default function LoginScreen() {
   const [errorMessage, setErrorMessage] = useState("");
 
   const floatAnim = useRef(new Animated.Value(0)).current;
+
+  // --- CONFIGURE GOOGLE SIGN IN ---
+  useEffect(() => {
+    GoogleSignin.configure({
+      scopes: ["email", "profile"],
+      webClientId:
+        "279998586082-buisq8vl4tnm3hrga2hb84raaghggnhf.apps.googleusercontent.com",
+    });
+  }, []);
 
   useEffect(() => {
     Animated.loop(
@@ -79,6 +96,56 @@ export default function LoginScreen() {
     validateField(field, value);
   };
 
+  // --- GOOGLE SIGN IN LOGIC ---
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    try {
+      // Force account picker
+      await GoogleSignin.signOut();
+
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.idToken || userInfo.data?.idToken;
+
+      if (idToken) {
+        const { data, error } = await supabase.auth.signInWithIdToken({
+          provider: "google",
+          token: idToken,
+        });
+
+        if (error) throw error;
+
+        // Check if New User or Existing (Same logic as AuthSelection)
+        const user = data.user;
+        const createdAt = new Date(user.created_at).getTime();
+        const lastSignIn = new Date(user.last_sign_in_at).getTime();
+        const isNewUser = lastSignIn - createdAt < 2000;
+
+        setIsLoading(false);
+
+        if (isNewUser) {
+          navigation.navigate("SetupHub", { fromSignup: true });
+        } else {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "MainApp" }],
+          });
+        }
+      } else {
+        throw new Error("No ID token present!");
+      }
+    } catch (error) {
+      setIsLoading(false);
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        return;
+      } else {
+        setErrorMessage(error.message);
+        setErrorModalVisible(true);
+      }
+    }
+  };
+
+  // --- SUPABASE EMAIL LOGIN LOGIC ---
   const handleLogin = async () => {
     const formValues = { email, password };
     let isValid = true;
@@ -96,16 +163,24 @@ export default function LoginScreen() {
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    });
+
+    setIsLoading(false);
+
+    if (error) {
+      setErrorMessage(error.message);
+      setErrorModalVisible(true);
+    } else {
       navigation.reset({
         index: 0,
         routes: [{ name: "MainApp" }],
       });
-    }, 2000);
+    }
   };
 
-  // --- STANDARD MODAL STYLES ---
   const styles = StyleSheet.create({
     modalOverlay: {
       flex: 1,
@@ -115,9 +190,9 @@ export default function LoginScreen() {
     },
     modalContainer: {
       borderWidth: 1,
-      padding: 20, // Standard p-5
-      borderRadius: 16, // Standard rounded-2xl
-      width: 288, // Standard w-72
+      padding: 20,
+      borderRadius: 16,
+      width: 288,
       alignItems: "center",
       backgroundColor: theme.card,
       borderColor: theme.cardBorder,
@@ -138,11 +213,11 @@ export default function LoginScreen() {
     },
     modalButton: {
       width: "100%",
-      height: 40, // Standard h-10
+      height: 40,
       borderRadius: 12,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: theme.buttonDangerText, // Red for Error
+      backgroundColor: theme.buttonDangerText,
     },
     modalButtonText: {
       color: "#fff",
@@ -317,6 +392,49 @@ export default function LoginScreen() {
               </View>
             </TouchableOpacity>
 
+            {/* --- ADDED: GOOGLE SIGN IN BUTTON --- */}
+            <View className="flex-row items-center my-6">
+              <View
+                className="flex-1 h-[1px]"
+                style={{ backgroundColor: theme.cardBorder }}
+              />
+              <Text
+                className="mx-3 text-xs font-bold uppercase"
+                style={{ color: theme.textSecondary }}
+              >
+                Or Login with
+              </Text>
+              <View
+                className="flex-1 h-[1px]"
+                style={{ backgroundColor: theme.cardBorder }}
+              />
+            </View>
+
+            <TouchableOpacity onPress={handleGoogleSignIn} activeOpacity={0.8}>
+              <View
+                className="flex-row items-center justify-center p-4 rounded-2xl border"
+                style={{
+                  backgroundColor: theme.buttonNeutral,
+                  borderColor: theme.cardBorder,
+                }}
+              >
+                <Image
+                  source={{
+                    uri: "https://cdn-icons-png.flaticon.com/512/300/300221.png",
+                  }}
+                  className="w-5 h-5 mr-3"
+                  resizeMode="contain"
+                />
+                <Text
+                  className="font-bold text-[15px]"
+                  style={{ color: theme.text }}
+                >
+                  Continue with Google
+                </Text>
+              </View>
+            </TouchableOpacity>
+            {/* ------------------------------------- */}
+
             <View className="flex-row justify-center mt-[30px]">
               <Text style={{ color: theme.textSecondary }}>
                 Don't have an account?{" "}
@@ -343,7 +461,6 @@ export default function LoginScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* --- STANDARD ERROR MODAL --- */}
       <Modal
         animationType="fade"
         transparent={true}

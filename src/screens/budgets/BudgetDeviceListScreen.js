@@ -58,7 +58,6 @@ export default function BudgetDeviceListScreen() {
       limit: "₱ 500",
       statusText: "Offline - Short Circuit",
       type: "critical",
-      // Removed isLocked: true so it can be clicked
     },
     {
       id: "fan",
@@ -73,7 +72,6 @@ export default function BudgetDeviceListScreen() {
 
   const handleDevicePress = (device) => {
     if (device.type === "critical") {
-      // Redirect to Fault Detail for critical errors
       navigation.navigate("FaultDetail", {
         deviceName: device.name,
         status: device.statusText,
@@ -109,35 +107,25 @@ export default function BudgetDeviceListScreen() {
         }}
       >
         <TouchableOpacity
-          style={{ flexDirection: "row", alignItems: "center" }}
           onPress={() => navigation.goBack()}
+          style={{ padding: 4 }}
         >
           <MaterialIcons
             name="arrow-back"
-            size={scaledSize(18)}
+            size={scaledSize(20)}
             color={theme.textSecondary}
           />
-          <Text
-            style={{
-              color: theme.textSecondary,
-              fontSize: scaledSize(14),
-              fontWeight: "500",
-              marginLeft: 4,
-            }}
-          >
-            Back
-          </Text>
         </TouchableOpacity>
         <Text
           style={{
             color: theme.text,
-            fontSize: scaledSize(16),
+            fontSize: scaledSize(18),
             fontWeight: "bold",
           }}
         >
           Budget Management
         </Text>
-        <View style={{ width: 50 }} />
+        <View style={{ width: scaledSize(20) + 8 }} />
       </View>
 
       <ScrollView
@@ -146,7 +134,7 @@ export default function BudgetDeviceListScreen() {
       >
         <Text
           style={{
-            marginBottom: 24,
+            marginBottom: 20,
             lineHeight: 20,
             color: theme.textSecondary,
             fontSize: scaledSize(13),
@@ -196,9 +184,10 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
 
   let iconColor, iconBg, statusTextColor;
 
+  // Determining Colors based on status
   if (data.type === "good") {
     iconColor = theme.buttonPrimary;
-    iconBg = `${theme.buttonPrimary}22`; // Low opacity primary
+    iconBg = `${theme.buttonPrimary}22`;
     statusTextColor = iconColor;
   } else if (data.type === "warn") {
     iconColor = isDarkMode ? "#ffaa00" : "#b37400";
@@ -217,17 +206,17 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
   return (
     <TouchableOpacity
       activeOpacity={0.9}
-      // Always allow press if not explicitly locked (removed isLocked check for critical items)
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      style={{ marginBottom: 12 }}
+      style={{ marginBottom: 0 }}
     >
       <Animated.View
         style={{
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
+          // MATCHING HUB CARD STYLE
           padding: 16,
           borderRadius: 16,
           borderWidth: 1,
@@ -238,7 +227,7 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-          {/* ICON BOX */}
+          {/* ICON BOX - Matching HubCard Size */}
           <View
             style={{
               width: 44,
@@ -252,7 +241,7 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
           >
             <MaterialIcons
               name={data.icon}
-              size={scaledSize(24)}
+              size={scaledSize(22)}
               color={iconColor}
             />
           </View>
@@ -262,48 +251,55 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
             <Text
               style={{
                 color: theme.text,
-                fontSize: scaledSize(15),
-                fontWeight: "700",
-                marginBottom: 4,
+                fontSize: scaledSize(14),
+                fontWeight: "700", // Bold title like HubCard
+                marginBottom: 2,
               }}
             >
               {data.name}
             </Text>
 
-            {/* DETAILS ROW (Current / Limit) */}
-            <View style={{ flexDirection: "row", marginBottom: 2 }}>
-              <Text
-                style={{
-                  color: theme.text,
-                  fontWeight: "600",
-                  fontSize: scaledSize(12),
-                }}
-              >
-                {data.currentLoad}{" "}
-              </Text>
-              <Text
-                style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
-              >
-                / {data.limit}
-              </Text>
-            </View>
-
-            <Text
+            {/* SUBTITLE ROW (Status / Load) */}
+            <View
               style={{
-                color: statusTextColor,
-                fontSize: scaledSize(11),
-                fontWeight: "500",
+                flexDirection: "row",
+                alignItems: "center",
               }}
             >
-              {data.statusText}
-            </Text>
+              <Text
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(11),
+                }}
+              >
+                {data.currentLoad}
+              </Text>
+              <Text
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(10),
+                  marginHorizontal: 4,
+                }}
+              >
+                •
+              </Text>
+              <Text
+                style={{
+                  color: statusTextColor,
+                  fontSize: scaledSize(11),
+                  fontWeight: "500",
+                }}
+              >
+                {data.statusText}
+              </Text>
+            </View>
           </View>
         </View>
 
-        {/* RIGHT ARROW / LOCK (Only show lock if explicitly isLocked) */}
+        {/* Right Arrow */}
         <MaterialIcons
           name={data.isLocked ? "lock" : "chevron-right"}
-          size={scaledSize(24)}
+          size={scaledSize(20)}
           color={theme.textSecondary}
         />
       </Animated.View>

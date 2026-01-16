@@ -6,6 +6,7 @@ import {
   ScrollView,
   StatusBar,
   TextInput,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -62,8 +63,7 @@ export default function BudgetDetailScreen() {
 
   return (
     <SafeAreaView
-      className="flex-1"
-      style={{ backgroundColor: theme.background }}
+      style={{ flex: 1, backgroundColor: theme.background }}
       edges={["top", "left", "right"]}
     >
       <StatusBar
@@ -71,37 +71,50 @@ export default function BudgetDetailScreen() {
         backgroundColor={theme.background}
       />
 
+      {/* --- UPDATED HEADER --- */}
       <View
-        className="flex-row items-center justify-between px-6 py-5 border-b"
         style={{
-          backgroundColor: theme.background,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingHorizontal: 24,
+          paddingVertical: 20,
+          borderBottomWidth: 1,
           borderBottomColor: theme.cardBorder,
+          backgroundColor: theme.background,
         }}
       >
         <TouchableOpacity
-          className="flex-row items-center gap-1.5"
           onPress={() => navigation.goBack()}
+          style={{ padding: 4 }}
         >
           <MaterialIcons
             name="arrow-back"
-            size={scaledSize(18)}
+            size={scaledSize(20)}
             color={theme.textSecondary}
           />
-          <Text
-            className="font-medium"
-            style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
-          ></Text>
         </TouchableOpacity>
+
         <Text
-          className="font-bold"
-          style={{ color: theme.text, fontSize: scaledSize(16) }}
+          style={{
+            color: theme.text,
+            fontSize: scaledSize(18),
+            fontWeight: "bold",
+          }}
         >
           {deviceName}
         </Text>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{ padding: 4 }}
+        >
           <Text
-            className="font-bold"
-            style={{ color: theme.buttonPrimary, fontSize: scaledSize(14) }}
+            style={{
+              color: theme.buttonPrimary,
+              fontSize: scaledSize(14),
+              fontWeight: "bold",
+            }}
           >
             Save
           </Text>
@@ -262,13 +275,19 @@ export default function BudgetDetailScreen() {
           <View className="mb-8">
             <View className="flex-row justify-between mb-2">
               <Text
-                style={{ color: theme.textSecondary, fontSize: scaledSize(13) }}
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(13),
+                }}
               >
                 Used: ₱ {usedAmount.toLocaleString()}
               </Text>
               <Text
                 className="font-bold"
-                style={{ color: theme.buttonPrimary, fontSize: scaledSize(13) }}
+                style={{
+                  color: theme.buttonPrimary,
+                  fontSize: scaledSize(13),
+                }}
               >
                 {percentage}%
               </Text>
@@ -289,12 +308,18 @@ export default function BudgetDetailScreen() {
 
             <View className="flex-row justify-between">
               <Text
-                style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(11),
+                }}
               >
                 Remaining: ₱ {remaining}
               </Text>
               <Text
-                style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(11),
+                }}
               >
                 Resets in: 12 Days
               </Text>
@@ -358,7 +383,10 @@ function RuleItem({
           {disabled && (
             <Text
               className="font-bold"
-              style={{ color: theme.buttonPrimary, fontSize: scaledSize(10) }}
+              style={{
+                color: theme.buttonPrimary,
+                fontSize: scaledSize(10),
+              }}
             >
               (Always On)
             </Text>
@@ -372,7 +400,7 @@ function RuleItem({
         </Text>
       </View>
 
-      {}
+      {/* Switch */}
       <CustomSwitch
         value={value}
         onToggle={disabled ? null : onToggle}

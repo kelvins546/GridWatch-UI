@@ -39,16 +39,15 @@ export default function DeviceConfigScreen() {
     setIsOnline(!isOnline);
   };
 
-  // --- UPDATED STATUS LOGIC ---
+  // --- STATUS LOGIC ---
   let statusDetailText = "Offline • Check Connection";
-  let statusColor = theme.textSecondary; // GRAY for Offline
-  let statusBg = theme.buttonNeutral; // GRAY BG for Offline
+  let statusColor = theme.textSecondary;
+  let statusBg = theme.buttonNeutral;
   let statusIcon = "wifi-off";
 
   if (isOnline) {
     statusDetailText = "Online • Stable";
-    statusColor = theme.buttonPrimary; // GREEN for Online
-    // Subtle Green BG based on Theme
+    statusColor = theme.buttonPrimary;
     statusBg = isDarkMode ? "rgba(0, 255, 153, 0.1)" : "rgba(0, 166, 81, 0.1)";
     statusIcon = "router";
   }
@@ -59,7 +58,6 @@ export default function DeviceConfigScreen() {
     statusBg = "rgba(255, 193, 7, 0.15)";
     statusIcon = "hourglass-top";
   }
-  // ----------------------------
 
   const [modalState, setModalState] = useState({
     visible: false,
@@ -100,8 +98,7 @@ export default function DeviceConfigScreen() {
     setModalState((prev) => ({
       ...prev,
       loading: true,
-      title: "Unpairing...",
-      msg: "Removing device from your account...",
+      msg: "Unpairing Device...",
     }));
 
     setTimeout(() => {
@@ -125,7 +122,6 @@ export default function DeviceConfigScreen() {
       setModalState((prev) => ({
         ...prev,
         loading: true,
-        title: "Sending Command...",
         msg: "Contacting Hub...",
       }));
 
@@ -143,11 +139,13 @@ export default function DeviceConfigScreen() {
         setIsOnline(false);
 
         let countdown = 10;
+
+        // --- 1. INITIAL COUNTDOWN MESSAGE ---
         setModalState((prev) => ({
           ...prev,
           loading: false,
           title: "Restarting Device...",
-          msg: `Please wait while the system reboots.\nTime remaining: ${countdown}s`,
+          msg: `Please wait while the system reboots.\n\nTime remaining: ${countdown}s`,
         }));
 
         const intervalId = setInterval(() => {
@@ -158,9 +156,10 @@ export default function DeviceConfigScreen() {
             setIsOnline(true);
             closeModal();
           } else {
+            // --- 2. UPDATE COUNTDOWN MESSAGE ---
             setModalState((prev) => ({
               ...prev,
-              msg: `Please wait while the system reboots.\nTime remaining: ${countdown}s`,
+              msg: `Please wait while the system reboots.\n\nTime remaining: ${countdown}s`,
             }));
           }
         }, 1000);
@@ -174,7 +173,6 @@ export default function DeviceConfigScreen() {
   };
 
   const dangerColor = isDarkMode ? "#ff4444" : "#c62828";
-
   const dangerBg = isDarkMode
     ? "rgba(255, 68, 68, 0.1)"
     : "rgba(198, 40, 40, 0.05)";
@@ -185,8 +183,12 @@ export default function DeviceConfigScreen() {
   if (loading) {
     return (
       <View
-        className="flex-1 justify-center items-center"
-        style={{ backgroundColor: theme.background }}
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: theme.background,
+        }}
       >
         <ActivityIndicator size="large" color={theme.buttonPrimary} />
       </View>
@@ -204,37 +206,29 @@ export default function DeviceConfigScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
+      {/* HEADER (UPDATED TO MATCH YOUR STYLE) */}
       <View
-        className="flex-row items-center justify-between px-6 py-5 border-b"
+        className="flex-row items-center px-6 py-5 border-b"
         style={{
           backgroundColor: theme.background,
           borderBottomColor: theme.cardBorder,
         }}
       >
-        <TouchableOpacity
-          className="flex-row items-center"
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons
             name="arrow-back"
-            size={scaledSize(18)}
+            size={scaledSize(20)}
             color={theme.textSecondary}
           />
-          <Text
-            className="font-medium ml-1"
-            style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
-          >
-            Back
-          </Text>
         </TouchableOpacity>
         <Text
-          className="font-bold"
-          style={{ color: theme.text, fontSize: scaledSize(16) }}
+          className="flex-1 text-center font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(18) }}
         >
           Device Configuration
         </Text>
-        <View className="w-[50px]" />
+        {/* Placeholder View for alignment balance */}
+        <View style={{ width: scaledSize(20) }} />
       </View>
 
       <ScrollView>
@@ -252,7 +246,7 @@ export default function DeviceConfigScreen() {
               <View
                 className="w-20 h-20 rounded-full border-2 justify-center items-center mb-4"
                 style={{
-                  borderColor: isOnline ? statusColor : theme.cardBorder, // Neutral border for offline
+                  borderColor: isOnline ? statusColor : theme.cardBorder,
                   backgroundColor: statusBg,
                 }}
               >
@@ -315,7 +309,10 @@ export default function DeviceConfigScreen() {
             >
               <Text
                 className="font-medium"
-                style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(14),
+                }}
               >
                 Firmware
               </Text>
@@ -510,35 +507,58 @@ export default function DeviceConfigScreen() {
         onRequestClose={closeModal}
       >
         <View className="flex-1 bg-black/80 justify-center items-center p-6">
-          <View
-            className="w-[85%] max-w-[320px] p-5 rounded-2xl border items-center"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
-          >
-            {modalState.loading ? (
-              <ActivityIndicator
-                size="large"
-                color={theme.buttonPrimary}
-                className="my-5"
-              />
-            ) : null}
-
-            <Text
-              className="font-bold mb-2.5 text-center"
-              style={{ color: theme.text, fontSize: scaledSize(18) }}
+          {modalState.loading ? (
+            // --- LOADING STATE: Strictly following AuthSelection styles ---
+            <View
+              style={{
+                width: "100%",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              {modalState.title}
-            </Text>
-            <Text
-              className="text-center mb-6 leading-5"
-              style={{ color: theme.textSecondary, fontSize: scaledSize(13) }}
+              <ActivityIndicator size="large" color="#B0B0B0" />
+              <Text
+                style={{
+                  color: "#B0B0B0",
+                  marginTop: 15,
+                  fontWeight: "500",
+                  fontSize: 12, // EXACT size from AuthSelection
+                  letterSpacing: 0.5,
+                  textAlign: "center", // Forces countdown to the middle
+                  width: "100%",
+                }}
+              >
+                {modalState.msg}
+              </Text>
+            </View>
+          ) : (
+            // --- NORMAL STATE: Standard Card ---
+            <View
+              className="w-[85%] max-w-[320px] p-5 rounded-2xl border items-center"
+              style={{
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+              }}
             >
-              {modalState.msg}
-            </Text>
+              <Text
+                className="font-bold mb-2.5 text-center"
+                style={{ color: theme.text, fontSize: scaledSize(18) }}
+              >
+                {modalState.title}
+              </Text>
 
-            {!modalState.loading && (
+              <Text
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(13),
+                  textAlign: "center",
+                  width: "100%",
+                  marginBottom: 24,
+                }}
+              >
+                {modalState.msg}
+              </Text>
+
               <View className="flex-row gap-3 w-full">
                 {(modalState.type === "restart" ||
                   modalState.type === "unpair" ||
@@ -551,7 +571,10 @@ export default function DeviceConfigScreen() {
                   >
                     <Text
                       className="font-bold"
-                      style={{ color: theme.text, fontSize: scaledSize(13) }}
+                      style={{
+                        color: theme.text,
+                        fontSize: scaledSize(13),
+                      }}
                     >
                       Cancel
                     </Text>
@@ -586,8 +609,8 @@ export default function DeviceConfigScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
-            )}
-          </View>
+            </View>
+          )}
         </View>
       </Modal>
     </SafeAreaView>

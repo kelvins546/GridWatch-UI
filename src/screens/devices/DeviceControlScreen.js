@@ -11,6 +11,7 @@ import {
   StyleSheet,
   UIManager,
   LayoutAnimation,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -38,6 +39,9 @@ export default function DeviceControlScreen() {
 
   const initialPower = !status?.includes("Standby") && !status?.includes("OFF");
   const [isPowered, setIsPowered] = useState(initialPower);
+
+  // --- NEW STATE FOR LOADING ---
+  const [isToggling, setIsToggling] = useState(false);
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
@@ -83,9 +87,18 @@ export default function DeviceControlScreen() {
 
   // --- ACTIONS ---
   const confirmToggle = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setIsPowered(!isPowered);
+    // 1. Close the modal first
     setShowConfirm(false);
+
+    // 2. Start Loading
+    setIsToggling(true);
+
+    // 3. Simulate API Delay
+    setTimeout(() => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setIsPowered((prev) => !prev);
+      setIsToggling(false); // Stop loading
+    }, 2000);
   };
 
   const toggleDay = (index) => {
@@ -121,12 +134,13 @@ export default function DeviceControlScreen() {
     },
     headerOverlay: {
       position: "absolute",
-      top: Platform.OS === "android" ? 40 : 50,
-      left: 20,
-      right: 20,
+      top: Platform.OS === "android" ? 60 : 60,
+      left: 24,
+      right: 24,
       zIndex: 10,
       flexDirection: "row",
       justifyContent: "space-between",
+      alignItems: "center",
     },
     card: {
       backgroundColor: theme.card,
@@ -160,7 +174,7 @@ export default function DeviceControlScreen() {
       shadowRadius: 20,
       elevation: 10,
     },
-    // --- MODAL STYLES COPIED EXACTLY FROM SETTINGS ---
+    // --- MODAL STYLES ---
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.8)",
@@ -169,9 +183,9 @@ export default function DeviceControlScreen() {
     },
     modalContainer: {
       borderWidth: 1,
-      padding: 20, // p-5
-      borderRadius: 16, // rounded-2xl
-      width: 288, // w-72
+      padding: 20,
+      borderRadius: 16,
+      width: 288,
       alignItems: "center",
       backgroundColor: theme.card,
       borderColor: theme.cardBorder,
@@ -185,8 +199,8 @@ export default function DeviceControlScreen() {
     },
     modalBody: {
       textAlign: "center",
-      marginBottom: 24, // mb-6
-      lineHeight: 20, // leading-5
+      marginBottom: 24,
+      lineHeight: 20,
       color: theme.textSecondary,
       fontSize: scaledSize(12),
     },
@@ -197,8 +211,8 @@ export default function DeviceControlScreen() {
     },
     modalBtnCancel: {
       flex: 1,
-      borderRadius: 12, // rounded-xl
-      height: 40, // h-10
+      borderRadius: 12,
+      height: 40,
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 1,
@@ -206,8 +220,8 @@ export default function DeviceControlScreen() {
     },
     modalBtnConfirm: {
       flex: 1,
-      borderRadius: 12, // rounded-xl
-      height: 40, // h-10
+      borderRadius: 12,
+      height: 40,
       justifyContent: "center",
       alignItems: "center",
       overflow: "hidden",
@@ -215,6 +229,24 @@ export default function DeviceControlScreen() {
     modalBtnText: {
       fontWeight: "bold",
       fontSize: scaledSize(12),
+    },
+    // --- LOADING OVERLAY STYLE ---
+    loaderOverlay: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.7)",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 50,
+    },
+    loaderText: {
+      color: "#fff",
+      marginTop: 16,
+      fontSize: scaledSize(14),
+      fontWeight: "600",
     },
   });
 
@@ -230,25 +262,23 @@ export default function DeviceControlScreen() {
       <View style={styles.headerOverlay}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          style={{ flexDirection: "row", alignItems: "center" }}
+          style={{
+            padding: 4,
+            backgroundColor: "rgba(0,0,0,0.2)",
+            borderRadius: 20,
+          }}
         >
-          <MaterialIcons name="arrow-back" size={24} color="#fff" />
-          <Text
-            style={{
-              color: "#fff",
-              marginLeft: 8,
-              fontSize: scaledSize(16),
-              fontWeight: "600",
-              textShadowColor: "rgba(0,0,0,0.3)",
-              textShadowOffset: { width: 0, height: 1 },
-              textShadowRadius: 3,
-            }}
-          >
-            Back
-          </Text>
+          <MaterialIcons name="arrow-back" size={scaledSize(24)} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity>
-          <MaterialIcons name="settings" size={24} color="#fff" />
+
+        <TouchableOpacity
+          style={{
+            padding: 4,
+            backgroundColor: "rgba(0,0,0,0.2)",
+            borderRadius: 20,
+          }}
+        >
+          <MaterialIcons name="settings" size={scaledSize(24)} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -518,11 +548,10 @@ export default function DeviceControlScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* --- CONFIRMATION MODAL (EXACT COPY OF SETTINGS MODAL) --- */}
+      {/* --- CONFIRMATION MODAL --- */}
       <Modal visible={showConfirm} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            {/* ICON REMOVED to match Settings */}
             <Text style={styles.modalTitle}>
               {isPowered ? "Turn Off Device?" : "Restore Power?"}
             </Text>
@@ -569,7 +598,7 @@ export default function DeviceControlScreen() {
         </View>
       </Modal>
 
-      {/* --- SCHEDULE MODAL (Adapted Style) --- */}
+      {/* --- SCHEDULE MODAL --- */}
       <Modal visible={showSchedule} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -703,6 +732,16 @@ export default function DeviceControlScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* --- LOADING OVERLAY --- */}
+      {isToggling && (
+        <View style={styles.loaderOverlay}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.loaderText}>
+            {isPowered ? "Turning Off..." : "Turning On..."}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }

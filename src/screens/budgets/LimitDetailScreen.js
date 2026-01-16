@@ -94,22 +94,15 @@ export default function LimitDetailScreen() {
       flex: 1,
       backgroundColor: theme.background,
     },
+    // --- UPDATED BACK BUTTON ---
     backButton: {
       position: "absolute",
-      top: Platform.OS === "android" ? 40 : 50,
-      left: 20,
+      top: 60, // Standardized top position
+      left: 24, // Standardized left margin
       zIndex: 10,
-      flexDirection: "row",
-      alignItems: "center",
-    },
-    backText: {
-      color: "#fff",
-      marginLeft: 8,
-      fontSize: scaledSize(16),
-      fontWeight: "600",
-      textShadowColor: "rgba(0,0,0,0.3)",
-      textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 3,
+      padding: 4,
+      backgroundColor: "rgba(0,0,0,0.2)",
+      borderRadius: 20,
     },
     // Standard Card Style
     card: {
@@ -122,7 +115,7 @@ export default function LimitDetailScreen() {
     },
     detailLabel: {
       color: theme.textSecondary,
-      fontSize: scaledSize(12), // Increased from 11
+      fontSize: scaledSize(12),
       fontWeight: "700",
       textTransform: "uppercase",
       marginBottom: 10,
@@ -144,7 +137,7 @@ export default function LimitDetailScreen() {
       paddingVertical: 0,
       paddingHorizontal: 12,
       color: theme.text,
-      fontSize: scaledSize(16), // Increased from 14 for better readability
+      fontSize: scaledSize(16),
       fontWeight: "600",
       height: 44,
     },
@@ -174,7 +167,7 @@ export default function LimitDetailScreen() {
       justifyContent: "center",
       marginTop: 10,
     },
-    // --- MODAL STYLES (Matched Exactly) ---
+    // --- MODAL STYLES ---
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.8)",
@@ -185,7 +178,7 @@ export default function LimitDetailScreen() {
       borderWidth: 1,
       padding: 20,
       borderRadius: 16,
-      width: 288, // w-72
+      width: 288,
       alignItems: "center",
       backgroundColor: theme.card,
       borderColor: theme.cardBorder,
@@ -202,11 +195,11 @@ export default function LimitDetailScreen() {
       marginBottom: 24,
       lineHeight: 22,
       color: theme.textSecondary,
-      fontSize: scaledSize(14), // Increased from 12 for better balance
+      fontSize: scaledSize(14),
     },
     modalButtonPrimary: {
       width: "100%",
-      height: 40, // h-10
+      height: 40,
       borderRadius: 12,
       alignItems: "center",
       justifyContent: "center",
@@ -226,8 +219,7 @@ export default function LimitDetailScreen() {
         style={styles.backButton}
         onPress={() => navigation.goBack()}
       >
-        <MaterialIcons name="arrow-back" size={24} color="#fff" />
-        <Text style={styles.backText}>Back</Text>
+        <MaterialIcons name="arrow-back" size={scaledSize(24)} color="#fff" />
       </TouchableOpacity>
 
       {/* Hero Section */}
@@ -324,7 +316,7 @@ export default function LimitDetailScreen() {
           <Text
             style={{
               textAlign: "right",
-              fontSize: scaledSize(14), // Increased from 12
+              fontSize: scaledSize(14),
               color: "#ff4444",
               fontWeight: "700",
             }}
@@ -344,7 +336,7 @@ export default function LimitDetailScreen() {
           >
             <Text
               style={{
-                fontSize: scaledSize(13), // Increased from 12
+                fontSize: scaledSize(13),
                 color: theme.textSecondary,
               }}
             >
@@ -352,7 +344,7 @@ export default function LimitDetailScreen() {
             </Text>
             <Text
               style={{
-                fontSize: scaledSize(13), // Increased from 12
+                fontSize: scaledSize(13),
                 color: theme.textSecondary,
               }}
             >
@@ -386,7 +378,7 @@ export default function LimitDetailScreen() {
             </Text>
             <Text
               style={{
-                fontSize: scaledSize(13), // Increased from 12
+                fontSize: scaledSize(13),
                 color: theme.textSecondary,
               }}
             >
@@ -452,7 +444,7 @@ export default function LimitDetailScreen() {
         >
           <Text
             style={{
-              fontSize: scaledSize(14), // Increased from 12
+              fontSize: scaledSize(14),
               color: theme.textSecondary,
               textDecorationLine: "underline",
             }}

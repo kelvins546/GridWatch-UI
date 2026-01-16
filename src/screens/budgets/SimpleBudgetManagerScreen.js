@@ -55,14 +55,12 @@ export default function SimpleBudgetManagerScreen() {
     new Date().getMonth()
   );
 
-  // --- DATE LOGIC (New) ---
+  // --- DATE LOGIC ---
   const today = new Date();
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth(); // 0-11
-  // Calculate specific days in the current month
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const monthName = today.toLocaleString("default", { month: "long" });
-  // Generate array [1, 2, 3... daysInMonth]
   const billingDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
   // --- DATA SOURCES ---
@@ -171,8 +169,8 @@ export default function SimpleBudgetManagerScreen() {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      paddingHorizontal: 24,
-      paddingVertical: 20,
+      paddingHorizontal: 24, // px-6
+      paddingVertical: 20, // py-5
       backgroundColor: theme.background,
     },
     headerTitleWrapper: {
@@ -183,7 +181,7 @@ export default function SimpleBudgetManagerScreen() {
     headerText: {
       fontWeight: "bold",
       color: theme.text,
-      fontSize: scaledSize(16),
+      fontSize: scaledSize(18), // Updated to 18
     },
     scrollContent: {
       paddingBottom: 100,
@@ -213,7 +211,7 @@ export default function SimpleBudgetManagerScreen() {
     card: {
       backgroundColor: theme.card,
       borderRadius: 20,
-      padding: 24,
+      padding: 20, // Reduced from 24
       borderWidth: 1,
       borderColor: theme.cardBorder,
       marginBottom: 20,
@@ -352,7 +350,7 @@ export default function SimpleBudgetManagerScreen() {
         </View>
 
         <View style={styles.section}>
-          {/* --- MAIN GOAL CARD --- */}
+          {/* --- MAIN GOAL CARD (COMPACT VERSION) --- */}
           <TouchableOpacity
             activeOpacity={1}
             style={{ marginBottom: 20 }}
@@ -367,7 +365,7 @@ export default function SimpleBudgetManagerScreen() {
                 style={{
                   flexDirection: "row",
                   justifyContent: "space-between",
-                  marginBottom: 8,
+                  marginBottom: 4, // Reduced margin
                 }}
               >
                 <View>
@@ -385,9 +383,9 @@ export default function SimpleBudgetManagerScreen() {
                   <Text
                     style={{
                       color: theme.text,
-                      fontSize: scaledSize(42),
+                      fontSize: scaledSize(34), // Reduced from 42 to 34
                       fontWeight: "900",
-                      marginTop: 4,
+                      marginTop: 2,
                     }}
                   >
                     ₱ {currentSpending.toLocaleString()}
@@ -400,7 +398,8 @@ export default function SimpleBudgetManagerScreen() {
                 />
               </View>
 
-              <View style={{ marginBottom: 16 }}>
+              {/* REMOVED STRAY SPACE HERE THAT CAUSED THE ERROR */}
+              <View style={{ marginBottom: 12 }}>
                 <View
                   style={{
                     flexDirection: "row",
@@ -428,7 +427,7 @@ export default function SimpleBudgetManagerScreen() {
                 </View>
                 <View
                   style={{
-                    height: 16,
+                    height: 12, // Reduced height from 16
                     backgroundColor: isDarkMode ? "#333" : "#f0f0f0",
                     borderRadius: 8,
                     overflow: "hidden",
@@ -452,7 +451,7 @@ export default function SimpleBudgetManagerScreen() {
                   flexDirection: "row",
                   borderTopWidth: 1,
                   borderTopColor: theme.cardBorder,
-                  paddingTop: 16,
+                  paddingTop: 12, // Reduced padding
                 }}
               >
                 <StatItem
@@ -643,7 +642,9 @@ export default function SimpleBudgetManagerScreen() {
                 primaryColor={primaryColor}
                 scaledSize={scaledSize}
                 onPress={() =>
-                  navigation.navigate("BudgetDeviceList", { hubName: hub.name })
+                  navigation.navigate("BudgetDeviceList", {
+                    hubName: hub.name,
+                  })
                 }
               />
             ))}
@@ -787,7 +788,11 @@ export default function SimpleBudgetManagerScreen() {
               }}
             >
               <Text
-                style={{ color: theme.text, fontSize: 18, fontWeight: "bold" }}
+                style={{
+                  color: theme.text,
+                  fontSize: 18,
+                  fontWeight: "bold",
+                }}
               >
                 Select Day in {monthName}
               </Text>
@@ -819,7 +824,6 @@ export default function SimpleBudgetManagerScreen() {
                       item === parseInt(billingDate)
                         ? primaryColor
                         : "transparent",
-                    // FIX: Prevent large items by limiting width or using flex basis
                     maxWidth: "18%",
                   }}
                 >
@@ -869,7 +873,11 @@ export default function SimpleBudgetManagerScreen() {
               }}
             >
               <Text
-                style={{ color: theme.text, fontSize: 18, fontWeight: "bold" }}
+                style={{
+                  color: theme.text,
+                  fontSize: 18,
+                  fontWeight: "bold",
+                }}
               >
                 Set Monthly Goal
               </Text>
@@ -985,7 +993,13 @@ export default function SimpleBudgetManagerScreen() {
           }}
         >
           <ActivityIndicator size="large" color={primaryColor} />
-          <Text style={{ color: "#fff", marginTop: 16, fontWeight: "bold" }}>
+          <Text
+            style={{
+              color: "#fff",
+              marginTop: 16,
+              fontWeight: "bold",
+            }}
+          >
             Updating Settings...
           </Text>
         </View>

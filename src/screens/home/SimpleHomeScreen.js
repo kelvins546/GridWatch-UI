@@ -68,13 +68,26 @@ export default function SimpleHomeScreen() {
     setTimeout(() => setIsLoading(false), 500);
   }, []);
 
+  // --- UPDATED LOADING STATE ---
   if (isLoading) {
     return (
       <View
         className="flex-1 justify-center items-center"
-        style={{ backgroundColor: theme.background }}
+        style={{ backgroundColor: theme.background }} // Reverted to theme background
       >
-        <ActivityIndicator size="large" color={theme.buttonPrimary} />
+        <ActivityIndicator size="large" color="#B0B0B0" />
+        <Text
+          style={{
+            marginTop: 20,
+            color: "#B0B0B0",
+            fontSize: 12, // Hardcoded 12
+            textAlign: "center",
+            width: "100%",
+            fontFamily: theme.fontRegular,
+          }}
+        >
+          Loading...
+        </Text>
       </View>
     );
   }
@@ -125,8 +138,8 @@ export default function SimpleHomeScreen() {
             className="absolute bg-[#ff4d4d] rounded-[7px] w-3.5 h-3.5 justify-center items-center border-2"
             style={{
               borderColor: theme.background,
-              top: 4, // Fixed: Was 8, now matches standard header
-              right: 4, // Fixed: Was 8, now matches standard header
+              top: 4,
+              right: 4,
             }}
           >
             <Text className="text-white text-[8px] font-bold">2</Text>
@@ -262,7 +275,7 @@ export default function SimpleHomeScreen() {
                           backgroundColor: badgeBg,
                           paddingHorizontal: scaledSize(6),
                           paddingVertical: scaledSize(2),
-                          marginRight: 8, // Space between badge and "devices active" text
+                          marginRight: 8,
                         }}
                       >
                         <Text

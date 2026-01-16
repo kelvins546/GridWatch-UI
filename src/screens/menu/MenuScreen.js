@@ -61,7 +61,19 @@ export default function MenuScreen() {
           barStyle={theme.statusBarStyle}
           backgroundColor={theme.background}
         />
-        <ActivityIndicator size="large" color={theme.primary} />
+        {/* UPDATED LOADER STYLE */}
+        <ActivityIndicator size="large" color="#B0B0B0" />
+        <Text
+          style={{
+            marginTop: 12,
+            color: "#B0B0B0",
+            fontSize: scaledSize(12),
+            fontWeight: "500",
+            letterSpacing: 0.5,
+          }}
+        >
+          Loading...
+        </Text>
       </View>
     );
   }

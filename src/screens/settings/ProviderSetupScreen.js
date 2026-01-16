@@ -814,8 +814,9 @@ export default function ProviderSetupScreen() {
         style={{ borderBottomColor: theme.cardBorder }}
       >
         <TouchableOpacity onPress={() => navigation.goBack()}>
+          {/* --- CHANGED ICON TO ARROW-BACK --- */}
           <MaterialIcons
-            name="close"
+            name="arrow-back"
             size={scaledSize(24)}
             color={theme.textSecondary}
           />
@@ -824,7 +825,7 @@ export default function ProviderSetupScreen() {
           className="flex-1 text-center text-base font-bold"
           style={{ color: theme.text, fontSize: scaledSize(16) }}
         >
-          Select Utility Provider
+          Utility Provider
         </Text>
         <View className="w-6" />
       </View>
@@ -949,9 +950,10 @@ export default function ProviderSetupScreen() {
                   onPress={toggleShowAll}
                   className="py-3 items-center"
                 >
+                  {/* --- CHANGED COLOR TO theme.text (White/Black) --- */}
                   <Text
                     className="text-xs font-bold"
-                    style={{ color: theme.primary, fontSize: scaledSize(12) }}
+                    style={{ color: theme.text, fontSize: scaledSize(12) }}
                   >
                     {showAll
                       ? "Show Less"
@@ -1039,7 +1041,7 @@ export default function ProviderSetupScreen() {
                     <Text
                       className="text-lg font-bold mr-2"
                       style={{
-                        color: theme.text, // UPDATED to theme.text for White request
+                        color: theme.text,
                         fontSize: scaledSize(18),
                       }}
                     >
@@ -1166,10 +1168,10 @@ function ProviderCard({
           className="text-xs"
           style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
         >
-          Rate:{" "}
+          Rate: {/* --- RATE COLOR SET TO GREEN (activeColor) --- */}
           <Text
             className="font-semibold"
-            style={{ color: theme.primary, fontSize: scaledSize(12) }}
+            style={{ color: activeColor, fontSize: scaledSize(12) }}
           >
             ₱ {item.rate} / kWh
           </Text>

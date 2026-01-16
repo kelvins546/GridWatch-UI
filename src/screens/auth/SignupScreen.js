@@ -10,19 +10,24 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Animated,
   StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
 
 const ALLOWED_EMAIL_REGEX =
   /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
 const ZIP_REGEX = /^[0-9]{4}$/;
 
 const MAX_ADDRESS_LENGTH = 150;
+
+// EmailJS Config
+const EMAILJS_SERVICE_ID = "service_ah3k0xc";
+const EMAILJS_TEMPLATE_ID = "template_xz7agxi";
+const EMAILJS_PUBLIC_KEY = "pdso3GRtCqLn7fVTs";
 
 const checkPasswordStrength = (str) => {
   const hasLength = str.length >= 8;
@@ -41,41 +46,42 @@ export default function SignupScreen() {
 
   const [currentStep, setCurrentStep] = useState(0);
 
+  // Form State
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-
   const [region, setRegion] = useState("");
   const [city, setCity] = useState("");
   const [zipCode, setZipCode] = useState("");
   const [fullAddress, setFullAddress] = useState("");
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
+  // Validation
   const [touched, setTouched] = useState({});
   const [errors, setErrors] = useState({});
-  const [otpModalVisible, setOtpModalVisible] = useState(false);
-
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsVisible, setTermsVisible] = useState(false);
 
+  // OTP State
+  const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [generatedOtp, setGeneratedOtp] = useState(null);
-
-  // 3 Minute Timer (180s)
   const [timer, setTimer] = useState(180);
   const [canResend, setCanResend] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Alert Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [modalConfig, setModalConfig] = useState({
     type: "success",
     title: "",
     message: "",
     onPress: null,
+    secondaryText: null,
+    onSecondaryPress: null,
   });
 
   const inputRefs = useRef([]);
@@ -92,8 +98,22 @@ export default function SignupScreen() {
     return () => clearInterval(interval);
   }, [otpModalVisible, timer]);
 
-  const showModal = (type, title, message, onPress = null) => {
-    setModalConfig({ type, title, message, onPress });
+  const showModal = (
+    type,
+    title,
+    message,
+    onPress = null,
+    secondaryText = null,
+    onSecondaryPress = null
+  ) => {
+    setModalConfig({
+      type,
+      title,
+      message,
+      onPress,
+      secondaryText,
+      onSecondaryPress,
+    });
     setModalVisible(true);
   };
 
@@ -101,7 +121,6 @@ export default function SignupScreen() {
     let error = null;
     switch (field) {
       case "firstName":
-      case "lastName":
         if (!value) error = "Required";
         break;
       case "region":
@@ -181,43 +200,37 @@ export default function SignupScreen() {
   };
 
   const handleNextToLocation = () => {
-    const fields = ["firstName", "lastName"];
-    const values = { firstName, lastName };
+    const fields = ["firstName"];
+    const values = { firstName };
     let isAllValid = true;
-
     fields.forEach((key) => {
-      const isValid = validateField(key, values[key]);
-      if (!isValid) isAllValid = false;
+      if (!validateField(key, values[key])) isAllValid = false;
       setTouched((prev) => ({ ...prev, [key]: true }));
     });
-
-    if (isAllValid) {
-      setCurrentStep(1);
-    } else {
-      showModal("error", "Missing Information", "Please enter your name.");
-    }
+    if (isAllValid) setCurrentStep(1);
+    else
+      showModal(
+        "error",
+        "Missing Information",
+        "Please enter your first name."
+      );
   };
 
   const handleNextToCredentials = () => {
     const fields = ["region", "city", "zipCode", "fullAddress"];
     const values = { region, city, zipCode, fullAddress };
     let isAllValid = true;
-
     fields.forEach((key) => {
-      const isValid = validateField(key, values[key]);
-      if (!isValid) isAllValid = false;
+      if (!validateField(key, values[key])) isAllValid = false;
       setTouched((prev) => ({ ...prev, [key]: true }));
     });
-
-    if (isAllValid) {
-      setCurrentStep(2);
-    } else {
+    if (isAllValid) setCurrentStep(2);
+    else
       showModal(
         "error",
         "Location Incomplete",
         "Please fill in all address details."
       );
-    }
   };
 
   const handleBackStep = () => {
@@ -225,14 +238,66 @@ export default function SignupScreen() {
     else navigation.goBack();
   };
 
+  const checkUserExists = async (checkEmail) => {
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", checkEmail)
+        .maybeSingle();
+
+      if (error) {
+        console.log("Check User Error:", error.message);
+        return false;
+      }
+      return !!data;
+    } catch (e) {
+      console.log(e);
+      return false;
+    }
+  };
+
+  const sendEmailOtp = async (otpCode) => {
+    const data = {
+      service_id: EMAILJS_SERVICE_ID,
+      template_id: EMAILJS_TEMPLATE_ID,
+      user_id: EMAILJS_PUBLIC_KEY,
+      template_params: {
+        to_email: email,
+        to_name: firstName,
+        d1: otpCode[0],
+        d2: otpCode[1],
+        d3: otpCode[2],
+        d4: otpCode[3],
+        d5: otpCode[4],
+        d6: otpCode[5],
+      },
+    };
+
+    try {
+      const response = await fetch(
+        "https://api.emailjs.com/api/v1.0/email/send",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }
+      );
+      return response.ok;
+    } catch (error) {
+      console.error("EmailJS Error:", error);
+      return false;
+    }
+  };
+
   const handleSignUpPress = async () => {
+    if (isLoading) return;
+
     const fields = ["email", "password", "confirmPassword"];
     const values = { email, password, confirmPassword };
-
     let isAllValid = true;
     fields.forEach((key) => {
-      const isValid = validateField(key, values[key]);
-      if (!isValid) isAllValid = false;
+      if (!validateField(key, values[key])) isAllValid = false;
       setTouched((prev) => ({ ...prev, [key]: true }));
     });
 
@@ -249,55 +314,164 @@ export default function SignupScreen() {
       showModal(
         "error",
         "Terms Required",
-        "Please open the Terms & Conditions and accept them to proceed."
+        "Please accept the Terms & Conditions."
       );
       return;
     }
 
     setIsLoading(true);
-    setTimeout(() => {
+
+    const formattedEmail = email.trim().toLowerCase();
+    const userAlreadyExists = await checkUserExists(formattedEmail);
+
+    if (userAlreadyExists) {
       setIsLoading(false);
-      setGeneratedOtp("123456");
+      showModal(
+        "error",
+        "Account Exists",
+        "An account with this email already exists.",
+        () => setModalVisible(false),
+        "LOG IN INSTEAD",
+        () => {
+          setModalVisible(false);
+          navigation.navigate("Login");
+        }
+      );
+      return;
+    }
+
+    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const emailSent = await sendEmailOtp(newOtp);
+
+    setIsLoading(false);
+
+    if (emailSent) {
+      setGeneratedOtp(newOtp);
       setOtpModalVisible(true);
       setTimer(180);
       setCanResend(false);
       setOtp(["", "", "", "", "", ""]);
-    }, 1500);
+    } else {
+      showModal("error", "Email Failed", "Could not send verification code.");
+    }
   };
 
-  const handleVerifyOtp = () => {
+  const handleVerifyOtp = async () => {
+    if (isLoading) return;
+
     if (otp.join("") !== generatedOtp) {
       showModal("error", "Invalid Code", "The code you entered is incorrect.");
       return;
     }
-    setOtpModalVisible(false);
-    setTimeout(() => {
+    await createSupabaseAccount();
+  };
+
+  const createSupabaseAccount = async () => {
+    setIsLoading(true);
+
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: email,
+      password: password,
+    });
+
+    if (authError) {
+      setIsLoading(false);
+      if (
+        authError.message.includes("registered") ||
+        authError.message.includes("exists")
+      ) {
+        showModal(
+          "error",
+          "Account Exists",
+          "This email is already registered.",
+          () => setModalVisible(false),
+          "LOG IN INSTEAD",
+          () => {
+            setModalVisible(false);
+            navigation.navigate("Login");
+          }
+        );
+      } else {
+        showModal("error", "Signup Failed", authError.message);
+      }
+      return;
+    }
+
+    const userId = authData.user?.id;
+
+    if (userId) {
+      const { error: dbError } = await supabase.from("users").upsert([
+        {
+          id: userId,
+          email: email,
+          first_name: firstName,
+          last_name: lastName || "",
+          region: region,
+          city: city,
+          zip_code: zipCode,
+          street_address: fullAddress,
+          role: "resident",
+          status: "active",
+        },
+      ]);
+
+      setIsLoading(false);
+
+      if (dbError) {
+        console.error("DB Error:", dbError);
+        showModal(
+          "error",
+          "Profile Error",
+          "Account created but profile failed to save."
+        );
+      } else {
+        setOtpModalVisible(false);
+        setTimeout(() => {
+          showModal(
+            "success",
+            "Welcome!",
+            "Account verified and created successfully.",
+            handleFinalSignup
+          );
+        }, 400);
+      }
+    } else {
+      setIsLoading(false);
       showModal(
-        "success",
-        "Success!",
-        "Email verified. Account created successfully.",
-        handleFinalSignup
+        "error",
+        "Verification Pending",
+        "Check your email to confirm."
       );
-    }, 500);
+    }
   };
 
   const handleFinalSignup = () => {
     setModalVisible(false);
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      // --- FIX IS HERE: Passing the flag ---
-      navigation.navigate("SetupHub", { fromSignup: true });
-    }, 1500);
+    navigation.navigate("SetupHub", { fromSignup: true });
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
+    if (isLoading) return;
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    setCanResend(false);
+
+    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const sent = await sendEmailOtp(newOtp);
+
+    setIsLoading(false);
+
+    if (sent) {
+      setGeneratedOtp(newOtp);
       setTimer(180);
-      setCanResend(false);
-    }, 1000);
+      showModal(
+        "success",
+        "Code Resent",
+        "A new code has been sent to your email."
+      );
+    } else {
+      showModal("error", "Resend Failed", "Could not resend OTP.");
+      setCanResend(true);
+    }
   };
 
   const handleOtpChange = (text, index) => {
@@ -328,15 +502,7 @@ export default function SignupScreen() {
     return "Step 3: Credentials";
   };
 
-  const getProgressWidth = () => {
-    if (currentStep === 0) return "33%";
-    if (currentStep === 1) return "66%";
-    return "100%";
-  };
-
-  // --- STYLES ---
   const styles = StyleSheet.create({
-    // Standard Design System Modal Styles
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.8)",
@@ -345,14 +511,13 @@ export default function SignupScreen() {
     },
     modalContainer: {
       borderWidth: 1,
-      padding: 20, // p-5
-      borderRadius: 16, // rounded-2xl
-      width: 288, // w-72 (Design System)
+      padding: 20,
+      borderRadius: 16,
+      width: 288,
       alignItems: "center",
       backgroundColor: theme.card,
       borderColor: theme.cardBorder,
     },
-    // OTP Modal Exception (Wider for inputs)
     otpModalContainer: {
       borderWidth: 1,
       padding: 24,
@@ -372,38 +537,17 @@ export default function SignupScreen() {
     },
     modalBody: {
       textAlign: "center",
-      marginBottom: 24, // mb-6 (Design System)
+      marginBottom: 24,
       lineHeight: 20,
       color: theme.textSecondary,
       fontSize: scaledSize(12),
     },
-    // Standard Button Style (h-10, rounded-xl)
     modalButton: {
-      width: "100%",
       height: 40,
       borderRadius: 12,
       alignItems: "center",
       justifyContent: "center",
-      borderWidth: 1,
-      borderColor: theme.textSecondary,
     },
-    modalButtonPrimary: {
-      width: "100%",
-      height: 40,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: theme.buttonPrimary,
-    },
-    modalButtonDanger: {
-      width: "100%",
-      height: 40,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: theme.buttonDangerText,
-    },
-    // OTP Specific Inputs
     otpInput: {
       width: 42,
       height: 50,
@@ -452,7 +596,6 @@ export default function SignupScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View className="mt-8">
-            {/* Header */}
             <View className="mb-6">
               <Text
                 className="text-[28px] font-extrabold mb-1"
@@ -464,21 +607,32 @@ export default function SignupScreen() {
                 {getStepTitle()}
               </Text>
 
+              {/* SEGMENTED PROGRESS BAR - FIXED STYLING */}
               <View
-                className="h-1 w-full mt-4 rounded-full overflow-hidden"
-                style={{ backgroundColor: theme.buttonNeutral }}
+                style={{
+                  flexDirection: "row",
+                  marginTop: 16,
+                  width: "100%",
+                  height: 4,
+                  gap: 8,
+                }}
               >
-                <View
-                  className="h-full"
-                  style={{
-                    backgroundColor: theme.buttonPrimary,
-                    width: getProgressWidth(),
-                  }}
-                />
+                {[0, 1, 2].map((step) => (
+                  <View
+                    key={step}
+                    style={{
+                      flex: 1,
+                      borderRadius: 2,
+                      backgroundColor:
+                        currentStep >= step
+                          ? theme.buttonPrimary
+                          : theme.buttonNeutral, // VISIBLE INACTIVE COLOR
+                    }}
+                  />
+                ))}
               </View>
             </View>
 
-            {/* STEP 1 */}
             {currentStep === 0 && (
               <View>
                 <InputGroup
@@ -493,12 +647,11 @@ export default function SignupScreen() {
                 />
 
                 <InputGroup
-                  label="Last Name"
+                  label="Last Name (Optional)"
                   icon="person-outline"
                   placeholder="Manalad"
                   value={lastName}
                   onChangeText={(t) => handleChange("lastName", t)}
-                  error={touched.lastName && errors.lastName}
                   theme={theme}
                   scaledSize={scaledSize}
                 />
@@ -546,7 +699,6 @@ export default function SignupScreen() {
               </View>
             )}
 
-            {/* STEP 2 */}
             {currentStep === 1 && (
               <View>
                 <InputGroup
@@ -644,7 +796,6 @@ export default function SignupScreen() {
               </View>
             )}
 
-            {/* STEP 3 */}
             {currentStep === 2 && (
               <View>
                 <InputGroup
@@ -739,7 +890,6 @@ export default function SignupScreen() {
                   </View>
                 )}
 
-                {/* Terms Agreement Link */}
                 <View className="mb-6 mt-2">
                   <View className="flex-row flex-wrap items-center justify-center">
                     <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
@@ -761,7 +911,7 @@ export default function SignupScreen() {
                       .
                     </Text>
                   </View>
-                  {/* Status Indicator */}
+
                   <View className="flex-row justify-center items-center mt-2">
                     <MaterialIcons
                       name={
@@ -790,7 +940,6 @@ export default function SignupScreen() {
                   </View>
                 </View>
 
-                {/* Final Buttons */}
                 <View className="flex-row gap-3">
                   <TouchableOpacity
                     onPress={handleBackStep}
@@ -815,8 +964,11 @@ export default function SignupScreen() {
 
                   <TouchableOpacity
                     onPress={handleSignUpPress}
-                    disabled={!termsAccepted}
-                    style={{ opacity: termsAccepted ? 1 : 0.5, flex: 1 }}
+                    disabled={!termsAccepted || isLoading}
+                    style={{
+                      opacity: termsAccepted && !isLoading ? 1 : 0.5,
+                      flex: 1,
+                    }}
                     activeOpacity={0.8}
                   >
                     <View
@@ -853,7 +1005,7 @@ export default function SignupScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Terms Modal (UNCHANGED) */}
+      {/* TERMS MODAL */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -862,7 +1014,7 @@ export default function SignupScreen() {
       >
         <View className="flex-1 bg-black/90 justify-center items-center">
           <View
-            className="w-[85%] h-[70%] border rounded-2xl overflow-hidden"
+            className="w-[85%] h-[75%] border rounded-2xl overflow-hidden"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
@@ -946,7 +1098,6 @@ export default function SignupScreen() {
               </Text>
             </ScrollView>
 
-            {/* Terms Footer */}
             <View
               className="p-5 border-t"
               style={{
@@ -995,23 +1146,24 @@ export default function SignupScreen() {
         </View>
       </Modal>
 
-      {/* OTP Modal (Exception Style) */}
+      {/* OTP MODAL */}
       <Modal
         animationType="fade"
         transparent={true}
         visible={otpModalVisible}
-        onRequestClose={() => setOtpModalVisible(false)}
+        onRequestClose={() => {
+          if (!isLoading) setOtpModalVisible(false);
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.otpModalContainer}>
             <Text style={styles.modalTitle}>Verify Email</Text>
-            {/* UPDATED: Informational Text */}
+
             <Text style={styles.modalBody}>
               We have sent a verification code to your email address. Please
               enter the 6-digit code below to complete your registration.
             </Text>
 
-            {/* UPDATED: Reduced Gap */}
             <View
               style={{
                 flexDirection: "row",
@@ -1031,6 +1183,7 @@ export default function SignupScreen() {
                   onChangeText={(text) => handleOtpChange(text, index)}
                   placeholder="-"
                   placeholderTextColor={theme.textSecondary}
+                  editable={!isLoading}
                 />
               ))}
             </View>
@@ -1038,6 +1191,7 @@ export default function SignupScreen() {
             <TouchableOpacity
               onPress={handleVerifyOtp}
               style={{ width: "100%", marginBottom: 12 }}
+              disabled={isLoading}
             >
               <View
                 style={{
@@ -1045,42 +1199,56 @@ export default function SignupScreen() {
                   borderRadius: 12,
                   justifyContent: "center",
                   alignItems: "center",
-                  backgroundColor: theme.buttonPrimary,
+                  backgroundColor: isLoading
+                    ? theme.buttonNeutral
+                    : theme.buttonPrimary,
                 }}
               >
-                <Text
-                  style={{
-                    color: theme.buttonPrimaryText,
-                    fontWeight: "bold",
-                    fontSize: scaledSize(12),
-                  }}
-                >
-                  VERIFY
-                </Text>
+                {isLoading ? (
+                  <ActivityIndicator size="small" color={theme.buttonPrimary} />
+                ) : (
+                  <Text
+                    style={{
+                      color: theme.buttonPrimaryText,
+                      fontWeight: "bold",
+                      fontSize: scaledSize(12),
+                    }}
+                  >
+                    VERIFY
+                  </Text>
+                )}
               </View>
             </TouchableOpacity>
 
             <View style={{ width: "100%", alignItems: "center", gap: 12 }}>
-              <TouchableOpacity disabled={!canResend} onPress={handleResend}>
+              <TouchableOpacity
+                disabled={!canResend || isLoading}
+                onPress={handleResend}
+              >
                 <Text
                   style={{
                     fontSize: scaledSize(12),
                     fontWeight: "bold",
-                    color: canResend
-                      ? theme.buttonPrimary
-                      : theme.textSecondary,
+                    color:
+                      canResend && !isLoading
+                        ? theme.buttonPrimary
+                        : theme.textSecondary,
                   }}
                 >
                   {canResend ? "Resend Code" : `Resend in ${formatTime(timer)}`}
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => setOtpModalVisible(false)}>
+              <TouchableOpacity
+                onPress={() => setOtpModalVisible(false)}
+                disabled={isLoading}
+              >
                 <Text
                   style={{
                     color: theme.textSecondary,
                     fontSize: scaledSize(12),
                     textDecorationLine: "underline",
+                    opacity: isLoading ? 0.5 : 1,
                   }}
                 >
                   Cancel
@@ -1091,7 +1259,7 @@ export default function SignupScreen() {
         </View>
       </Modal>
 
-      {/* Standard Error/Success Modal */}
+      {/* ALERT MODAL (ROW LAYOUT - FIXED SIZING) */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -1105,39 +1273,82 @@ export default function SignupScreen() {
             <Text style={styles.modalTitle}>{modalConfig.title}</Text>
             <Text style={styles.modalBody}>{modalConfig.message}</Text>
 
-            <TouchableOpacity
-              style={{ width: "100%" }}
-              onPress={() => {
-                setModalVisible(false);
-                if (modalConfig.onPress) modalConfig.onPress();
-              }}
-            >
-              <View
-                style={[
-                  styles.modalButton,
-                  {
-                    backgroundColor:
-                      modalConfig.type === "success"
-                        ? theme.buttonPrimary
-                        : theme.buttonDangerText,
-                    borderColor:
-                      modalConfig.type === "success"
-                        ? theme.buttonPrimary
-                        : theme.buttonDangerText,
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: "#fff",
-                    fontWeight: "bold",
-                    fontSize: scaledSize(12),
+            <View style={{ flexDirection: "row", gap: 10, width: "100%" }}>
+              {/* Secondary Button First (Left) */}
+              {modalConfig.secondaryText && (
+                <TouchableOpacity
+                  style={{ flex: 1 }}
+                  onPress={() => {
+                    if (modalConfig.onSecondaryPress)
+                      modalConfig.onSecondaryPress();
                   }}
                 >
-                  {modalConfig.type === "success" ? "CONTINUE" : "TRY AGAIN"}
-                </Text>
-              </View>
-            </TouchableOpacity>
+                  <View
+                    style={[
+                      styles.modalButton,
+                      {
+                        backgroundColor: "transparent",
+                        borderWidth: 1,
+                        borderColor: theme.cardBorder,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: theme.textSecondary,
+                        fontWeight: "bold",
+                        fontSize: scaledSize(12),
+                        textTransform: "uppercase",
+                        letterSpacing: 1,
+                        textAlign: "center",
+                      }}
+                    >
+                      {modalConfig.secondaryText}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* Primary Button Second (Right) - FIXED BORDER */}
+              <TouchableOpacity
+                style={{ flex: 1 }}
+                onPress={() => {
+                  setModalVisible(false);
+                  if (modalConfig.onPress) modalConfig.onPress();
+                }}
+              >
+                <View
+                  style={[
+                    styles.modalButton,
+                    {
+                      backgroundColor:
+                        modalConfig.type === "success"
+                          ? theme.buttonPrimary
+                          : theme.buttonDangerText,
+                      borderWidth: 1, // FIXED: Added border width
+                      // FIXED: Added matching border color
+                      borderColor:
+                        modalConfig.type === "success"
+                          ? theme.buttonPrimary
+                          : theme.buttonDangerText,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontWeight: "bold",
+                      fontSize: scaledSize(12),
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                      textAlign: "center",
+                    }}
+                  >
+                    {modalConfig.type === "success" ? "CONTINUE" : "TRY AGAIN"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

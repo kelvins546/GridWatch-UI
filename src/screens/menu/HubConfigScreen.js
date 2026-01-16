@@ -144,34 +144,34 @@ export default function HubConfigScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
-      {isLoading && (
+      {/* --- FIXED: LOADING MODAL (COVERS FULL SCREEN) --- */}
+      <Modal transparent visible={isLoading} animationType="fade">
         <View
           style={{
-            position: "absolute",
-            zIndex: 50,
-            width: "100%",
-            height: "100%",
+            flex: 1,
+            // Keeping subtle background dim
             backgroundColor: "rgba(0,0,0,0.7)",
             justifyContent: "center",
             alignItems: "center",
           }}
         >
-          <ActivityIndicator size="large" color={theme.buttonPrimary} />
+          {/* Color: #B0B0B0, Size: Large */}
+          <ActivityIndicator size="large" color="#B0B0B0" />
           <Text
             style={{
-              color: "#fff",
+              color: "#B0B0B0", // Matching Text Color
               marginTop: 15,
-              fontWeight: "bold",
-              fontSize: scaledSize(14),
+              fontWeight: "500", // Medium Weight
+              fontSize: scaledSize(12),
+              letterSpacing: 0.5,
             }}
           >
             Finalizing Setup...
           </Text>
         </View>
-      )}
+      </Modal>
 
-      {}
+      {/* --- UPDATED HEADER (Balanced Layout & Correct Sizes) --- */}
       <View
         className="flex-row items-center justify-between px-6 py-5 border-b"
         style={{
@@ -179,29 +179,23 @@ export default function HubConfigScreen() {
           borderBottomColor: theme.cardBorder,
         }}
       >
-        <TouchableOpacity
-          className="flex-row items-center"
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons
             name="arrow-back"
-            size={scaledSize(18)}
+            size={scaledSize(20)}
             color={theme.textSecondary}
           />
-          <Text
-            className="font-medium ml-1"
-            style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
-          >
-            Back
-          </Text>
         </TouchableOpacity>
+
         <Text
           className="font-bold"
-          style={{ color: theme.text, fontSize: scaledSize(16) }}
+          style={{ color: theme.text, fontSize: scaledSize(18) }}
         >
           Configure Hub
         </Text>
-        <View className="w-[50px]" />
+
+        {/* Placeholder View for alignment balance */}
+        <View style={{ width: scaledSize(20) }} />
       </View>
 
       <KeyboardAvoidingView
@@ -259,7 +253,10 @@ export default function HubConfigScreen() {
               </View>
               <Text
                 className="leading-5"
-                style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(12),
+                }}
               >
                 Ensure you plug the correct appliance into the matching physical
                 outlet number on the Hub.
@@ -327,7 +324,7 @@ export default function HubConfigScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {}
+      {/* ALERT MODAL */}
       <Modal transparent visible={alertConfig.visible} animationType="fade">
         <View className="flex-1 bg-black/60 justify-center items-center p-6">
           <View
@@ -337,7 +334,6 @@ export default function HubConfigScreen() {
               borderColor: theme.cardBorder,
             }}
           >
-            {}
             <Text
               className="font-bold mb-2 text-center"
               style={{ color: theme.text, fontSize: scaledSize(18) }}
@@ -412,10 +408,7 @@ function ConfigDropdown({
         {label} <Text style={{ color: "#ff4444" }}>*</Text>
       </Text>
 
-      {/* Container for Input/Select 
-        If "Others" -> Show TextInput on Left, Dropdown Icon on Right
-        If Not "Others" -> Show Text on Left, Dropdown Icon on Right
-      */}
+      {/* Container for Input/Select */}
       <View
         className="flex-row items-center border rounded-xl"
         style={{
@@ -454,7 +447,6 @@ function ConfigDropdown({
           </TouchableOpacity>
         )}
 
-        {}
         <TouchableOpacity className="p-4" onPress={() => setModalVisible(true)}>
           <MaterialIcons
             name="arrow-drop-down"

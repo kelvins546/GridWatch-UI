@@ -11,6 +11,7 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -20,6 +21,9 @@ import {
   useFocusEffect,
 } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+
+// Import Supabase
+import { supabase } from "../../lib/supabase";
 
 // Enable LayoutAnimation for Android
 if (
@@ -50,10 +54,12 @@ export default function SettingsScreen() {
   const [advancedModeModalVisible, setAdvancedModeModalVisible] =
     useState(false);
 
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   const [userData, setUserData] = useState({
-    fullName: "User",
-    unitLocation: "Not Set",
-    initial: "US",
+    fullName: "Guest User",
+    unitLocation: "Not Logged In",
+    initial: "G",
     avatarUrl: null,
   });
 
@@ -61,17 +67,66 @@ export default function SettingsScreen() {
   const [isAddingWidget, setIsAddingWidget] = useState(false);
   const [widgetInstalled, setWidgetInstalled] = useState(false);
 
+  // --- UPDATED: FETCH REAL USER DATA FROM 'users' TABLE ---
   const fetchUserProfile = async () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setUserData({
-        fullName: "Kelvin Manalad",
-        unitLocation: "Unit 402, Tower 1",
-        initial: "KM",
-        avatarUrl: null,
-      });
+    // Only show loading on initial mount if needed, otherwise background refresh
+    // setIsLoading(true);
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError) throw authError;
+
+      if (user) {
+        // 1. Try to get detailed profile from 'users' table
+        const { data: profile, error: dbError } = await supabase
+          .from("users")
+          .select("first_name, last_name, avatar_url, city, region")
+          .eq("id", user.id)
+          .single();
+
+        // 2. Prepare Name
+        let fullName = "GridWatch User";
+        let avatarUrl = user.user_metadata?.avatar_url; // Default from Google
+        let location = user.email; // Default fallback
+
+        if (profile) {
+          // Use DB data if available
+          const first = profile.first_name || "";
+          const last = profile.last_name || "";
+
+          if (first) {
+            fullName = last ? `${first} ${last}` : first;
+          } else {
+            // Fallback to Google meta if DB name is empty
+            fullName = user.user_metadata?.full_name || fullName;
+          }
+
+          if (profile.avatar_url) avatarUrl = profile.avatar_url;
+
+          // Optional: Create a location string if you want
+          // location = profile.city ? `${profile.city}, ${profile.region}` : user.email;
+        } else {
+          // No DB profile found, rely purely on Auth Metadata
+          fullName = user.user_metadata?.full_name || fullName;
+        }
+
+        const initial = fullName ? fullName.charAt(0).toUpperCase() : "U";
+
+        setUserData({
+          fullName: fullName,
+          unitLocation: location, // Keeping email as 'unitLocation' per your design, or swap to city/region
+          initial: initial,
+          avatarUrl: avatarUrl,
+        });
+      }
+    } catch (error) {
+      console.log("Error fetching profile:", error);
+    } finally {
       setIsLoading(false);
-    }, 500);
+    }
   };
 
   useFocusEffect(
@@ -94,11 +149,21 @@ export default function SettingsScreen() {
   const logoSource = providerLogos[displayProvider];
 
   const handleLogout = async () => {
-    setModalVisible(false);
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "Landing" }],
-    });
+    setIsLoggingOut(true);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+
+      setModalVisible(false);
+
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Landing" }],
+      });
+    } catch (error) {
+      Alert.alert("Error", error.message);
+      setIsLoggingOut(false);
+    }
   };
 
   const handleAddWidget = () => {
@@ -128,7 +193,6 @@ export default function SettingsScreen() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     toggleAdvancedMode();
     setAdvancedModeModalVisible(false);
-    // REDIRECT TO HOME IMMEDIATELY
     navigation.navigate("Home");
   };
 
@@ -146,13 +210,14 @@ export default function SettingsScreen() {
           barStyle={theme.statusBarStyle}
           backgroundColor={theme.background}
         />
-        <ActivityIndicator size="large" color={theme.primary} />
+        <ActivityIndicator size="large" color="#B0B0B0" />
         <Text
           style={{
             marginTop: 12,
-            color: theme.textSecondary,
-            fontSize: scaledSize(14),
+            color: "#B0B0B0",
+            fontSize: scaledSize(12),
             fontWeight: "500",
+            letterSpacing: 0.5,
           }}
         >
           Loading Settings...
@@ -172,20 +237,95 @@ export default function SettingsScreen() {
         backgroundColor={theme.background}
       />
 
-      <View
-        className="flex-row items-center justify-center px-6 py-5 border-b"
-        style={{
-          backgroundColor: theme.background,
-          borderBottomColor: theme.cardBorder,
-        }}
-      >
-        <Text
-          className="font-bold"
-          style={{ color: theme.text, fontSize: scaledSize(16) }}
+      {/* --- DYNAMIC HEADER --- */}
+      {!isAdvancedMode ? (
+        // SIMPLE MODE HEADER
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingHorizontal: 24,
+            paddingVertical: 20,
+            backgroundColor: theme.background,
+          }}
         >
-          Settings
-        </Text>
-      </View>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Menu")}
+            style={{ padding: 4 }}
+          >
+            <MaterialIcons
+              name="menu"
+              size={scaledSize(28)}
+              color={theme.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <View
+            style={{
+              height: 40,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                fontWeight: "bold",
+                color: theme.text,
+                fontSize: scaledSize(18),
+              }}
+            >
+              Settings
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Notifications")}
+            style={{ padding: 4 }}
+          >
+            <MaterialIcons
+              name="notifications-none"
+              size={scaledSize(28)}
+              color={theme.text}
+            />
+            <View
+              style={{
+                position: "absolute",
+                top: 4,
+                right: 4,
+                backgroundColor: "#ff4d4d",
+                width: 14,
+                height: 14,
+                borderRadius: 7,
+                justifyContent: "center",
+                alignItems: "center",
+                borderWidth: 2,
+                borderColor: theme.background,
+              }}
+            >
+              <Text style={{ color: "white", fontSize: 8, fontWeight: "bold" }}>
+                2
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        // ADVANCED MODE HEADER
+        <View
+          className="flex-row items-center justify-center px-6 py-5 border-b"
+          style={{
+            backgroundColor: theme.background,
+            borderBottomColor: theme.cardBorder,
+          }}
+        >
+          <Text
+            className="font-bold"
+            style={{ color: theme.text, fontSize: scaledSize(16) }}
+          >
+            Settings
+          </Text>
+        </View>
+      )}
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="p-6 pb-10">
@@ -631,7 +771,6 @@ export default function SettingsScreen() {
               borderColor: theme.cardBorder,
             }}
           >
-            {/* ICON REMOVED */}
             <Text
               className="font-bold mb-2 text-center"
               style={{ color: theme.text, fontSize: scaledSize(18) }}
@@ -712,6 +851,7 @@ export default function SettingsScreen() {
                 className="flex-1 rounded-xl h-10 justify-center items-center border"
                 style={{ borderColor: theme.textSecondary }}
                 onPress={() => setModalVisible(false)}
+                disabled={isLoggingOut}
               >
                 <Text
                   className="font-bold"
@@ -724,14 +864,19 @@ export default function SettingsScreen() {
                 className="flex-1 rounded-xl h-10 justify-center items-center overflow-hidden"
                 style={{ backgroundColor: theme.buttonDangerText }}
                 onPress={handleLogout}
+                disabled={isLoggingOut}
               >
                 <View className="w-full h-full justify-center items-center">
-                  <Text
-                    className="font-bold"
-                    style={{ color: "white", fontSize: scaledSize(12) }}
-                  >
-                    Log Out
-                  </Text>
+                  {isLoggingOut ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text
+                      className="font-bold"
+                      style={{ color: "white", fontSize: scaledSize(12) }}
+                    >
+                      Log Out
+                    </Text>
+                  )}
                 </View>
               </TouchableOpacity>
             </View>

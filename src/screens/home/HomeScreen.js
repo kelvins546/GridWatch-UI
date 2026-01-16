@@ -432,21 +432,30 @@ export default function HomeScreen() {
     setActiveHubFilter(hubId);
   };
 
+  // --- UPDATED LOADING STATE ---
   if (isLoading) {
     return (
       <View
-        style={{
-          flex: 1,
-          backgroundColor: theme.background,
-          justifyContent: "center",
-          alignItems: "center",
-        }}
+        className="flex-1 justify-center items-center"
+        style={{ backgroundColor: theme.background }}
       >
         <StatusBar
           barStyle={theme.statusBarStyle}
           backgroundColor={theme.background}
         />
-        <ActivityIndicator size="large" color={theme.primary} />
+        <ActivityIndicator size="large" color="#B0B0B0" />
+        <Text
+          style={{
+            marginTop: 20,
+            color: "#B0B0B0",
+            fontSize: 12, // Hardcoded 12
+            textAlign: "center",
+            width: "100%",
+            fontFamily: theme.fontRegular,
+          }}
+        >
+          Loading...
+        </Text>
       </View>
     );
   }
@@ -810,7 +819,10 @@ export default function HomeScreen() {
                   </Text>
                   <Text
                     className="font-extrabold"
-                    style={{ color: theme.text, fontSize: theme.font["3xl"] }}
+                    style={{
+                      color: theme.text,
+                      fontSize: theme.font["3xl"],
+                    }}
                   >
                     ₱{" "}
                     {summaryData.spending.toLocaleString(undefined, {
@@ -896,7 +908,9 @@ export default function HomeScreen() {
                 </View>
                 <View
                   className="h-3 rounded-full w-full overflow-hidden"
-                  style={{ backgroundColor: isDarkMode ? "#333" : "#f0f0f0" }}
+                  style={{
+                    backgroundColor: isDarkMode ? "#333" : "#f0f0f0",
+                  }}
                 >
                   <View
                     style={{
@@ -945,7 +959,10 @@ export default function HomeScreen() {
             <View>
               <Text
                 className="font-bold uppercase tracking-widest mb-4"
-                style={{ color: theme.textSecondary, fontSize: theme.font.sm }}
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: theme.font.sm,
+                }}
               >
                 Your Hubs
               </Text>
@@ -955,7 +972,12 @@ export default function HomeScreen() {
           displayData.length > 0 ? (
             displayData.map((hub) => renderHubDetail(hub))
           ) : (
-            <Text style={{ color: theme.textSecondary, textAlign: "center" }}>
+            <Text
+              style={{
+                color: theme.textSecondary,
+                textAlign: "center",
+              }}
+            >
               No hub selected.
             </Text>
           )}
@@ -969,7 +991,10 @@ export default function HomeScreen() {
           <MaterialIcons name="add" size={20} color={theme.textSecondary} />
           <Text
             className="ml-2 font-bold uppercase tracking-wider"
-            style={{ color: theme.textSecondary, fontSize: theme.font.xs }}
+            style={{
+              color: theme.textSecondary,
+              fontSize: theme.font.xs,
+            }}
           >
             {activeTab === "personal" ? "Add New Device" : "Join Shared Hub"}
           </Text>
@@ -1063,7 +1088,10 @@ const TourOverlay = ({
             </Text>
             <Text
               className="text-center mb-5 leading-4"
-              style={{ color: theme.textSecondary, fontSize: theme.font.xs }}
+              style={{
+                color: theme.textSecondary,
+                fontSize: theme.font.xs,
+              }}
             >
               {step.description}
             </Text>
@@ -1130,11 +1158,19 @@ const TourOverlay = ({
         />
         <View
           className="absolute bg-black/80 left-0"
-          style={{ top: layout.y, height: layout.height, width: maskLeft }}
+          style={{
+            top: layout.y,
+            height: layout.height,
+            width: maskLeft,
+          }}
         />
         <View
           className="absolute bg-black/80 right-0"
-          style={{ top: layout.y, height: layout.height, width: maskRight }}
+          style={{
+            top: layout.y,
+            height: layout.height,
+            width: maskRight,
+          }}
         />
 
         <View
@@ -1191,7 +1227,10 @@ const TourOverlay = ({
           </Text>
           <Text
             className="mb-4 leading-4"
-            style={{ color: theme.textSecondary, fontSize: theme.font.xs }}
+            style={{
+              color: theme.textSecondary,
+              fontSize: theme.font.xs,
+            }}
           >
             {step.description}
           </Text>
@@ -1250,7 +1289,10 @@ const DeviceItem = forwardRef(
     const scale = useRef(new Animated.Value(1)).current;
 
     const pressIn = () =>
-      Animated.spring(scale, { toValue: 0.98, useNativeDriver: true }).start();
+      Animated.spring(scale, {
+        toValue: 0.98,
+        useNativeDriver: true,
+      }).start();
     const pressOut = () =>
       Animated.spring(scale, {
         toValue: 1,
