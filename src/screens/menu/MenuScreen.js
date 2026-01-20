@@ -12,33 +12,82 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+// 1. Import Supabase
+import { supabase } from "../../lib/supabase";
 
 export default function MenuScreen() {
   const navigation = useNavigation();
-  // Added isAdvancedMode to the destructuring
   const { theme, isDarkMode, fontScale, isAdvancedMode } = useTheme();
 
   const scaledSize = (size) => size * fontScale;
 
   const [isLoading, setIsLoading] = useState(true);
   const [userData, setUserData] = useState({
-    fullName: "User",
+    fullName: "GridWatch User",
     role: "Resident",
-    initial: "US",
+    initial: "G",
     avatarUrl: null,
   });
 
+  // --- FETCH PROFILE LOGIC ---
   const fetchMenuProfile = async () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setUserData({
-        fullName: "Kelvin Manalad",
-        role: "Resident",
-        initial: "KM",
-        avatarUrl: null,
-      });
+    try {
+      // 1. Get Auth User
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError) throw authError;
+
+      if (user) {
+        // 2. Get Public Profile
+        const { data: profile } = await supabase
+          .from("users")
+          .select("first_name, last_name, avatar_url, role")
+          .eq("id", user.id)
+          .single();
+
+        let fullName = "GridWatch User";
+        let avatarUrl = user.user_metadata?.avatar_url;
+        let role = "Resident"; // Default
+
+        if (profile) {
+          // Construct Name
+          const first = profile.first_name || "";
+          const last = profile.last_name || "";
+          if (first) {
+            fullName = last ? `${first} ${last}` : first;
+          } else {
+            fullName = user.user_metadata?.full_name || fullName;
+          }
+
+          // Avatar
+          if (profile.avatar_url) avatarUrl = profile.avatar_url;
+
+          // Role (Capitalize first letter if exists)
+          if (profile.role) {
+            role = profile.role.charAt(0).toUpperCase() + profile.role.slice(1);
+          }
+        } else {
+          // Fallback to metadata if no profile row
+          fullName = user.user_metadata?.full_name || fullName;
+        }
+
+        const initial = fullName ? fullName.charAt(0).toUpperCase() : "G";
+
+        setUserData({
+          fullName,
+          role,
+          initial,
+          avatarUrl,
+        });
+      }
+    } catch (error) {
+      console.log("Error fetching menu profile:", error);
+    } finally {
       setIsLoading(false);
-    }, 500);
+    }
   };
 
   useFocusEffect(
@@ -61,7 +110,6 @@ export default function MenuScreen() {
           barStyle={theme.statusBarStyle}
           backgroundColor={theme.background}
         />
-        {/* UPDATED LOADER STYLE */}
         <ActivityIndicator size="large" color="#B0B0B0" />
         <Text
           style={{

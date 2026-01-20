@@ -23,7 +23,6 @@ import {
 } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
 import { supabase } from "../../lib/supabase";
 import { requestWidgetUpdate } from "react-native-android-widget";
 import { BudgetWidget } from "../../widgets/BudgetWidget";
@@ -38,7 +37,6 @@ if (
 export default function SettingsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-
   const {
     isDarkMode,
     toggleTheme,
@@ -55,7 +53,6 @@ export default function SettingsScreen() {
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [advancedModeModalVisible, setAdvancedModeModalVisible] =
     useState(false);
-
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const [userData, setUserData] = useState({
@@ -69,14 +66,12 @@ export default function SettingsScreen() {
   const [isAddingWidget, setIsAddingWidget] = useState(false);
   const [widgetInstalled, setWidgetInstalled] = useState(false);
 
-  // --- LOAD SETTINGS ---
   useEffect(() => {
     const loadSettings = async () => {
       try {
         const storedEnabled = await AsyncStorage.getItem("widgetsEnabled");
         if (storedEnabled !== null)
           setWidgetsEnabled(JSON.parse(storedEnabled));
-
         const storedInstalled = await AsyncStorage.getItem("widgetInstalled");
         if (storedInstalled !== null)
           setWidgetInstalled(JSON.parse(storedInstalled));
@@ -87,7 +82,6 @@ export default function SettingsScreen() {
     loadSettings();
   }, []);
 
-  // --- FETCH USER PROFILE ---
   const fetchUserProfile = async () => {
     try {
       const {
@@ -172,10 +166,8 @@ export default function SettingsScreen() {
     }
   };
 
-  // --- WIDGET INSTALL/UPDATE LOGIC ---
   const handleAddWidget = async () => {
     setIsAddingWidget(true);
-
     try {
       await requestWidgetUpdate({
         widgetName: "BudgetWidget",
@@ -273,7 +265,7 @@ export default function SettingsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- HEADER --- */}
+      {/* HEADER */}
       {!isAdvancedMode ? (
         <View
           style={{
@@ -295,7 +287,6 @@ export default function SettingsScreen() {
               color={theme.textSecondary}
             />
           </TouchableOpacity>
-
           <View
             style={{
               height: 40,
@@ -313,7 +304,6 @@ export default function SettingsScreen() {
               Settings
             </Text>
           </View>
-
           <TouchableOpacity
             onPress={() => navigation.navigate("Notifications")}
             style={{ padding: 4 }}
@@ -363,9 +353,9 @@ export default function SettingsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="p-6 pb-10">
-          {/* --- ✅ RESTORED PROFILE SECTION --- */}
+          {/* PROFILE HEADER */}
           <TouchableOpacity
-            className="flex-row items-center mb-8"
+            className="flex-row items-center mb-6"
             onPress={() => navigation.navigate("ProfileSettings")}
             activeOpacity={0.8}
           >
@@ -379,7 +369,7 @@ export default function SettingsScreen() {
               ) : (
                 <View
                   className="w-full h-full rounded-full justify-center items-center"
-                  style={{ backgroundColor: theme.buttonPrimary }}
+                  style={{ backgroundColor: theme.buttonNeutral }}
                 >
                   <Text
                     className="font-bold"
@@ -390,7 +380,6 @@ export default function SettingsScreen() {
                 </View>
               )}
             </View>
-
             <View className="flex-1">
               <Text
                 className="font-bold"
@@ -415,9 +404,27 @@ export default function SettingsScreen() {
             />
           </TouchableOpacity>
 
+          {/* --- ADDED SECURITY LABEL HERE --- */}
+          <Text
+            className="font-bold uppercase tracking-widest mb-3 mt-4"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+          >
+            Security
+          </Text>
+
+          {/* ACCOUNT SETTINGS BUTTON */}
+          <SettingsRow
+            icon="admin-panel-settings"
+            title="Account Settings"
+            subtitle="Security, 2FA, Deactivation"
+            onPress={() => navigation.navigate("AccountSettings")}
+            theme={theme}
+            scaledSize={scaledSize}
+          />
+
           {/* Utility Section */}
           <Text
-            className="font-bold uppercase tracking-widest mb-3 mt-2"
+            className="font-bold uppercase tracking-widest mb-3 mt-4"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
           >
             Utility & Rates
@@ -600,8 +607,6 @@ export default function SettingsScreen() {
                   >
                     Preview: Monthly Budget Card
                   </Text>
-
-                  {/* PREVIEW UI */}
                   <View
                     className="p-5 rounded-2xl border"
                     style={{
@@ -634,7 +639,6 @@ export default function SettingsScreen() {
                         style={{ width: 22, height: 22, opacity: 0.8 }}
                       />
                     </View>
-
                     <View className="mb-4">
                       <View className="h-1.5 w-full bg-zinc-800 rounded-full mb-2 overflow-hidden">
                         <View
@@ -652,7 +656,6 @@ export default function SettingsScreen() {
                         48% of Budget Used
                       </Text>
                     </View>
-
                     <View className="flex-row border-t border-zinc-800 pt-4">
                       <StatItem
                         label="Daily Avg"
@@ -676,14 +679,13 @@ export default function SettingsScreen() {
                       />
                     </View>
                   </View>
-
                   <TouchableOpacity
                     className="mt-4 rounded-xl overflow-hidden"
                     onPress={handleAddWidget}
                     disabled={isAddingWidget}
                     style={{
                       backgroundColor: widgetInstalled
-                        ? theme.buttonPrimary // Use primary color even for updates to look active
+                        ? theme.buttonPrimary
                         : theme.buttonPrimary,
                     }}
                   >
@@ -700,7 +702,6 @@ export default function SettingsScreen() {
                       )}
                     </View>
                   </TouchableOpacity>
-
                   <Text
                     className="text-center mt-3"
                     style={{

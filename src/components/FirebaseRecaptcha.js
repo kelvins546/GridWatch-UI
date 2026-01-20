@@ -3,6 +3,7 @@ import React, {
   useState,
   useImperativeHandle,
   forwardRef,
+  useEffect,
 } from "react";
 import {
   Modal,
@@ -14,26 +15,35 @@ import {
   Dimensions,
 } from "react-native";
 import { WebView } from "react-native-webview";
-
-const { width, height } = Dimensions.get("window");
+import { useTheme } from "../context/ThemeContext";
 
 const FirebaseRecaptcha = forwardRef(
   ({ firebaseConfig, onVerify, onCancel }, ref) => {
+    const { theme } = useTheme();
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(true);
 
-    // We need to store both resolve (success) and reject (cancel/fail)
     const [promiseControls, setPromiseControls] = useState(null);
 
-    // --- METHODS ---
+    // --- SAFETY TIMER REF ---
+    const timeoutRef = useRef(null);
+
+    // Helper to clear timeout
+    const clearTimeoutSafe = () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+
     useImperativeHandle(ref, () => ({
       open: () => {
         setVisible(true);
         setLoading(true);
       },
       close: () => {
+        clearTimeoutSafe(); // Safety check
         setVisible(false);
-        // If closed programmatically without resolving, reject it to stop loading
         if (promiseControls) {
           promiseControls.reject(new Error("cancelled"));
           setPromiseControls(null);
@@ -43,8 +53,19 @@ const FirebaseRecaptcha = forwardRef(
         return new Promise((resolve, reject) => {
           setVisible(true);
           setLoading(true);
-          // Store both control functions so we can access them later
           setPromiseControls({ resolve, reject });
+
+          // --- SAFETY TIMEOUT (15 Seconds) ---
+          // If Google hangs or network dies, we kill the process so user isn't stuck.
+          timeoutRef.current = setTimeout(() => {
+            if (visible) {
+              // Only if still showing
+              console.log("Recaptcha Timed Out");
+              setVisible(false);
+              reject(new Error("Verification timed out. Please try again."));
+              setPromiseControls(null);
+            }
+          }, 15000); // 15000ms = 15 seconds
         });
       },
       type: "recaptcha",
@@ -54,13 +75,14 @@ const FirebaseRecaptcha = forwardRef(
     }));
 
     const handleMessage = (event) => {
+      clearTimeoutSafe(); // Stop the safety timer! We got a response.
+
       const data = event.nativeEvent.data;
       if (!data) return;
 
       if (data.startsWith("error:")) {
         console.log("Recaptcha Error:", data);
         setVisible(false);
-        // If there is an error, reject the promise
         if (promiseControls) {
           promiseControls.reject(new Error(data));
           setPromiseControls(null);
@@ -68,7 +90,6 @@ const FirebaseRecaptcha = forwardRef(
         return;
       }
 
-      // Success! Resolve the promise.
       if (promiseControls) {
         promiseControls.resolve(data);
         setPromiseControls(null);
@@ -79,8 +100,8 @@ const FirebaseRecaptcha = forwardRef(
     };
 
     const handleCancel = () => {
+      clearTimeoutSafe(); // Stop timer on user cancel
       setVisible(false);
-      // CRITICAL FIX: Reject the promise so SignupScreen knows to stop loading
       if (promiseControls) {
         promiseControls.reject(new Error("cancelled"));
         setPromiseControls(null);
@@ -88,6 +109,7 @@ const FirebaseRecaptcha = forwardRef(
       if (onCancel) onCancel();
     };
 
+    // --- HTML CONFIGURATION ---
     const html = `
     <!DOCTYPE html>
     <html>
@@ -101,7 +123,7 @@ const FirebaseRecaptcha = forwardRef(
           
           window.onload = function() {
             window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-              'size': 'normal', 
+              'size': 'invisible', 
               'callback': function(response) {
                 window.ReactNativeWebView.postMessage(response);
               },
@@ -109,7 +131,11 @@ const FirebaseRecaptcha = forwardRef(
                 window.ReactNativeWebView.postMessage('error:expired');
               }
             });
-            window.recaptchaVerifier.render();
+
+            // Trigger verify immediately
+            window.recaptchaVerifier.render().then(function(widgetId) {
+                window.recaptchaVerifier.verify(); 
+            });
           };
         </script>
         <style>
@@ -120,11 +146,18 @@ const FirebaseRecaptcha = forwardRef(
             justify-content: center; 
             align-items: center; 
             margin: 0; 
-            background-color: white; 
+            background-color: ${theme.card}; 
           }
+          /* Ensure container is centered but doesn't block the view if empty */
           #recaptcha-container {
-            transform: scale(1.0); 
-            transform-origin: 0 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+          }
+          /* Hide the 'Protected by reCAPTCHA' badge if desired */
+          .grecaptcha-badge { 
+            visibility: hidden; 
+            opacity: 0;
           }
         </style>
       </head>
@@ -135,38 +168,84 @@ const FirebaseRecaptcha = forwardRef(
   `;
 
     return (
-      <Modal visible={visible} animationType="slide" transparent>
-        <View style={styles.container}>
-          <View style={styles.modalContent}>
+      <Modal visible={visible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContainer,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+              },
+            ]}
+          >
             {/* HEADER */}
-            <View style={styles.header}>
-              <Text style={styles.title}>Security Check</Text>
-              <TouchableOpacity onPress={handleCancel}>
-                <Text style={styles.cancel}>Cancel</Text>
-              </TouchableOpacity>
+            <View
+              style={[
+                styles.header,
+                {
+                  borderBottomColor: theme.cardBorder,
+                  backgroundColor: theme.card,
+                },
+              ]}
+            >
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                Security Check
+              </Text>
             </View>
 
-            {/* LOADER */}
-            {loading && (
-              <View style={styles.loaderContainer}>
-                <ActivityIndicator size="large" color="#000" />
-                <Text style={styles.loadingText}>Loading Challenge...</Text>
-              </View>
-            )}
+            <View style={{ flex: 1, width: "100%", position: "relative" }}>
+              {/* LOADER: Only shows while the HTML/JS is initializing */}
+              {loading && (
+                <View
+                  style={[
+                    styles.loaderOverlay,
+                    { backgroundColor: theme.card },
+                  ]}
+                >
+                  <ActivityIndicator size="large" color="#B0B0B0" />
+                  <Text
+                    style={[styles.loadingText, { color: theme.textSecondary }]}
+                  >
+                    Analyzing...
+                  </Text>
+                </View>
+              )}
 
-            {/* WEBVIEW */}
-            <WebView
-              originWhitelist={["*"]}
-              source={{
-                html,
-                baseUrl: "https://gridwatch-auth.firebaseapp.com",
+              {/* WEBVIEW: Visible so user can solve puzzle if it appears */}
+              <WebView
+                originWhitelist={["*"]}
+                source={{
+                  html,
+                  baseUrl: "https://gridwatch-auth.firebaseapp.com",
+                }}
+                javaScriptEnabled={true}
+                onMessage={handleMessage}
+                // When the page loads, hide the loader so the user can interact
+                onLoadEnd={() => setLoading(false)}
+                style={{
+                  flex: 1,
+                  backgroundColor: "transparent",
+                }}
+                automaticallyAdjustContentInsets={false}
+              />
+            </View>
+
+            {/* CANCEL BUTTON */}
+            <TouchableOpacity
+              onPress={handleCancel}
+              style={{
+                width: "100%",
+                paddingVertical: 15,
+                alignItems: "center",
+                borderTopWidth: 1,
+                borderTopColor: theme.cardBorder,
               }}
-              javaScriptEnabled={true}
-              onMessage={handleMessage}
-              onLoadEnd={() => setLoading(false)}
-              style={{ flex: 1, backgroundColor: "white" }}
-              automaticallyAdjustContentInsets={false}
-            />
+            >
+              <Text style={[styles.cancelText, { color: theme.textSecondary }]}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -175,56 +254,48 @@ const FirebaseRecaptcha = forwardRef(
 );
 
 const styles = StyleSheet.create({
-  container: {
+  modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(0,0,0,0.8)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 10,
   },
-  modalContent: {
-    width: "95%",
-    height: "80%",
-    maxHeight: 600,
-    backgroundColor: "white",
-    borderRadius: 12,
+  modalContainer: {
+    width: "90%", // Responsive width
+    maxWidth: 360, // Slightly wider to fit challenge comfortably
+    height: 600, // Taller to ensure NO SCROLLING for standard image challenges
+    borderWidth: 1,
+    borderRadius: 16,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 8,
+    alignItems: "center",
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+    width: "100%",
     alignItems: "center",
-    padding: 16,
+    paddingVertical: 15,
     borderBottomWidth: 1,
-    borderColor: "#eee",
-    backgroundColor: "#fff",
-    zIndex: 2,
   },
-  title: {
+  modalTitle: {
     fontWeight: "bold",
-    fontSize: 18,
-    color: "#333",
-  },
-  cancel: {
-    color: "#007AFF",
     fontSize: 16,
-    fontWeight: "600",
+    textAlign: "center",
   },
-  loaderContainer: {
+  // Loader sits on top of WebView until loaded
+  loaderOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "white",
     zIndex: 10,
   },
   loadingText: {
-    marginTop: 10,
-    color: "#666",
+    marginTop: 12,
+    fontSize: 12,
+    letterSpacing: 0.5,
+    fontWeight: "500",
+  },
+  cancelText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
 });
 

@@ -140,7 +140,6 @@ export default function DeviceConfigScreen() {
 
         let countdown = 10;
 
-        // --- 1. INITIAL COUNTDOWN MESSAGE ---
         setModalState((prev) => ({
           ...prev,
           loading: false,
@@ -156,7 +155,6 @@ export default function DeviceConfigScreen() {
             setIsOnline(true);
             closeModal();
           } else {
-            // --- 2. UPDATE COUNTDOWN MESSAGE ---
             setModalState((prev) => ({
               ...prev,
               msg: `Please wait while the system reboots.\n\nTime remaining: ${countdown}s`,
@@ -206,29 +204,45 @@ export default function DeviceConfigScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER (UPDATED TO MATCH YOUR STYLE) */}
+      {/* --- HEADER (Consistent with previous files) --- */}
       <View
-        className="flex-row items-center px-6 py-5 border-b"
         style={{
-          backgroundColor: theme.background,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between", // Ensures items are spread out
+          paddingHorizontal: 24,
+          paddingVertical: 20,
+          borderBottomWidth: 1,
           borderBottomColor: theme.cardBorder,
+          backgroundColor: theme.background,
         }}
       >
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        {/* LEFT: Back Button */}
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <MaterialIcons
             name="arrow-back"
-            size={scaledSize(20)}
+            size={scaledSize(24)}
             color={theme.textSecondary}
           />
         </TouchableOpacity>
+
+        {/* CENTER: Title */}
         <Text
-          className="flex-1 text-center font-bold"
-          style={{ color: theme.text, fontSize: scaledSize(18) }}
+          style={{
+            fontSize: scaledSize(18),
+            fontWeight: "700",
+            color: theme.text,
+            textAlign: "center",
+          }}
         >
           Device Configuration
         </Text>
-        {/* Placeholder View for alignment balance */}
-        <View style={{ width: scaledSize(20) }} />
+
+        {/* RIGHT: Invisible View to balance layout and force title center */}
+        <View style={{ width: scaledSize(24) }} />
       </View>
 
       <ScrollView>
@@ -458,40 +472,77 @@ export default function DeviceConfigScreen() {
             Advanced Actions
           </Text>
 
+          {/* RESTART HUB BUTTON - Centered & Styled */}
           <TouchableOpacity
-            className="flex-row items-center justify-center gap-2 p-3.5 rounded-xl border mb-4"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
+            activeOpacity={0.7}
             onPress={() => openModal("restart")}
+            style={{
+              width: "100%",
+              flexDirection: "row",
+              justifyContent: "center", // Center Horizontally
+              alignItems: "center", // Center Vertically
+              paddingVertical: 16,
+              marginBottom: 16,
+              borderRadius: 16,
+              gap: 10,
+              backgroundColor: theme.card,
+              borderWidth: 1,
+              borderColor: theme.cardBorder,
+              // Adding shadows for a "good" look
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.05,
+              shadowRadius: 3,
+              elevation: 2,
+            }}
           >
             <MaterialIcons
               name="restart-alt"
-              size={scaledSize(18)}
+              size={scaledSize(20)}
               color={theme.text}
             />
             <Text
-              className="font-semibold"
-              style={{ color: theme.text, fontSize: scaledSize(14) }}
+              style={{
+                color: theme.text,
+                fontSize: scaledSize(15),
+                fontWeight: "600",
+                textAlign: "center",
+              }}
             >
               Restart Hub
             </Text>
           </TouchableOpacity>
 
+          {/* UNPAIR BUTTON - Centered & Styled to match */}
           <TouchableOpacity
-            className="flex-row items-center justify-center gap-2 p-3.5 rounded-xl border mb-3"
-            style={{ backgroundColor: dangerBg, borderColor: dangerBorder }}
+            activeOpacity={0.7}
             onPress={() => openModal("unpair")}
+            style={{
+              width: "100%",
+              flexDirection: "row",
+              justifyContent: "center",
+              alignItems: "center",
+              paddingVertical: 16,
+              marginBottom: 12,
+              borderRadius: 16,
+              gap: 10,
+              backgroundColor: dangerBg,
+              borderWidth: 1,
+              borderColor: dangerBorder,
+            }}
           >
             <MaterialIcons
               name="link-off"
-              size={scaledSize(18)}
+              size={scaledSize(20)}
               color={dangerColor}
             />
             <Text
-              className="font-semibold"
-              style={{ color: dangerColor, fontSize: scaledSize(14) }}
+              style={{
+                color: dangerColor,
+                fontSize: scaledSize(15),
+                fontWeight: "600",
+                textAlign: "center",
+              }}
             >
               Unpair & Reset
             </Text>
@@ -508,7 +559,6 @@ export default function DeviceConfigScreen() {
       >
         <View className="flex-1 bg-black/80 justify-center items-center p-6">
           {modalState.loading ? (
-            // --- LOADING STATE: Strictly following AuthSelection styles ---
             <View
               style={{
                 width: "100%",
@@ -522,9 +572,9 @@ export default function DeviceConfigScreen() {
                   color: "#B0B0B0",
                   marginTop: 15,
                   fontWeight: "500",
-                  fontSize: 12, // EXACT size from AuthSelection
+                  fontSize: 12,
                   letterSpacing: 0.5,
-                  textAlign: "center", // Forces countdown to the middle
+                  textAlign: "center",
                   width: "100%",
                 }}
               >
@@ -532,7 +582,6 @@ export default function DeviceConfigScreen() {
               </Text>
             </View>
           ) : (
-            // --- NORMAL STATE: Standard Card ---
             <View
               className="w-[85%] max-w-[320px] p-5 rounded-2xl border items-center"
               style={{
@@ -604,8 +653,8 @@ export default function DeviceConfigScreen() {
                     {modalState.type === "wifi" || modalState.type === "success"
                       ? "Okay"
                       : modalState.type === "force_unpair"
-                      ? "Force Remove"
-                      : "Confirm"}
+                        ? "Force Remove"
+                        : "Confirm"}
                   </Text>
                 </TouchableOpacity>
               </View>

@@ -33,6 +33,7 @@ import BudgetManagerScreen from "../screens/budgets/BudgetManagerScreen";
 import SimpleBudgetManagerScreen from "../screens/budgets/SimpleBudgetManagerScreen";
 import SettingsScreen from "../screens/settings/SettingsScreen";
 import ProfileSettingsScreen from "../screens/settings/ProfileSettingsScreen";
+import AccountSettingsScreen from "../screens/settings/AccountSettingsScreen"; // NEW IMPORT
 import DeviceConfigScreen from "../screens/settings/DeviceConfigScreen";
 import HelpSupportScreen from "../screens/settings/HelpSupportScreen";
 import AboutUsScreen from "../screens/settings/AboutUsScreen";
@@ -212,10 +213,8 @@ function BottomTabNavigator() {
 }
 
 export default function AppNavigator() {
-  const { isDarkMode, theme } = useTheme(); // Added theme here
-  // --- 1. DIRECTLY USE authUser (REMOVED LOCAL STATE to prevent sync lag) ---
+  const { isDarkMode, theme } = useTheme();
   const { user: authUser, isLoading } = useAuth();
-
   const notifiedIds = useRef(new Set());
 
   useEffect(() => {
@@ -270,7 +269,6 @@ export default function AppNavigator() {
   };
 
   useEffect(() => {
-    // --- UPDATED: Use authUser directly instead of currentUser ---
     if (!authUser || !authUser.email) return;
 
     const myEmail = authUser.email.trim().toLowerCase();
@@ -361,16 +359,14 @@ export default function AppNavigator() {
       supabase.removeChannel(channel);
       clearInterval(intervalId);
     };
-  }, [authUser]); // Depend on authUser directly
+  }, [authUser]);
 
-  // --- 2. THE STANDARDIZED LOADING SCREEN ---
-  // This blocks the app from rendering unti auth is settled
   if (isLoading) {
     return (
       <View
         style={{
           flex: 1,
-          backgroundColor: isDarkMode ? "#0f0f0f" : "#ffffff", // Match your app bg
+          backgroundColor: isDarkMode ? "#0f0f0f" : "#ffffff",
           justifyContent: "center",
           alignItems: "center",
         }}
@@ -379,14 +375,13 @@ export default function AppNavigator() {
           barStyle={isDarkMode ? "light-content" : "dark-content"}
           backgroundColor={isDarkMode ? "#0f0f0f" : "#ffffff"}
         />
-        {/* MATCHING YOUR STANDARD LOADING STYLE */}
         <ActivityIndicator size="large" color="#B0B0B0" />
         <Text
           style={{
             color: "#B0B0B0",
             marginTop: 15,
             fontWeight: "500",
-            fontSize: 12, // Strict size 12
+            fontSize: 12,
             letterSpacing: 0.5,
             textAlign: "center",
             width: "100%",
@@ -398,7 +393,6 @@ export default function AppNavigator() {
     );
   }
 
-  // --- 3. CONDITIONAL RENDERING ---
   return (
     <Stack.Navigator
       screenOptions={{
@@ -407,12 +401,16 @@ export default function AppNavigator() {
       }}
     >
       {authUser ? (
-        // --- AUTHENTICATED GROUP ---
         <Stack.Group>
           <Stack.Screen name="MainApp" component={BottomTabNavigator} />
           <Stack.Screen
             name="ProfileSettings"
             component={ProfileSettingsScreen}
+          />
+          {/* --- ADDED ACCOUNT SETTINGS --- */}
+          <Stack.Screen
+            name="AccountSettings"
+            component={AccountSettingsScreen}
           />
           <Stack.Screen name="DeviceConfig" component={DeviceConfigScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
@@ -458,7 +456,6 @@ export default function AppNavigator() {
           />
         </Stack.Group>
       ) : (
-        // --- UNAUTHENTICATED GROUP ---
         <Stack.Group>
           <Stack.Screen name="Landing" component={LandingScreen} />
           <Stack.Screen name="AuthSelection" component={AuthSelectionScreen} />

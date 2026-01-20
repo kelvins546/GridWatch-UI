@@ -1680,7 +1680,7 @@ function InputGroup({
               marginRight: 4,
               textAlignVertical: "center",
               includeFontPadding: false,
-              transform: [{ translateY: -2 }],
+              transform: [{ translateY: -0.5 }],
             }}
           >
             {prefix}
