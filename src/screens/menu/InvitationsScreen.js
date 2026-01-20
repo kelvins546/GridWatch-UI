@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,11 +9,16 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
+import * as Notifications from "expo-notifications";
 
 if (
   Platform.OS === "android" &&
@@ -22,38 +27,147 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const INCOMING_INVITES = [
-  {
-    id: "1",
-    inviterName: "Natasha Pearl",
-    inviterEmail: "natasha@gmail.com",
-    hubName: "Living Room Hub",
-    role: "Guest",
-    date: "2 hours ago",
-    initial: "NP",
-  },
-  {
-    id: "2",
-    inviterName: "Francis Gian",
-    inviterEmail: "francis@yahoo.com",
-    hubName: "Garage Hub",
-    role: "Admin",
-    date: "Yesterday",
-    initial: "FG",
-  },
-];
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 export default function InvitationsScreen() {
   const navigation = useNavigation();
   const { theme, fontScale, isDarkMode } = useTheme();
-
   const scaledSize = (size) => size * fontScale;
 
-  const [invitations, setInvitations] = useState(INCOMING_INVITES);
+  const [invitations, setInvitations] = useState([]);
   const [selectedInvite, setSelectedInvite] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
 
   const [showAcceptModal, setShowAcceptModal] = useState(false);
   const [showDeclineModal, setShowDeclineModal] = useState(false);
+
+  // --- REALTIME SUBSCRIPTION (For Incoming Invites) ---
+  useEffect(() => {
+    let subscription;
+
+    const setupRealtimeListener = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      subscription = supabase
+        .channel("public:hub_invites")
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "hub_invites",
+            filter: `email=eq.${user.email}`,
+          },
+          async (payload) => {
+            console.log("New Invite Received:", payload);
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: "New Invitation",
+                body: "You have been invited to join a new Hub.",
+                sound: true,
+              },
+              trigger: null,
+            });
+            fetchInvitations();
+          },
+        )
+        .subscribe();
+    };
+
+    setupRealtimeListener();
+
+    return () => {
+      if (subscription) supabase.removeChannel(subscription);
+    };
+  }, []);
+
+  // --- FETCH INVITATIONS ---
+  const fetchInvitations = async () => {
+    setLoading(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: invites, error } = await supabase
+        .from("hub_invites")
+        .select("*")
+        .eq("email", user.email)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      const enrichedInvites = await Promise.all(
+        invites.map(async (invite) => {
+          const { data: sender } = await supabase
+            .from("users")
+            .select("first_name, last_name")
+            .eq("id", invite.sender_id)
+            .single();
+
+          let hubDisplay = "Unknown Hub";
+          if (invite.hub_ids && invite.hub_ids.length > 0) {
+            const { data: hubs } = await supabase
+              .from("hubs")
+              .select("name")
+              .in("id", invite.hub_ids);
+
+            if (hubs && hubs.length > 0) {
+              const names = hubs.map((h) => h.name);
+              hubDisplay =
+                names.length > 2
+                  ? `${names[0]}, ${names[1]} +${names.length - 2} more`
+                  : names.join(", ");
+            }
+          }
+
+          const dateObj = new Date(invite.created_at);
+          const dateString =
+            dateObj.toLocaleDateString() === new Date().toLocaleDateString()
+              ? `Today, ${dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+              : dateObj.toLocaleDateString();
+
+          const senderName = sender
+            ? `${sender.first_name} ${sender.last_name}`
+            : "Unknown User";
+
+          return {
+            ...invite,
+            inviterName: senderName,
+            initial: senderName.charAt(0).toUpperCase(),
+            hubName: hubDisplay,
+            date: dateString,
+            role: "Guest",
+          };
+        }),
+      );
+
+      setInvitations(enrichedInvites);
+    } catch (err) {
+      console.log("Fetch Error:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchInvitations();
+    }, []),
+  );
 
   const onPressAccept = (invite) => {
     setSelectedInvite(invite);
@@ -65,21 +179,92 @@ export default function InvitationsScreen() {
     setShowDeclineModal(true);
   };
 
-  const confirmAccept = () => {
-    if (selectedInvite) {
+  // --- LOGIC: ACCEPT & NOTIFY SENDER ---
+  const confirmAccept = async () => {
+    if (!selectedInvite) return;
+    setProcessing(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      // 1. Give Access
+      const accessInserts = selectedInvite.hub_ids.map((hubId) => ({
+        hub_id: hubId,
+        user_id: user.id,
+        role: "guest",
+      }));
+
+      const { error: accessError } = await supabase
+        .from("hub_access")
+        .insert(accessInserts);
+
+      if (accessError && !accessError.message.includes("unique constraint")) {
+        throw accessError;
+      }
+
+      // 2. NOTIFY THE SENDER
+      // We insert into 'app_notifications' targeting the sender_id
+      await supabase.from("app_notifications").insert({
+        user_id: selectedInvite.sender_id, // Target the person who invited us
+        title: "Invitation Accepted ✅",
+        body: `${user.email} has accepted your invitation to ${selectedInvite.hubName}.`,
+      });
+
+      // 3. Delete Invite
+      const { error: deleteError } = await supabase
+        .from("hub_invites")
+        .delete()
+        .eq("id", selectedInvite.id);
+
+      if (deleteError) throw deleteError;
+
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setInvitations((prev) => prev.filter((i) => i.id !== selectedInvite.id));
       setShowAcceptModal(false);
       setSelectedInvite(null);
+      Alert.alert("Success", "You have joined the hub!");
+    } catch (err) {
+      Alert.alert("Error", err.message);
+    } finally {
+      setProcessing(false);
     }
   };
 
-  const confirmDecline = () => {
-    if (selectedInvite) {
+  // --- LOGIC: DECLINE & NOTIFY SENDER ---
+  const confirmDecline = async () => {
+    if (!selectedInvite) return;
+    setProcessing(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      // 1. NOTIFY THE SENDER
+      await supabase.from("app_notifications").insert({
+        user_id: selectedInvite.sender_id, // Target the sender
+        title: "Invitation Declined",
+        body: `${user.email} declined your invitation to ${selectedInvite.hubName}.`,
+      });
+
+      // 2. Delete Invite
+      const { error } = await supabase
+        .from("hub_invites")
+        .delete()
+        .eq("id", selectedInvite.id);
+
+      if (error) throw error;
+
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setInvitations((prev) => prev.filter((i) => i.id !== selectedInvite.id));
       setShowDeclineModal(false);
       setSelectedInvite(null);
+    } catch (err) {
+      Alert.alert("Error", err.message);
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -94,7 +279,7 @@ export default function InvitationsScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
+      {/* Header */}
       <View
         className="flex-row items-center px-6 py-5 border-b"
         style={{ borderBottomColor: theme.cardBorder }}
@@ -115,7 +300,16 @@ export default function InvitationsScreen() {
         <View className="w-6" />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={fetchInvitations}
+            tintColor={theme.primary}
+          />
+        }
+      >
         <View className="p-6">
           <Text
             className="font-bold uppercase tracking-widest mb-4"
@@ -124,7 +318,13 @@ export default function InvitationsScreen() {
             Incoming Requests
           </Text>
 
-          {invitations.length === 0 ? (
+          {loading && invitations.length === 0 ? (
+            <ActivityIndicator
+              size="large"
+              color={theme.buttonPrimary}
+              style={{ marginTop: 20 }}
+            />
+          ) : invitations.length === 0 ? (
             <View className="items-center justify-center py-10 opacity-50">
               <MaterialIcons
                 name="mail-outline"
@@ -133,7 +333,10 @@ export default function InvitationsScreen() {
               />
               <Text
                 className="mt-3 font-medium"
-                style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(14),
+                }}
               >
                 No pending invitations
               </Text>
@@ -153,7 +356,6 @@ export default function InvitationsScreen() {
                   elevation: 2,
                 }}
               >
-                {}
                 <View className="flex-row items-center mb-4">
                   <View
                     className="w-10 h-10 rounded-full justify-center items-center mr-3"
@@ -192,7 +394,6 @@ export default function InvitationsScreen() {
                   </Text>
                 </View>
 
-                {}
                 <View
                   className="p-3 rounded-xl mb-5 flex-row items-center"
                   style={{ backgroundColor: theme.background }}
@@ -207,9 +408,10 @@ export default function InvitationsScreen() {
                       color={theme.buttonPrimary}
                     />
                   </View>
-                  <View>
+                  <View style={{ flex: 1 }}>
                     <Text
                       className="font-bold"
+                      numberOfLines={1}
                       style={{ color: theme.text, fontSize: scaledSize(13) }}
                     >
                       {invite.hubName}
@@ -225,7 +427,6 @@ export default function InvitationsScreen() {
                   </View>
                 </View>
 
-                {}
                 <View className="flex-row gap-3">
                   <TouchableOpacity
                     onPress={() => onPressDecline(invite)}
@@ -259,7 +460,7 @@ export default function InvitationsScreen() {
         </View>
       </ScrollView>
 
-      {}
+      {/* Accept Modal */}
       <Modal visible={showAcceptModal} transparent animationType="fade">
         <View className="flex-1 bg-black/80 justify-center items-center p-6">
           <View
@@ -288,6 +489,7 @@ export default function InvitationsScreen() {
             <View className="flex-row gap-3 w-full">
               <TouchableOpacity
                 onPress={() => setShowAcceptModal(false)}
+                disabled={processing}
                 className="flex-1 py-3 rounded-xl border items-center"
                 style={{ borderColor: theme.cardBorder }}
               >
@@ -300,22 +502,27 @@ export default function InvitationsScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={confirmAccept}
+                disabled={processing}
                 className="flex-1 py-3 rounded-xl items-center"
                 style={{ backgroundColor: theme.buttonPrimary }}
               >
-                <Text
-                  className="font-bold"
-                  style={{ color: "#fff", fontSize: scaledSize(13) }}
-                >
-                  Join
-                </Text>
+                {processing ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text
+                    className="font-bold"
+                    style={{ color: "#fff", fontSize: scaledSize(13) }}
+                  >
+                    Join
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {}
+      {/* Decline Modal */}
       <Modal visible={showDeclineModal} transparent animationType="fade">
         <View className="flex-1 bg-black/80 justify-center items-center p-6">
           <View
@@ -344,6 +551,7 @@ export default function InvitationsScreen() {
             <View className="flex-row gap-3 w-full">
               <TouchableOpacity
                 onPress={() => setShowDeclineModal(false)}
+                disabled={processing}
                 className="flex-1 py-3 rounded-xl border items-center"
                 style={{ borderColor: theme.cardBorder }}
               >
@@ -356,17 +564,22 @@ export default function InvitationsScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={confirmDecline}
+                disabled={processing}
                 className="flex-1 py-3 rounded-xl items-center"
                 style={{
                   backgroundColor: isDarkMode ? "#ff4444" : "#cc0000",
                 }}
               >
-                <Text
-                  className="font-bold"
-                  style={{ color: "#fff", fontSize: scaledSize(13) }}
-                >
-                  Decline
-                </Text>
+                {processing ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text
+                    className="font-bold"
+                    style={{ color: "#fff", fontSize: scaledSize(13) }}
+                  >
+                    Decline
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>

@@ -39,9 +39,9 @@ const themes = {
     textSecondary: "#1F1F1F",
     icon: "#1F1F1F",
     statusOffline: "#5F6672",
-    primary: "#007A3B", // Deeper Green for primary elements
+    primary: "#007A3B",
     statusBarStyle: "dark-content",
-    buttonPrimary: "#008744", // Slightly darker, less vibrating green
+    buttonPrimary: "#008744",
     buttonPrimaryText: "#ffffff",
     buttonNeutral: "#e4e6eb",
     buttonNeutralText: "#000000",

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,12 +12,14 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-  StyleSheet,
+  Image, // Added Image
+  Keyboard, // Added Keyboard to dismiss on select
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
 
 if (
   Platform.OS === "android" &&
@@ -26,52 +28,33 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const AVAILABLE_HUBS = [
-  { id: "living", name: "Living Room Hub" },
-  { id: "kitchen", name: "Kitchen Hub" },
-  { id: "bedroom", name: "Bedroom Hub" },
-  { id: "garage", name: "Garage Hub" },
-];
-
-const INITIAL_MEMBERS = [
-  {
-    id: "1",
-    name: "Natasha Pearl",
-    email: "natasha@example.com",
-    role: "Admin",
-    access: "All Hubs",
-    initial: "NP",
-  },
-  {
-    id: "2",
-    name: "Leo Carlo",
-    email: "leo@example.com",
-    role: "Guest",
-    access: "Living Room Hub, Kitchen Hub",
-    initial: "LC",
-  },
-];
-
-const INITIAL_PENDING = [
-  {
-    id: "p1",
-    email: "cousin_ben@example.com",
-    access: "Garage Hub",
-    status: "Pending",
-    date: "Sent 2 days ago",
-  },
+// --- 1. MOCK HUBS ---
+const MOCK_HUBS = [
+  { id: "00000000-0000-0000-0000-000000000001", name: "Living Room Hub" },
+  { id: "00000000-0000-0000-0000-000000000002", name: "Kitchen Hub" },
+  { id: "00000000-0000-0000-0000-000000000003", name: "Bedroom Hub" },
+  { id: "00000000-0000-0000-0000-000000000004", name: "Garage Hub" },
 ];
 
 export default function FamilyAccessScreen() {
   const navigation = useNavigation();
   const { theme, fontScale } = useTheme();
-
   const scaledSize = (size) => size * fontScale;
 
   const [email, setEmail] = useState("");
-  const [familyMembers, setFamilyMembers] = useState(INITIAL_MEMBERS);
-  const [pendingInvites, setPendingInvites] = useState(INITIAL_PENDING);
+  const [myHubs, setMyHubs] = useState(MOCK_HUBS);
+  const [familyMembers, setFamilyMembers] = useState([]);
+  const [pendingInvites, setPendingInvites] = useState([]);
+
+  // --- AUTOCOMPLETE STATE ---
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchTimer, setSearchTimer] = useState(null);
+
+  const [loading, setLoading] = useState(true);
   const [isInviting, setIsInviting] = useState(false);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
   const [activeTab, setActiveTab] = useState("members");
 
@@ -79,49 +62,239 @@ export default function FamilyAccessScreen() {
   const [selectedHubs, setSelectedHubs] = useState([]);
   const [grantAllAccess, setGrantAllAccess] = useState(true);
 
+  // Modals
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showRevokeModal, setShowRevokeModal] = useState(false);
   const [showRemoveMemberModal, setShowRemoveMemberModal] = useState(false);
 
-  const [showErrorModal, setShowErrorModal] = useState(false);
+  // Alerts
+  const [alertModalVisible, setAlertModalVisible] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({
+    type: "success",
+    title: "",
+    message: "",
+  });
 
   const [showMemberOptions, setShowMemberOptions] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
   const [itemToRevoke, setItemToRevoke] = useState(null);
 
-  const handlePreInvite = () => {
-    if (!email.includes("@")) {
-      setShowErrorModal(true);
-      return;
-    }
-    setShowConfirmModal(true);
+  const showAlert = (type, title, message) => {
+    setAlertConfig({ type, title, message });
+    setAlertModalVisible(true);
   };
 
-  const confirmInvite = () => {
+  // --- FETCH DATA ---
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      setMyHubs(MOCK_HUBS);
+
+      // Fetch Pending Invites
+      const { data: invites, error: inviteError } = await supabase
+        .from("hub_invites")
+        .select("*")
+        .eq("sender_id", user.id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+
+      if (inviteError) throw inviteError;
+
+      const formattedInvites = invites.map((invite) => {
+        const hubCount = invite.hub_ids ? invite.hub_ids.length : 0;
+        const totalHubs = MOCK_HUBS.length;
+        const accessText =
+          hubCount >= totalHubs ? "All Hubs" : `${hubCount} Hubs`;
+
+        return {
+          id: invite.id,
+          email: invite.email,
+          access: accessText,
+          status: "Pending",
+          date: new Date(invite.created_at).toLocaleDateString(),
+        };
+      });
+      setPendingInvites(formattedInvites);
+
+      // Fetch Members
+      const mockIds = MOCK_HUBS.map((h) => h.id);
+      const { data: accessRecords, error: accessError } = await supabase
+        .from("hub_access")
+        .select("user_id, hub_id, role, users(first_name, last_name, email)")
+        .in("hub_id", mockIds);
+
+      if (!accessError && accessRecords) {
+        const memberMap = {};
+        accessRecords.forEach((record) => {
+          if (!record.users) return;
+          const uid = record.user_id;
+          if (!memberMap[uid]) {
+            memberMap[uid] = {
+              id: uid,
+              name:
+                `${record.users.first_name} ${record.users.last_name}`.trim() ||
+                "Unknown",
+              email: record.users.email,
+              role: record.role,
+              hubIds: [],
+              initial: (
+                record.users.first_name?.[0] ||
+                record.users.email?.[0] ||
+                "?"
+              ).toUpperCase(),
+            };
+          }
+          memberMap[uid].hubIds.push(record.hub_id);
+        });
+
+        const formattedMembers = Object.values(memberMap).map((m) => {
+          const hubCount = m.hubIds.length;
+          const accessStr =
+            hubCount >= MOCK_HUBS.length
+              ? "All Hubs"
+              : `${hubCount} Hubs Selected`;
+          return { ...m, access: accessStr };
+        });
+        setFamilyMembers(formattedMembers);
+      }
+    } catch (err) {
+      console.log("Error fetching data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, []),
+  );
+
+  // --- NEW: GMAIL STYLE SEARCH LOGIC ---
+  const handleTextChange = (text) => {
+    setEmail(text);
+
+    // Clear previous timer to debounce
+    if (searchTimer) clearTimeout(searchTimer);
+
+    if (text.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    // Set new timer (Debounce 300ms)
+    const timer = setTimeout(async () => {
+      try {
+        // Search for users with email LIKE text
+        const { data, error } = await supabase
+          .from("users")
+          .select("id, email, first_name, last_name, avatar_url") // Ensure your DB has these fields
+          .ilike("email", `%${text}%`) // Case insensitive partial match
+          .limit(5);
+
+        if (!error && data.length > 0) {
+          setSuggestions(data);
+          setShowSuggestions(true);
+        } else {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
+      } catch (err) {
+        console.log("Search error:", err);
+      }
+    }, 300);
+
+    setSearchTimer(timer);
+  };
+
+  const selectSuggestion = (user) => {
+    setEmail(user.email);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    Keyboard.dismiss();
+  };
+
+  // --- ACTIONS ---
+
+  const handlePreInvite = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail.includes("@")) {
+      showAlert(
+        "error",
+        "Invalid Email",
+        "Please enter a valid email address.",
+      );
+      return;
+    }
+
+    setIsCheckingEmail(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user.email === trimmedEmail)
+        throw new Error("You cannot invite yourself.");
+
+      const { data: recipient } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", trimmedEmail)
+        .maybeSingle();
+
+      if (!recipient)
+        throw new Error("This email is not registered with GridWatch.");
+
+      setShowConfirmModal(true);
+    } catch (err) {
+      showAlert("error", "Invitation Error", err.message);
+    } finally {
+      setIsCheckingEmail(false);
+    }
+  };
+
+  const confirmInvite = async () => {
     setShowConfirmModal(false);
     setIsInviting(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    setTimeout(() => {
-      const newPending = {
-        id: Date.now().toString(),
-        email: email,
-        access: grantAllAccess
-          ? "All Hubs"
-          : selectedHubs
-              .map((id) => AVAILABLE_HUBS.find((h) => h.id === id)?.name)
-              .join(", "),
-        status: "Pending",
-        date: "Sent just now",
-      };
+      let hubIdsToGrant = selectedHubs;
+      if (grantAllAccess) {
+        hubIdsToGrant = MOCK_HUBS.map((h) => h.id);
+      }
 
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setPendingInvites([newPending, ...pendingInvites]);
+      if (hubIdsToGrant.length === 0)
+        throw new Error("Select at least one hub.");
+
+      const { error } = await supabase.from("hub_invites").insert({
+        sender_id: user.id,
+        email: email.trim().toLowerCase(),
+        hub_ids: hubIdsToGrant,
+        status: "pending",
+      });
+
+      if (error) throw error;
+
+      showAlert("success", "Invitation Sent", `Invitation sent to ${email}`);
+
       setEmail("");
       setGrantAllAccess(true);
       setSelectedHubs([]);
-      setIsInviting(false);
+      fetchData();
       setActiveTab("pending");
-    }, 1500);
+    } catch (err) {
+      showAlert("error", "Failed to Send", err.message);
+    } finally {
+      setIsInviting(false);
+    }
   };
 
   const handleRevokePress = (id) => {
@@ -129,13 +302,74 @@ export default function FamilyAccessScreen() {
     setShowRevokeModal(true);
   };
 
-  const confirmRevoke = () => {
-    if (itemToRevoke) {
+  const confirmRevoke = async () => {
+    if (!itemToRevoke) return;
+    setProcessing(true);
+    try {
+      const { error } = await supabase
+        .from("hub_invites")
+        .delete()
+        .eq("id", itemToRevoke);
+
+      if (error) throw error;
+
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setPendingInvites(pendingInvites.filter((i) => i.id !== itemToRevoke));
-      setItemToRevoke(null);
+      setPendingInvites((prev) => prev.filter((i) => i.id !== itemToRevoke));
       setShowRevokeModal(false);
+      setItemToRevoke(null);
+    } catch (err) {
+      showAlert("error", "Error", "Failed to revoke invitation.");
+    } finally {
+      setProcessing(false);
     }
+  };
+
+  const confirmRemoveMember = async () => {
+    if (!selectedMember) return;
+    setProcessing(true);
+    try {
+      const mockIds = MOCK_HUBS.map((h) => h.id);
+
+      const { error } = await supabase
+        .from("hub_access")
+        .delete()
+        .eq("user_id", selectedMember.id)
+        .in("hub_id", mockIds);
+
+      if (error) throw error;
+
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setFamilyMembers((prev) =>
+        prev.filter((m) => m.id !== selectedMember.id),
+      );
+      setShowRemoveMemberModal(false);
+      setSelectedMember(null);
+    } catch (err) {
+      showAlert("error", "Error", "Failed to remove user.");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const toggleHubSelection = (hubId) => {
+    if (selectedHubs.includes(hubId)) {
+      setSelectedHubs(selectedHubs.filter((id) => id !== hubId));
+      setGrantAllAccess(false);
+    } else {
+      const newSelection = [...selectedHubs, hubId];
+      setSelectedHubs(newSelection);
+      if (newSelection.length === MOCK_HUBS.length) {
+        setGrantAllAccess(true);
+      }
+    }
+  };
+
+  const getAccessSummary = () => {
+    if (grantAllAccess) return "Full Access (All Hubs)";
+    if (selectedHubs.length === 0) return "No Access Selected";
+    if (selectedHubs.length === MOCK_HUBS.length)
+      return "Full Access (All Hubs)";
+    return `${selectedHubs.length} Hub(s) Selected`;
   };
 
   const openMemberOptions = (member) => {
@@ -144,63 +378,25 @@ export default function FamilyAccessScreen() {
   };
 
   const handleEditAccess = () => {
+    if (!selectedMember) return;
+    const currentHubIds = selectedMember.hubIds || [];
+    setSelectedHubs(currentHubIds);
+    setGrantAllAccess(currentHubIds.length === MOCK_HUBS.length);
     setShowMemberOptions(false);
-    setGrantAllAccess(false);
-    setSelectedHubs([]);
-    setTimeout(() => {
-      setShowHubModal(true);
-    }, 200);
+    setTimeout(() => setShowHubModal(true), 200);
   };
 
   const handleRemoveMemberPress = () => {
     setShowMemberOptions(false);
-    setTimeout(() => {
-      setShowRemoveMemberModal(true);
-    }, 200);
+    setTimeout(() => setShowRemoveMemberModal(true), 200);
   };
 
-  const confirmRemoveMember = () => {
-    if (selectedMember) {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setFamilyMembers(familyMembers.filter((m) => m.id !== selectedMember.id));
-      setSelectedMember(null);
-      setShowRemoveMemberModal(false);
-    }
-  };
-
-  const toggleHubSelection = (hubId) => {
-    if (selectedHubs.includes(hubId)) {
-      setSelectedHubs(selectedHubs.filter((id) => id !== hubId));
-    } else {
-      setSelectedHubs([...selectedHubs, hubId]);
-    }
-  };
-
-  const saveHubSelection = () => {
-    const newAccessString = grantAllAccess
-      ? "All Hubs"
-      : selectedHubs.length > 0
-      ? selectedHubs
-          .map((id) => AVAILABLE_HUBS.find((h) => h.id === id)?.name)
-          .join(", ")
-      : "No Access";
-
-    if (selectedMember && !showConfirmModal) {
-      const updatedMembers = familyMembers.map((m) =>
-        m.id === selectedMember.id ? { ...m, access: newAccessString } : m
-      );
-      setFamilyMembers(updatedMembers);
-      setSelectedMember(null);
+  const saveHubSelection = async () => {
+    if (!selectedMember) {
+      setShowHubModal(false);
+      return;
     }
     setShowHubModal(false);
-  };
-
-  const getAccessSummary = () => {
-    if (grantAllAccess) return "Full Access (All Hubs)";
-    if (selectedHubs.length === 0) return "No Access Selected";
-    if (selectedHubs.length === AVAILABLE_HUBS.length)
-      return "Full Access (All Hubs)";
-    return `${selectedHubs.length} Hub(s) Selected`;
   };
 
   return (
@@ -214,7 +410,6 @@ export default function FamilyAccessScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* Header */}
       <View
         className="flex-row items-center px-6 py-5 border-b"
         style={{ borderBottomColor: theme.cardBorder }}
@@ -235,9 +430,11 @@ export default function FamilyAccessScreen() {
         <View className="w-6" />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <View className="p-6">
-          {/* Invite Section */}
           <Text
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -245,8 +442,9 @@ export default function FamilyAccessScreen() {
             Invite New User
           </Text>
 
+          {/* --- INVITE CONTAINER (Z-Index is important here for dropdown) --- */}
           <View
-            className="p-5 rounded-2xl border mb-8"
+            className="p-5 rounded-2xl border mb-8 z-50" // Added z-50
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
@@ -258,29 +456,114 @@ export default function FamilyAccessScreen() {
             >
               Email Address
             </Text>
-            <View
-              className="flex-row items-center border rounded-xl px-3 mb-4"
-              style={{
-                borderColor: theme.cardBorder,
-                backgroundColor: theme.background,
-                height: scaledSize(48),
-              }}
-            >
-              <MaterialIcons
-                name="email"
-                size={scaledSize(20)}
-                color={theme.textSecondary}
-              />
-              <TextInput
-                className="flex-1 ml-3 font-medium"
-                style={{ color: theme.text, fontSize: scaledSize(14) }}
-                placeholder="user@example.com"
-                placeholderTextColor={theme.textSecondary}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
+
+            {/* INPUT FIELD CONTAINER */}
+            <View className="relative z-50">
+              <View
+                className="flex-row items-center border rounded-xl px-3 mb-4"
+                style={{
+                  borderColor: theme.cardBorder,
+                  backgroundColor: theme.background,
+                  height: scaledSize(48),
+                }}
+              >
+                <MaterialIcons
+                  name="email"
+                  size={scaledSize(20)}
+                  color={theme.textSecondary}
+                />
+                <TextInput
+                  className="flex-1 ml-3 font-medium"
+                  style={{ color: theme.text, fontSize: scaledSize(14) }}
+                  placeholder="user@example.com"
+                  placeholderTextColor={theme.textSecondary}
+                  value={email}
+                  onChangeText={handleTextChange} // UPDATED FUNCTION
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              {/* --- GMAIL STYLE SUGGESTIONS DROPDOWN --- */}
+              {showSuggestions && suggestions.length > 0 && (
+                <View
+                  className="absolute top-[50px] left-0 right-0 rounded-xl border shadow-lg overflow-hidden"
+                  style={{
+                    backgroundColor: theme.card,
+                    borderColor: theme.cardBorder,
+                    elevation: 5,
+                    shadowColor: "#000",
+                    shadowOpacity: 0.2,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowRadius: 4,
+                    zIndex: 100, // Ensure it floats on top
+                  }}
+                >
+                  {suggestions.map((user) => (
+                    <TouchableOpacity
+                      key={user.id}
+                      onPress={() => selectSuggestion(user)}
+                      className="flex-row items-center p-3 border-b last:border-b-0"
+                      style={{ borderBottomColor: theme.cardBorder }}
+                    >
+                      {/* Avatar or Initial */}
+                      {user.avatar_url ? (
+                        <Image
+                          source={{ uri: user.avatar_url }}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            marginRight: 10,
+                          }}
+                        />
+                      ) : (
+                        <View
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            marginRight: 10,
+                            backgroundColor: theme.buttonPrimary,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                            {(
+                              user.first_name?.[0] || user.email[0]
+                            ).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+
+                      <View>
+                        {/* Name (if exists) or Email Part */}
+                        <Text
+                          style={{
+                            color: theme.text,
+                            fontWeight: "bold",
+                            fontSize: scaledSize(13),
+                          }}
+                        >
+                          {user.first_name
+                            ? `${user.first_name} ${user.last_name}`
+                            : user.email.split("@")[0]}
+                        </Text>
+                        {/* Email */}
+                        <Text
+                          style={{
+                            color: theme.textSecondary,
+                            fontSize: scaledSize(11),
+                          }}
+                        >
+                          {user.email}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
 
             <Text
@@ -292,6 +575,8 @@ export default function FamilyAccessScreen() {
             <TouchableOpacity
               onPress={() => {
                 setSelectedMember(null);
+                setGrantAllAccess(true);
+                setSelectedHubs(MOCK_HUBS.map((h) => h.id));
                 setShowHubModal(true);
               }}
               className="flex-row items-center justify-between border rounded-xl px-4 mb-6"
@@ -323,19 +608,18 @@ export default function FamilyAccessScreen() {
 
             <TouchableOpacity
               onPress={handlePreInvite}
-              disabled={isInviting}
+              disabled={isInviting || isCheckingEmail}
               style={{
                 backgroundColor: theme.buttonPrimary,
                 borderRadius: 12,
-                // FIXED: Returned to standard height and full width
                 height: scaledSize(48),
                 width: "100%",
                 justifyContent: "center",
                 alignItems: "center",
-                opacity: isInviting ? 0.7 : 1,
+                opacity: isInviting || isCheckingEmail ? 0.7 : 1,
               }}
             >
-              {isInviting ? (
+              {isInviting || isCheckingEmail ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <Text
@@ -348,7 +632,6 @@ export default function FamilyAccessScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Members / Pending Tabs */}
           <View
             className="flex-row mb-4 border-b"
             style={{ borderColor: theme.cardBorder }}
@@ -397,66 +680,82 @@ export default function FamilyAccessScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* List Content */}
-          {activeTab === "members" ? (
-            familyMembers.map((member) => (
-              <View
-                key={member.id}
-                className="flex-row items-center p-4 rounded-xl border mb-3"
+          {loading ? (
+            <ActivityIndicator
+              size="large"
+              color={theme.buttonPrimary}
+              style={{ marginTop: 20 }}
+            />
+          ) : activeTab === "members" ? (
+            familyMembers.length === 0 ? (
+              <Text
                 style={{
-                  backgroundColor: theme.card,
-                  borderColor: theme.cardBorder,
+                  color: theme.textSecondary,
+                  textAlign: "center",
+                  marginTop: 20,
+                  fontStyle: "italic",
                 }}
               >
+                No family members yet.
+              </Text>
+            ) : (
+              familyMembers.map((member) => (
                 <View
-                  className="w-10 h-10 rounded-full justify-center items-center mr-3"
-                  style={{ backgroundColor: `${theme.buttonPrimary}22` }}
-                >
-                  <Text
-                    className="font-bold"
-                    style={{
-                      color: theme.buttonPrimary,
-                      fontSize: scaledSize(14),
-                    }}
-                  >
-                    {member.initial}
-                  </Text>
-                </View>
-
-                <View className="flex-1">
-                  <Text
-                    className="font-bold"
-                    style={{ color: theme.text, fontSize: scaledSize(14) }}
-                  >
-                    {member.name}
-                  </Text>
-                  <Text
-                    className="mt-0.5"
-                    style={{
-                      color: theme.textSecondary,
-                      fontSize: scaledSize(12),
-                    }}
-                  >
-                    {member.access}
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  onPress={() => openMemberOptions(member)}
+                  key={member.id}
+                  className="flex-row items-center p-4 rounded-xl border mb-3"
                   style={{
-                    padding: 8,
-                    backgroundColor: theme.buttonNeutral,
-                    borderRadius: 8,
+                    backgroundColor: theme.card,
+                    borderColor: theme.cardBorder,
                   }}
                 >
-                  <MaterialIcons
-                    name="more-horiz"
-                    size={scaledSize(20)}
-                    color={theme.text}
-                  />
-                </TouchableOpacity>
-              </View>
-            ))
+                  <View
+                    className="w-10 h-10 rounded-full justify-center items-center mr-3"
+                    style={{ backgroundColor: `${theme.buttonPrimary}22` }}
+                  >
+                    <Text
+                      className="font-bold"
+                      style={{
+                        color: theme.buttonPrimary,
+                        fontSize: scaledSize(14),
+                      }}
+                    >
+                      {member.initial}
+                    </Text>
+                  </View>
+                  <View className="flex-1">
+                    <Text
+                      className="font-bold"
+                      style={{ color: theme.text, fontSize: scaledSize(14) }}
+                    >
+                      {member.name}
+                    </Text>
+                    <Text
+                      className="mt-0.5"
+                      style={{
+                        color: theme.textSecondary,
+                        fontSize: scaledSize(12),
+                      }}
+                    >
+                      {member.access}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => openMemberOptions(member)}
+                    style={{
+                      padding: 8,
+                      backgroundColor: theme.buttonNeutral,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <MaterialIcons
+                      name="more-horiz"
+                      size={scaledSize(20)}
+                      color={theme.text}
+                    />
+                  </TouchableOpacity>
+                </View>
+              ))
+            )
           ) : pendingInvites.length === 0 ? (
             <Text
               style={{
@@ -507,7 +806,6 @@ export default function FamilyAccessScreen() {
                     </Text>
                   </View>
                 </View>
-
                 <View
                   className="flex-row justify-between items-center mt-2 border-t pt-2"
                   style={{ borderColor: theme.cardBorder }}
@@ -540,7 +838,7 @@ export default function FamilyAccessScreen() {
         </View>
       </ScrollView>
 
-      {/* Hub Selection Modal (Bottom Sheet) */}
+      {/* Hub Selection Modal */}
       <Modal visible={showHubModal} transparent animationType="slide">
         <View
           className="flex-1 justify-end"
@@ -551,7 +849,7 @@ export default function FamilyAccessScreen() {
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
-              height: "60%",
+              maxHeight: "70%",
             }}
           >
             <View className="flex-row justify-between items-center mb-6">
@@ -572,9 +870,13 @@ export default function FamilyAccessScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Grant All Toggle */}
             <TouchableOpacity
-              onPress={() => setGrantAllAccess(!grantAllAccess)}
+              onPress={() => {
+                const newState = !grantAllAccess;
+                setGrantAllAccess(newState);
+                if (newState) setSelectedHubs(MOCK_HUBS.map((h) => h.id));
+                else setSelectedHubs([]);
+              }}
               className="flex-row items-center justify-between p-4 rounded-xl border mb-4"
               style={{
                 backgroundColor: theme.background,
@@ -636,7 +938,7 @@ export default function FamilyAccessScreen() {
                   Or select specific hubs:
                 </Text>
                 <FlatList
-                  data={AVAILABLE_HUBS}
+                  data={MOCK_HUBS}
                   keyExtractor={(item) => item.id}
                   contentContainerStyle={{ paddingBottom: 20 }}
                   renderItem={({ item }) => {
@@ -691,21 +993,26 @@ export default function FamilyAccessScreen() {
 
             <TouchableOpacity
               onPress={saveHubSelection}
+              disabled={processing}
               className="mt-4 w-full rounded-xl h-12 justify-center items-center"
               style={{ backgroundColor: theme.buttonPrimary }}
             >
-              <Text
-                className="font-bold"
-                style={{ color: "#fff", fontSize: scaledSize(14) }}
-              >
-                Done
-              </Text>
+              {processing ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text
+                  className="font-bold"
+                  style={{ color: "#fff", fontSize: scaledSize(14) }}
+                >
+                  Done
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* Member Options Modal (Bottom Sheet) */}
+      {/* Member Options Modal */}
       <Modal visible={showMemberOptions} transparent animationType="slide">
         <View
           className="flex-1 justify-end"
@@ -797,7 +1104,7 @@ export default function FamilyAccessScreen() {
         </View>
       </Modal>
 
-      {/* Confirm Invite Modal - MATCHING INVITATION SCREEN */}
+      {/* Confirm Invite Modal */}
       <Modal visible={showConfirmModal} transparent animationType="fade">
         <View
           className="flex-1 justify-center items-center p-6"
@@ -860,7 +1167,7 @@ export default function FamilyAccessScreen() {
         </View>
       </Modal>
 
-      {/* Revoke Modal - MATCHING INVITATION SCREEN */}
+      {/* Revoke Modal */}
       <Modal visible={showRevokeModal} transparent animationType="fade">
         <View
           className="flex-1 justify-center items-center p-6"
@@ -888,6 +1195,7 @@ export default function FamilyAccessScreen() {
             <View className="flex-row gap-3 w-full">
               <TouchableOpacity
                 onPress={() => setShowRevokeModal(false)}
+                disabled={processing}
                 className="flex-1 py-3 rounded-xl border items-center"
                 style={{ borderColor: theme.cardBorder }}
               >
@@ -900,22 +1208,27 @@ export default function FamilyAccessScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={confirmRevoke}
+                disabled={processing}
                 className="flex-1 py-3 rounded-xl items-center"
                 style={{ backgroundColor: theme.buttonDangerText }}
               >
-                <Text
-                  className="font-bold"
-                  style={{ color: "#fff", fontSize: scaledSize(13) }}
-                >
-                  Revoke
-                </Text>
+                {processing ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text
+                    className="font-bold"
+                    style={{ color: "#fff", fontSize: scaledSize(13) }}
+                  >
+                    Revoke
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Remove Member Modal - MATCHING INVITATION SCREEN */}
+      {/* Remove Member Modal */}
       <Modal visible={showRemoveMemberModal} transparent animationType="fade">
         <View
           className="flex-1 justify-center items-center p-6"
@@ -947,6 +1260,7 @@ export default function FamilyAccessScreen() {
             <View className="flex-row gap-3 w-full">
               <TouchableOpacity
                 onPress={() => setShowRemoveMemberModal(false)}
+                disabled={processing}
                 className="flex-1 py-3 rounded-xl border items-center"
                 style={{ borderColor: theme.cardBorder }}
               >
@@ -959,23 +1273,28 @@ export default function FamilyAccessScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={confirmRemoveMember}
+                disabled={processing}
                 className="flex-1 py-3 rounded-xl items-center"
                 style={{ backgroundColor: theme.buttonDangerText }}
               >
-                <Text
-                  className="font-bold"
-                  style={{ color: "#fff", fontSize: scaledSize(13) }}
-                >
-                  Remove
-                </Text>
+                {processing ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text
+                    className="font-bold"
+                    style={{ color: "#fff", fontSize: scaledSize(13) }}
+                  >
+                    Remove
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Error Modal - MATCHING INVITATION SCREEN */}
-      <Modal visible={showErrorModal} transparent animationType="fade">
+      {/* UNIFIED STATUS MODAL (REPLACES ALERT) */}
+      <Modal visible={alertModalVisible} transparent animationType="fade">
         <View
           className="flex-1 justify-center items-center p-6"
           style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
@@ -987,22 +1306,30 @@ export default function FamilyAccessScreen() {
               borderColor: theme.cardBorder,
             }}
           >
+            {/* Title */}
             <Text
               className="font-bold mb-2 text-center"
               style={{ color: theme.text, fontSize: scaledSize(18) }}
             >
-              Invalid Email
+              {alertConfig.title}
             </Text>
+            {/* Message */}
             <Text
               className="text-center mb-6 leading-5"
               style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
             >
-              Please enter a valid email address.
+              {alertConfig.message}
             </Text>
+            {/* OK Button */}
             <TouchableOpacity
-              onPress={() => setShowErrorModal(false)}
+              onPress={() => setAlertModalVisible(false)}
               className="w-[50%] self-center py-3 rounded-xl items-center"
-              style={{ backgroundColor: theme.buttonPrimary }}
+              style={{
+                backgroundColor:
+                  alertConfig.type === "success"
+                    ? theme.buttonPrimary
+                    : theme.buttonDangerText,
+              }}
             >
               <Text
                 className="font-bold"

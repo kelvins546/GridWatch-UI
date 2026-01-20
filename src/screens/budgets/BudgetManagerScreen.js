@@ -29,8 +29,6 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const { width } = Dimensions.get("window");
-
 export default function BudgetManagerScreen() {
   const navigation = useNavigation();
   const { theme, isDarkMode, fontScale } = useTheme();
@@ -53,12 +51,12 @@ export default function BudgetManagerScreen() {
   const [monthlyBudget, setMonthlyBudget] = useState(2800);
   const [billingDate, setBillingDate] = useState("15");
 
-  // --- DATE LOGIC ---
   const today = new Date();
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth();
-  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-  const monthName = today.toLocaleString("default", { month: "long" });
+  const daysInMonth = new Date(
+    today.getFullYear(),
+    today.getMonth() + 1,
+    0,
+  ).getDate();
   const billingDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
   // --- DATA SOURCES ---
@@ -106,15 +104,11 @@ export default function BudgetManagerScreen() {
     },
   ];
 
-  // --- FILTER LOGIC ---
-  useEffect(() => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setActiveHubFilter("all");
-  }, [activeTab]);
-
+  // --- CALCULATIONS ---
   const sourceData = activeTab === "personal" ? PERSONAL_HUBS : SHARED_HUBS;
 
-  const displayHubs =
+  // Filter list for display
+  const displayList =
     activeHubFilter === "all"
       ? sourceData
       : sourceData.filter((h) => h.id === activeHubFilter);
@@ -126,11 +120,11 @@ export default function BudgetManagerScreen() {
     if (activeHubFilter === "all") {
       current = sourceData.reduce(
         (acc, hub) => acc + (hub.totalSpending || 0),
-        0
+        0,
       );
       hardLimitTotal = sourceData.reduce(
         (acc, hub) => acc + (hub.limit || 0),
-        0
+        0,
       );
     } else {
       const hub = sourceData.find((h) => h.id === activeHubFilter);
@@ -139,19 +133,23 @@ export default function BudgetManagerScreen() {
         hardLimitTotal = hub.limit || 0;
       }
     }
-
     return { current, hardLimitTotal };
-  }, [activeHubFilter, activeTab, sourceData]);
+  }, [activeTab, activeHubFilter, sourceData]);
 
   const currentSpending = budgetStats.current;
-  const totalDeviceLimits = budgetStats.hardLimitTotal;
-  const isOverAllocated = totalDeviceLimits > monthlyBudget;
-
-  const percentage = Math.min((currentSpending / monthlyBudget) * 100, 100);
+  const activeLimit =
+    activeHubFilter === "all" ? monthlyBudget : budgetStats.hardLimitTotal;
+  const percentage = Math.min((currentSpending / activeLimit) * 100, 100);
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   // --- ACTIONS ---
-  const handleHubSelect = (id) => {
+  const handleScopeChange = (scope) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setActiveTab(scope);
+    setActiveHubFilter("all");
+  };
+
+  const handleFilterChange = (id) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setActiveHubFilter(id);
   };
@@ -168,17 +166,13 @@ export default function BudgetManagerScreen() {
   const handleManualReset = () => {
     setShowConfirmModal(false);
     setIsResetting(true);
-    setTimeout(() => {
-      setIsResetting(false);
-    }, 2000);
+    setTimeout(() => setIsResetting(false), 2000);
   };
 
   const handleSaveBudget = () => {
     setShowBudgetModal(false);
     setIsResetting(true);
-    setTimeout(() => {
-      setIsResetting(false);
-    }, 1000);
+    setTimeout(() => setIsResetting(false), 1000);
   };
 
   const handleDateSelect = (day) => {
@@ -195,65 +189,6 @@ export default function BudgetManagerScreen() {
 
   // --- STYLES ---
   const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.background,
-    },
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: 24,
-      paddingVertical: 20,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.cardBorder,
-      backgroundColor: theme.background,
-    },
-    headerText: {
-      fontWeight: "bold",
-      color: theme.text,
-      fontSize: scaledSize(16),
-    },
-    scrollContent: {
-      paddingBottom: 100,
-    },
-    section: {
-      padding: 24,
-    },
-    tabContainer: {
-      flexDirection: "row",
-      backgroundColor: theme.buttonNeutral,
-      borderRadius: 12,
-      padding: 4,
-      marginBottom: 16,
-    },
-    tabButton: {
-      flex: 1,
-      paddingVertical: 10,
-      borderRadius: 8,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    tabText: {
-      fontWeight: "bold",
-      fontSize: scaledSize(12),
-    },
-    filterContainer: {
-      marginBottom: 20,
-    },
-    chip: {
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 20,
-      borderWidth: 1,
-      marginRight: 8,
-      flexDirection: "row",
-      alignItems: "center",
-    },
-    chipText: {
-      fontWeight: "bold",
-      fontSize: scaledSize(11),
-    },
     card: {
       backgroundColor: theme.card,
       borderRadius: 20,
@@ -267,24 +202,18 @@ export default function BudgetManagerScreen() {
       shadowOpacity: 0.1,
       shadowRadius: 12,
     },
-    warningCard: {
-      padding: 16,
-      borderRadius: 16,
-      borderWidth: 1,
-      marginBottom: 24,
-    },
-    // --- DESIGN SYSTEM MODAL STYLES ---
+    // Modals
     modalOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.8)",
+      backgroundColor: "rgba(0,0,0,0.7)",
       justifyContent: "center",
       alignItems: "center",
     },
     modalContainer: {
       borderWidth: 1,
-      padding: 20, // p-5
-      borderRadius: 16, // rounded-2xl
-      width: 288, // w-72
+      padding: 20,
+      borderRadius: 16,
+      width: 288,
       alignItems: "center",
       backgroundColor: theme.card,
       borderColor: theme.cardBorder,
@@ -298,17 +227,12 @@ export default function BudgetManagerScreen() {
     },
     modalBody: {
       textAlign: "center",
-      marginBottom: 24, // mb-6
+      marginBottom: 24,
       lineHeight: 20,
       color: theme.textSecondary,
       fontSize: scaledSize(12),
     },
-    // Buttons
-    buttonRow: {
-      flexDirection: "row",
-      gap: 10, // gap-2.5
-      width: "100%",
-    },
+    buttonRow: { flexDirection: "row", gap: 10, width: "100%" },
     modalCancelBtn: {
       flex: 1,
       height: 40,
@@ -324,7 +248,6 @@ export default function BudgetManagerScreen() {
       borderRadius: 12,
       alignItems: "center",
       justifyContent: "center",
-      overflow: "hidden",
     },
     modalButtonText: {
       fontWeight: "bold",
@@ -335,156 +258,105 @@ export default function BudgetManagerScreen() {
   });
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      edges={["top", "left", "right"]}
+    >
       <StatusBar
         barStyle={theme.statusBarStyle}
         backgroundColor={theme.background}
       />
 
-      <View style={styles.header}>
-        <Text style={styles.headerText}>Budget & Management</Text>
+      {/* --- HEADER --- */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingHorizontal: 24,
+          paddingVertical: 16,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: scaledSize(20),
+            fontWeight: "bold",
+            color: theme.text,
+          }}
+        >
+          Budget
+        </Text>
+
+        {/* --- PILL SWITCHER --- */}
+        <View
+          style={{
+            flexDirection: "row",
+            backgroundColor: theme.buttonNeutral,
+            borderRadius: 20,
+            padding: 4,
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => handleScopeChange("personal")}
+            style={{
+              paddingVertical: 6,
+              paddingHorizontal: 16,
+              borderRadius: 16,
+              backgroundColor:
+                activeTab === "personal" ? theme.card : "transparent",
+              shadowColor: activeTab === "personal" ? "#000" : "transparent",
+              shadowOpacity: activeTab === "personal" ? 0.1 : 0,
+              shadowRadius: 2,
+              elevation: activeTab === "personal" ? 2 : 0,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: scaledSize(12),
+                fontWeight: "600",
+                color:
+                  activeTab === "personal" ? theme.text : theme.textSecondary,
+              }}
+            >
+              Personal
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => handleScopeChange("shared")}
+            style={{
+              paddingVertical: 6,
+              paddingHorizontal: 16,
+              borderRadius: 16,
+              backgroundColor:
+                activeTab === "shared" ? theme.card : "transparent",
+              shadowColor: activeTab === "shared" ? "#000" : "transparent",
+              shadowOpacity: activeTab === "shared" ? 0.1 : 0,
+              shadowRadius: 2,
+              elevation: activeTab === "shared" ? 2 : 0,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: scaledSize(12),
+                fontWeight: "600",
+                color:
+                  activeTab === "shared" ? theme.text : theme.textSecondary,
+              }}
+            >
+              Shared
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[0]}
       >
-        <View
-          style={{
-            backgroundColor: theme.background,
-            paddingTop: 24,
-            paddingHorizontal: 24,
-          }}
-        >
-          {/* --- TAB SWITCHER --- */}
-          <View style={styles.tabContainer}>
-            <TouchableOpacity
-              onPress={() => setActiveTab("personal")}
-              style={[
-                styles.tabButton,
-                {
-                  backgroundColor:
-                    activeTab === "personal" ? theme.card : "transparent",
-                  shadowOpacity: activeTab === "personal" ? 0.1 : 0,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  {
-                    color:
-                      activeTab === "personal"
-                        ? theme.text
-                        : theme.textSecondary,
-                  },
-                ]}
-              >
-                My Hubs
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setActiveTab("shared")}
-              style={[
-                styles.tabButton,
-                {
-                  backgroundColor:
-                    activeTab === "shared" ? theme.card : "transparent",
-                  shadowOpacity: activeTab === "shared" ? 0.1 : 0,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  {
-                    color:
-                      activeTab === "shared" ? theme.text : theme.textSecondary,
-                  },
-                ]}
-              >
-                Shared
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* --- HUB SELECTION TABS --- */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 10 }}
-            style={styles.filterContainer}
-          >
-            <TouchableOpacity
-              onPress={() => handleHubSelect("all")}
-              style={[
-                styles.chip,
-                {
-                  backgroundColor:
-                    activeHubFilter === "all" ? primaryColor : theme.card,
-                  borderColor:
-                    activeHubFilter === "all" ? primaryColor : theme.cardBorder,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  {
-                    color:
-                      activeHubFilter === "all" ? "#fff" : theme.textSecondary,
-                  },
-                ]}
-              >
-                All
-              </Text>
-            </TouchableOpacity>
-
-            {sourceData.map((hub) => {
-              const isActive = activeHubFilter === hub.id;
-              return (
-                <TouchableOpacity
-                  key={hub.id}
-                  onPress={() => handleHubSelect(hub.id)}
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: isActive ? primaryColor : theme.card,
-                      borderColor: isActive ? primaryColor : theme.cardBorder,
-                    },
-                  ]}
-                >
-                  {activeTab === "shared" && (
-                    <MaterialIcons
-                      name="person"
-                      size={12}
-                      color={isActive ? "#fff" : theme.textSecondary}
-                      style={{ marginRight: 4 }}
-                    />
-                  )}
-                  <Text
-                    style={[
-                      styles.chipText,
-                      { color: isActive ? "#fff" : theme.textSecondary },
-                    ]}
-                  >
-                    {activeTab === "shared"
-                      ? hub.owner.split(" ")[0] + "'s"
-                      : hub.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        <View style={styles.section}>
-          {/* --- MAIN GOAL CARD --- */}
+        {/* --- HERO CARD --- */}
+        <View style={{ paddingHorizontal: 24 }}>
           <TouchableOpacity
             activeOpacity={1}
-            style={{ marginBottom: 20 }}
             onPress={() => setShowBudgetModal(true)}
             onPressIn={() => animateButton(0.98)}
             onPressOut={() => animateButton(1)}
@@ -492,6 +364,7 @@ export default function BudgetManagerScreen() {
             <Animated.View
               style={[styles.card, { transform: [{ scale: scaleAnim }] }]}
             >
+              {/* Top Row */}
               <View
                 style={{
                   flexDirection: "row",
@@ -530,6 +403,7 @@ export default function BudgetManagerScreen() {
                 />
               </View>
 
+              {/* Progress Bar */}
               <View style={{ marginBottom: 16 }}>
                 <View
                   style={{
@@ -553,7 +427,7 @@ export default function BudgetManagerScreen() {
                       fontSize: scaledSize(12),
                     }}
                   >
-                    Goal: ₱ {monthlyBudget.toLocaleString()}
+                    Limit: ₱ {activeLimit.toLocaleString()}
                   </Text>
                 </View>
                 <View
@@ -577,6 +451,7 @@ export default function BudgetManagerScreen() {
                 </View>
               </View>
 
+              {/* Footer */}
               <View
                 style={{
                   flexDirection: "row",
@@ -587,7 +462,7 @@ export default function BudgetManagerScreen() {
               >
                 <StatItem
                   label="Daily Avg"
-                  value="₱ 120.50"
+                  value={`₱ ${(currentSpending / 30).toFixed(2)}`}
                   icon="trending-up"
                   theme={theme}
                   scaledSize={scaledSize}
@@ -610,186 +485,235 @@ export default function BudgetManagerScreen() {
               </View>
             </Animated.View>
           </TouchableOpacity>
+        </View>
 
-          {/* --- BUDGET HEALTH WARNING --- */}
-          {isOverAllocated && (
-            <View
-              style={[
-                styles.warningCard,
-                {
-                  backgroundColor: isDarkMode
-                    ? "rgba(255,68,68,0.1)"
-                    : "rgba(255,200,200,0.3)",
-                  borderColor: dangerColor,
-                },
-              ]}
+        {/* --- HUB FILTER CHIPS --- */}
+        <View style={{ paddingLeft: 24, marginBottom: 20 }}>
+          <Text
+            style={{
+              fontSize: scaledSize(13),
+              fontWeight: "600",
+              color: theme.text,
+              marginBottom: 10,
+            }}
+          >
+            Filter by Hub
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingRight: 24 }}
+          >
+            <TouchableOpacity
+              onPress={() => handleFilterChange("all")}
+              style={{
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 12,
+                backgroundColor:
+                  activeHubFilter === "all" ? theme.text : theme.buttonNeutral,
+                marginRight: 8,
+              }}
             >
-              <View
+              <Text
                 style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: 8,
+                  fontSize: scaledSize(12),
+                  fontWeight: "600",
+                  color:
+                    activeHubFilter === "all"
+                      ? theme.background
+                      : theme.textSecondary,
                 }}
               >
-                <MaterialIcons name="warning" size={20} color={dangerColor} />
+                All
+              </Text>
+            </TouchableOpacity>
+
+            {sourceData.map((hub) => (
+              <TouchableOpacity
+                key={hub.id}
+                onPress={() => handleFilterChange(hub.id)}
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 12,
+                  backgroundColor:
+                    activeHubFilter === hub.id
+                      ? theme.text
+                      : theme.buttonNeutral,
+                  marginRight: 8,
+                }}
+              >
                 <Text
                   style={{
-                    fontWeight: "bold",
-                    marginLeft: 8,
-                    color: dangerColor,
-                    fontSize: scaledSize(14),
+                    fontSize: scaledSize(12),
+                    fontWeight: "600",
+                    color:
+                      activeHubFilter === hub.id
+                        ? theme.background
+                        : theme.textSecondary,
                   }}
                 >
-                  Conflict Detected
+                  {hub.name}
                 </Text>
-              </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* --- ACTIONS ROW --- */}
+        <View
+          style={{
+            flexDirection: "row",
+            paddingHorizontal: 24,
+            gap: 12,
+            marginBottom: 24,
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => setShowDatePicker(true)}
+            style={{
+              flex: 1,
+              flexDirection: "row",
+              alignItems: "center",
+              padding: 12,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: theme.cardBorder,
+              backgroundColor: theme.card,
+            }}
+          >
+            <View
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                justifyContent: "center",
+                alignItems: "center",
+                marginRight: 10,
+                backgroundColor: `${theme.buttonPrimary}15`,
+              }}
+            >
+              <MaterialIcons
+                name="calendar-today"
+                size={18}
+                color={primaryColor}
+              />
+            </View>
+            <View>
+              <Text
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(10),
+                  fontWeight: "bold",
+                  textTransform: "uppercase",
+                }}
+              >
+                Cycle Date
+              </Text>
               <Text
                 style={{
                   color: theme.text,
                   fontSize: scaledSize(13),
-                  lineHeight: 20,
-                }}
-              >
-                {`Your device limits (₱${totalDeviceLimits.toLocaleString()}) exceed your monthly goal.`}
-              </Text>
-            </View>
-          )}
-
-          {/* --- BILLING DATE SELECTION --- */}
-          <TouchableOpacity
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: 16,
-              borderRadius: 16,
-              borderWidth: 1,
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-              marginBottom: 16,
-            }}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <MaterialIcons
-                name="calendar-today"
-                size={20}
-                color={theme.textSecondary}
-              />
-              <View style={{ marginLeft: 12 }}>
-                <Text
-                  style={{
-                    fontWeight: "bold",
-                    color: theme.text,
-                    fontSize: scaledSize(14),
-                  }}
-                >
-                  Billing Cycle Date
-                </Text>
-                <Text
-                  style={{
-                    color: theme.textSecondary,
-                    fontSize: scaledSize(11),
-                  }}
-                >
-                  App resets automatically
-                </Text>
-              </View>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Text
-                style={{
                   fontWeight: "bold",
-                  marginRight: 4,
-                  color: theme.text,
-                  fontSize: scaledSize(12),
                 }}
               >
                 {billingDate}th
               </Text>
-              <MaterialIcons
-                name="chevron-right"
-                size={18}
-                color={theme.textSecondary}
-              />
             </View>
           </TouchableOpacity>
 
-          {/* --- MANUAL RESET --- */}
           <TouchableOpacity
             onPress={() => setShowConfirmModal(true)}
             style={{
+              flex: 1,
               flexDirection: "row",
               alignItems: "center",
-              justifyContent: "center",
-              paddingVertical: 16,
+              padding: 12,
               borderRadius: 16,
               borderWidth: 1,
-              borderColor: dangerColor,
-              backgroundColor: isDarkMode
-                ? "rgba(255, 68, 68, 0.05)"
-                : "rgba(204, 0, 0, 0.05)",
-              marginBottom: 30,
+              borderColor: theme.cardBorder,
+              backgroundColor: theme.card,
             }}
           >
-            <MaterialIcons name="restart-alt" size={20} color={dangerColor} />
-            <Text
+            <View
               style={{
-                marginLeft: 8,
-                fontWeight: "bold",
-                textTransform: "uppercase",
-                letterSpacing: 1,
-                color: dangerColor,
-                fontSize: scaledSize(12),
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                justifyContent: "center",
+                alignItems: "center",
+                marginRight: 10,
+                backgroundColor: `${dangerColor}15`,
               }}
             >
-              Manual Reset
-            </Text>
+              <MaterialIcons name="restart-alt" size={18} color={dangerColor} />
+            </View>
+            <View>
+              <Text
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(10),
+                  fontWeight: "bold",
+                  textTransform: "uppercase",
+                }}
+              >
+                Manual
+              </Text>
+              <Text
+                style={{
+                  color: dangerColor,
+                  fontSize: scaledSize(13),
+                  fontWeight: "bold",
+                }}
+              >
+                Reset Now
+              </Text>
+            </View>
           </TouchableOpacity>
+        </View>
 
-          {/* Hub List Header */}
+        {/* --- HUB ALLOCATION LIST (CARD STYLE) --- */}
+        <View style={{ paddingHorizontal: 24 }}>
           <Text
             style={{
-              color: theme.textSecondary,
-              fontSize: scaledSize(11),
-              fontWeight: "bold",
-              textTransform: "uppercase",
+              fontSize: scaledSize(13),
+              fontWeight: "600",
+              color: theme.text,
               marginBottom: 12,
-              letterSpacing: 1,
             }}
           >
-            {activeTab === "personal" ? "Select Hub to Manage" : "Shared Hubs"}
+            Hub Allocation
           </Text>
 
-          {/* Hub List */}
-          <View style={{ gap: 12 }}>
-            {displayHubs.map((hub) => (
-              <HubCard
+          {displayList.length > 0 ? (
+            displayList.map((hub) => (
+              <HubListItem
                 key={hub.id}
                 data={hub}
-                activeTab={activeTab}
                 theme={theme}
-                isDarkMode={isDarkMode}
                 primaryColor={primaryColor}
                 scaledSize={scaledSize}
                 onPress={() =>
-                  navigation.navigate("BudgetDeviceList", {
-                    hubName: hub.name,
-                  })
+                  navigation.navigate("BudgetDeviceList", { hubName: hub.name })
                 }
               />
-            ))}
-          </View>
+            ))
+          ) : (
+            <View style={{ alignItems: "center", paddingVertical: 20 }}>
+              <Text style={{ color: theme.textSecondary }}>No hubs found.</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 
-      {/* --- CONFIRMATION MODAL (DESIGN SYSTEM) --- */}
+      {/* --- MODALS --- */}
       <Modal visible={showConfirmModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <Text style={styles.modalTitle}>Reset Spending?</Text>
             <Text style={styles.modalBody}>
-              This will clear your current spending.
+              This will clear your current spending tracking.
             </Text>
             <View style={styles.buttonRow}>
               <TouchableOpacity
@@ -816,65 +740,52 @@ export default function BudgetManagerScreen() {
         </View>
       </Modal>
 
-      {/* --- BUDGET INPUT MODAL (DESIGN SYSTEM ADAPTED) --- */}
       <Modal visible={showBudgetModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Set Monthly Goal</Text>
-
+            <Text style={styles.modalTitle}>Set Monthly Limit</Text>
             <View
-              style={{ width: "100%", marginBottom: 24, alignItems: "center" }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 20,
+                marginVertical: 20,
+              }}
             >
-              <View
+              <TouchableOpacity
+                onPress={() => setMonthlyBudget((b) => Math.max(0, b - 100))}
                 style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  width: "100%",
-                  marginBottom: 12,
+                  padding: 10,
+                  backgroundColor: theme.buttonNeutral,
+                  borderRadius: 10,
                 }}
               >
-                <TouchableOpacity
-                  onPress={() => setMonthlyBudget((b) => Math.max(0, b - 100))}
-                  style={{
-                    padding: 8,
-                    backgroundColor: theme.buttonNeutral,
-                    borderRadius: 12,
-                  }}
-                >
-                  <MaterialIcons name="remove" size={24} color={theme.text} />
-                </TouchableOpacity>
-                <TextInput
-                  value={monthlyBudget.toString()}
-                  onChangeText={handleBudgetChange}
-                  keyboardType="numeric"
-                  style={{
-                    color: theme.text,
-                    fontSize: scaledSize(24),
-                    fontWeight: "bold",
-                    textAlign: "center",
-                    minWidth: 80,
-                  }}
-                  maxLength={7}
-                />
-                <TouchableOpacity
-                  onPress={() => setMonthlyBudget((b) => b + 100)}
-                  style={{
-                    padding: 8,
-                    backgroundColor: theme.buttonNeutral,
-                    borderRadius: 12,
-                  }}
-                >
-                  <MaterialIcons name="add" size={24} color={theme.text} />
-                </TouchableOpacity>
-              </View>
-              <Text
-                style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+                <MaterialIcons name="remove" size={24} color={theme.text} />
+              </TouchableOpacity>
+              <TextInput
+                value={monthlyBudget.toString()}
+                onChangeText={handleBudgetChange}
+                keyboardType="numeric"
+                style={{
+                  fontSize: scaledSize(28),
+                  fontWeight: "bold",
+                  color: theme.text,
+                  minWidth: 80,
+                  textAlign: "center",
+                }}
+              />
+              <TouchableOpacity
+                onPress={() => setMonthlyBudget((b) => b + 100)}
+                style={{
+                  padding: 10,
+                  backgroundColor: theme.buttonNeutral,
+                  borderRadius: 10,
+                }}
               >
-                ≈ ₱ {(monthlyBudget / daysInMonth).toFixed(2)} / day
-              </Text>
+                <MaterialIcons name="add" size={24} color={theme.text} />
+              </TouchableOpacity>
             </View>
-
             <View style={styles.buttonRow}>
               <TouchableOpacity
                 onPress={() => setShowBudgetModal(false)}
@@ -900,43 +811,38 @@ export default function BudgetManagerScreen() {
         </View>
       </Modal>
 
-      {/* --- DATE PICKER MODAL (Full Screen Exception) --- */}
       <Modal visible={showDatePicker} transparent animationType="slide">
-        <View style={{ flex: 1, justifyContent: "flex-end" }}>
-          <TouchableOpacity
-            style={{
-              position: "absolute",
-              width: "100%",
-              height: "100%",
-              backgroundColor: "rgba(0,0,0,0.5)",
-            }}
-            onPress={() => setShowDatePicker(false)}
-          />
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "flex-end",
+            backgroundColor: "rgba(0,0,0,0.5)",
+          }}
+        >
           <View
             style={{
               backgroundColor: theme.card,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               padding: 24,
-              height: "50%",
+              maxHeight: "60%",
             }}
           >
             <View
               style={{
                 flexDirection: "row",
                 justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 24,
+                marginBottom: 20,
               }}
             >
               <Text
                 style={{
-                  color: theme.text,
-                  fontSize: 18,
+                  fontSize: scaledSize(18),
                   fontWeight: "bold",
+                  color: theme.text,
                 }}
               >
-                Select Day in {monthName}
+                Billing Cycle Start Day
               </Text>
               <TouchableOpacity onPress={() => setShowDatePicker(false)}>
                 <MaterialIcons
@@ -948,31 +854,28 @@ export default function BudgetManagerScreen() {
             </View>
             <FlatList
               data={billingDays}
-              keyExtractor={(i) => i.toString()}
               numColumns={5}
+              keyExtractor={(i) => i.toString()}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   onPress={() => handleDateSelect(item)}
                   style={{
                     flex: 1,
                     aspectRatio: 1,
+                    margin: 4,
+                    borderRadius: 8,
                     justifyContent: "center",
                     alignItems: "center",
-                    margin: 4,
-                    borderWidth: 1,
-                    borderColor: theme.cardBorder,
-                    borderRadius: 8,
                     backgroundColor:
-                      item === parseInt(billingDate)
+                      item.toString() === billingDate
                         ? primaryColor
-                        : "transparent",
-                    maxWidth: "18%",
+                        : theme.buttonNeutral,
                   }}
                 >
                   <Text
                     style={{
                       color:
-                        item === parseInt(billingDate) ? "#fff" : theme.text,
+                        item.toString() === billingDate ? "#fff" : theme.text,
                       fontWeight: "bold",
                     }}
                   >
@@ -985,28 +888,26 @@ export default function BudgetManagerScreen() {
         </View>
       </Modal>
 
-      {/* Loading Overlay */}
+      {/* LOADING OVERLAY */}
       {isResetting && (
         <View
           style={{
             position: "absolute",
-            zIndex: 100,
             width: "100%",
             height: "100%",
-            backgroundColor: "rgba(0,0,0,0.7)",
+            backgroundColor: "rgba(0,0,0,0.5)",
             justifyContent: "center",
             alignItems: "center",
           }}
         >
           <ActivityIndicator size="large" color={primaryColor} />
-          <Text style={{ color: "#fff", marginTop: 16, fontWeight: "bold" }}>
-            Updating Settings...
-          </Text>
         </View>
       )}
     </SafeAreaView>
   );
 }
+
+// --- SUB-COMPONENTS ---
 
 function StatItem({ label, value, icon, theme, scaledSize }) {
   return (
@@ -1046,101 +947,103 @@ function StatItem({ label, value, icon, theme, scaledSize }) {
   );
 }
 
-function HubCard({
-  data,
-  activeTab,
-  theme,
-  isDarkMode,
-  primaryColor,
-  scaledSize,
-  onPress,
-}) {
-  const isOffline = data.status === "Offline";
+// CARD STYLE RESTORED
+function HubListItem({ data, theme, primaryColor, scaledSize, onPress }) {
+  const usagePercent = Math.min((data.totalSpending / data.limit) * 100, 100);
   return (
     <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={!isOffline ? onPress : null}
+      onPress={onPress}
       style={{
         flexDirection: "row",
         alignItems: "center",
-        justifyContent: "space-between",
+        backgroundColor: theme.card,
         padding: 16,
         borderRadius: 16,
         borderWidth: 1,
-        backgroundColor: theme.card,
         borderColor: theme.cardBorder,
-        opacity: isOffline ? 0.6 : 1,
+        marginBottom: 12,
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
+      <View
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 12,
+          marginRight: 12,
+          backgroundColor: `${primaryColor}15`,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <MaterialIcons name={data.icon} size={22} color={primaryColor} />
+      </View>
+      <View style={{ flex: 1 }}>
         <View
           style={{
-            width: 44,
-            height: 44,
-            borderRadius: 12,
-            justifyContent: "center",
-            alignItems: "center",
-            backgroundColor: isOffline
-              ? `${theme.textSecondary}20`
-              : `${primaryColor}20`,
-            marginRight: 16,
+            flexDirection: "row",
+            justifyContent: "space-between",
+            marginBottom: 4,
           }}
         >
-          <MaterialIcons
-            name={data.icon}
-            size={22}
-            color={isOffline ? theme.textSecondary : primaryColor}
-          />
-        </View>
-        <View>
           <Text
             style={{
               color: theme.text,
               fontWeight: "bold",
               fontSize: scaledSize(14),
-              marginBottom: 2,
             }}
           >
             {data.name}
           </Text>
-          {activeTab === "shared" ? (
-            <Text
-              style={{
-                color: theme.textSecondary,
-                fontSize: scaledSize(11),
-              }}
-            >
-              Owner: {data.owner}
-            </Text>
-          ) : (
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <View
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 3,
-                  backgroundColor: isOffline
-                    ? theme.textSecondary
-                    : primaryColor,
-                  marginRight: 6,
-                }}
-              />
-              <Text
-                style={{
-                  color: theme.textSecondary,
-                  fontSize: scaledSize(11),
-                }}
-              >
-                {data.status}
-              </Text>
-            </View>
-          )}
+          <Text
+            style={{
+              color: theme.text,
+              fontWeight: "bold",
+              fontSize: scaledSize(14),
+            }}
+          >
+            ₱{data.totalSpending}
+          </Text>
+        </View>
+        <View
+          style={{
+            height: 6,
+            backgroundColor: theme.buttonNeutral,
+            borderRadius: 3,
+            overflow: "hidden",
+          }}
+        >
+          <View
+            style={{
+              width: `${usagePercent}%`,
+              height: "100%",
+              backgroundColor: primaryColor,
+            }}
+          />
+        </View>
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            marginTop: 4,
+          }}
+        >
+          <Text
+            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
+          >
+            Limit: ₱{data.limit}
+          </Text>
+          <Text
+            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
+          >
+            {usagePercent.toFixed(0)}%
+          </Text>
         </View>
       </View>
       <MaterialIcons
         name="chevron-right"
         size={20}
         color={theme.textSecondary}
+        style={{ marginLeft: 8 }}
       />
     </TouchableOpacity>
   );

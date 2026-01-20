@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Platform,
   UIManager,
   Alert,
+  ToastAndroid,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -21,11 +22,12 @@ import {
   useFocusEffect,
 } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Import Supabase
 import { supabase } from "../../lib/supabase";
+import { requestWidgetUpdate } from "react-native-android-widget";
+import { BudgetWidget } from "../../widgets/BudgetWidget";
 
-// Enable LayoutAnimation for Android
 if (
   Platform.OS === "android" &&
   UIManager.setLayoutAnimationEnabledExperimental
@@ -67,10 +69,26 @@ export default function SettingsScreen() {
   const [isAddingWidget, setIsAddingWidget] = useState(false);
   const [widgetInstalled, setWidgetInstalled] = useState(false);
 
-  // --- UPDATED: FETCH REAL USER DATA FROM 'users' TABLE ---
+  // --- LOAD SETTINGS ---
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const storedEnabled = await AsyncStorage.getItem("widgetsEnabled");
+        if (storedEnabled !== null)
+          setWidgetsEnabled(JSON.parse(storedEnabled));
+
+        const storedInstalled = await AsyncStorage.getItem("widgetInstalled");
+        if (storedInstalled !== null)
+          setWidgetInstalled(JSON.parse(storedInstalled));
+      } catch (e) {
+        console.log("Failed to load widget settings");
+      }
+    };
+    loadSettings();
+  }, []);
+
+  // --- FETCH USER PROFILE ---
   const fetchUserProfile = async () => {
-    // Only show loading on initial mount if needed, otherwise background refresh
-    // setIsLoading(true);
     try {
       const {
         data: { user },
@@ -80,36 +98,26 @@ export default function SettingsScreen() {
       if (authError) throw authError;
 
       if (user) {
-        // 1. Try to get detailed profile from 'users' table
-        const { data: profile, error: dbError } = await supabase
+        const { data: profile } = await supabase
           .from("users")
           .select("first_name, last_name, avatar_url, city, region")
           .eq("id", user.id)
           .single();
 
-        // 2. Prepare Name
         let fullName = "GridWatch User";
-        let avatarUrl = user.user_metadata?.avatar_url; // Default from Google
-        let location = user.email; // Default fallback
+        let avatarUrl = user.user_metadata?.avatar_url;
+        let location = user.email;
 
         if (profile) {
-          // Use DB data if available
           const first = profile.first_name || "";
           const last = profile.last_name || "";
-
           if (first) {
             fullName = last ? `${first} ${last}` : first;
           } else {
-            // Fallback to Google meta if DB name is empty
             fullName = user.user_metadata?.full_name || fullName;
           }
-
           if (profile.avatar_url) avatarUrl = profile.avatar_url;
-
-          // Optional: Create a location string if you want
-          // location = profile.city ? `${profile.city}, ${profile.region}` : user.email;
         } else {
-          // No DB profile found, rely purely on Auth Metadata
           fullName = user.user_metadata?.full_name || fullName;
         }
 
@@ -117,7 +125,7 @@ export default function SettingsScreen() {
 
         setUserData({
           fullName: fullName,
-          unitLocation: location, // Keeping email as 'unitLocation' per your design, or swap to city/region
+          unitLocation: location,
           initial: initial,
           avatarUrl: avatarUrl,
         });
@@ -132,7 +140,7 @@ export default function SettingsScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchUserProfile();
-    }, [])
+    }, []),
   );
 
   const { providerName, rate } = route.params || {};
@@ -153,9 +161,7 @@ export default function SettingsScreen() {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-
       setModalVisible(false);
-
       navigation.reset({
         index: 0,
         routes: [{ name: "Landing" }],
@@ -166,18 +172,48 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleAddWidget = () => {
+  // --- WIDGET INSTALL/UPDATE LOGIC ---
+  const handleAddWidget = async () => {
     setIsAddingWidget(true);
-    setTimeout(() => {
-      setIsAddingWidget(false);
+
+    try {
+      await requestWidgetUpdate({
+        widgetName: "BudgetWidget",
+        renderWidget: () => (
+          <BudgetWidget
+            cost="1,450.75"
+            percentage={48}
+            budget={3000}
+            usage={1450}
+          />
+        ),
+        widgetNotFound: () => {
+          console.log("Widget not pinned yet");
+        },
+      });
+
+      if (widgetInstalled) {
+        if (Platform.OS === "android") {
+          ToastAndroid.show("Widget Updated!", ToastAndroid.SHORT);
+        }
+      } else {
+        setSuccessModalVisible(true);
+      }
+
       setWidgetInstalled(true);
-      setSuccessModalVisible(true);
-    }, 2000);
+      await AsyncStorage.setItem("widgetInstalled", "true");
+    } catch (error) {
+      console.log("Widget Error:", error);
+    } finally {
+      setIsAddingWidget(false);
+    }
   };
 
-  const handleToggleWidgets = () => {
+  const handleToggleWidgets = async () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setWidgetsEnabled(!widgetsEnabled);
+    const newValue = !widgetsEnabled;
+    setWidgetsEnabled(newValue);
+    await AsyncStorage.setItem("widgetsEnabled", JSON.stringify(newValue));
   };
 
   const handleToggleTheme = () => {
@@ -237,9 +273,8 @@ export default function SettingsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- DYNAMIC HEADER --- */}
+      {/* --- HEADER --- */}
       {!isAdvancedMode ? (
-        // SIMPLE MODE HEADER
         <View
           style={{
             flexDirection: "row",
@@ -310,7 +345,6 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        // ADVANCED MODE HEADER
         <View
           className="flex-row items-center justify-center px-6 py-5 border-b"
           style={{
@@ -329,7 +363,7 @@ export default function SettingsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="p-6 pb-10">
-          {/* Profile Section */}
+          {/* --- ✅ RESTORED PROFILE SECTION --- */}
           <TouchableOpacity
             className="flex-row items-center mb-8"
             onPress={() => navigation.navigate("ProfileSettings")}
@@ -381,7 +415,7 @@ export default function SettingsScreen() {
             />
           </TouchableOpacity>
 
-          {/* --- SECTION 1: UTILITY --- */}
+          {/* Utility Section */}
           <Text
             className="font-bold uppercase tracking-widest mb-3 mt-2"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -466,7 +500,7 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {/* --- SECTION 2: PREFERENCES --- */}
+          {/* Preferences Section */}
           <Text
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -474,7 +508,6 @@ export default function SettingsScreen() {
             Preferences
           </Text>
 
-          {/* ADVANCED MODE TOGGLE */}
           <View
             className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
             style={{
@@ -523,7 +556,7 @@ export default function SettingsScreen() {
             scaledSize={scaledSize}
           />
 
-          {/* Widgets Config - ONLY IN ADVANCED MODE */}
+          {/* --- WIDGETS SECTION --- */}
           {isAdvancedMode && (
             <View
               className="rounded-xl border mb-3 overflow-hidden"
@@ -568,6 +601,7 @@ export default function SettingsScreen() {
                     Preview: Monthly Budget Card
                   </Text>
 
+                  {/* PREVIEW UI */}
                   <View
                     className="p-5 rounded-2xl border"
                     style={{
@@ -646,12 +680,10 @@ export default function SettingsScreen() {
                   <TouchableOpacity
                     className="mt-4 rounded-xl overflow-hidden"
                     onPress={handleAddWidget}
-                    disabled={widgetInstalled || isAddingWidget}
+                    disabled={isAddingWidget}
                     style={{
                       backgroundColor: widgetInstalled
-                        ? isDarkMode
-                          ? "#333"
-                          : "#ccc"
+                        ? theme.buttonPrimary // Use primary color even for updates to look active
                         : theme.buttonPrimary,
                     }}
                   >
@@ -663,9 +695,7 @@ export default function SettingsScreen() {
                           className="font-bold ml-2"
                           style={{ color: "#fff", fontSize: scaledSize(12) }}
                         >
-                          {widgetInstalled
-                            ? "WIDGET INSTALLED"
-                            : "INSTALL WIDGET"}
+                          {widgetInstalled ? "UPDATE WIDGET" : "INSTALL WIDGET"}
                         </Text>
                       )}
                     </View>
@@ -713,7 +743,7 @@ export default function SettingsScreen() {
             />
           </View>
 
-          {/* --- SECTION 3: SUPPORT --- */}
+          {/* Support Section */}
           <Text
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -756,7 +786,7 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
 
-      {/* --- Advanced Mode Modal (No Icon) --- */}
+      {/* Advanced Mode Modal */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -819,7 +849,7 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      {/* Logout Modal (No Icon) */}
+      {/* Logout Modal */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -880,6 +910,52 @@ export default function SettingsScreen() {
                 </View>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={successModalVisible}
+        onRequestClose={() => setSuccessModalVisible(false)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/80">
+          <View
+            className="border p-5 rounded-2xl w-72 items-center"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            }}
+          >
+            <View className="mb-3 bg-green-500/20 p-3 rounded-full">
+              <MaterialIcons name="check" size={24} color="#22c55e" />
+            </View>
+            <Text
+              className="font-bold mb-2 text-center"
+              style={{ color: theme.text, fontSize: scaledSize(18) }}
+            >
+              Widget Added!
+            </Text>
+            <Text
+              className="text-center mb-6 leading-5"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+            >
+              The GridWatch widget has been added to your home screen.
+            </Text>
+            <TouchableOpacity
+              className="w-full h-10 rounded-xl justify-center items-center"
+              style={{ backgroundColor: theme.buttonPrimary }}
+              onPress={() => setSuccessModalVisible(false)}
+            >
+              <Text
+                className="font-bold"
+                style={{ color: "white", fontSize: scaledSize(12) }}
+              >
+                Done
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

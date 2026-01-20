@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -21,7 +22,7 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// --- HUB LISTS FOR CHIPS ---
+// --- CONSTANTS ---
 const PERSONAL_HUBS = [
   { id: "living", name: "Living Room" },
   { id: "kitchen", name: "Kitchen" },
@@ -32,9 +33,7 @@ const SHARED_HUBS = [
   { id: "cielo", name: "Cielo's House", owner: "Cielo Cortado" },
 ];
 
-// --- RAW DATA (Source of Truth) ---
 const RAW_DATA = {
-  // PERSONAL DATA
   personal: {
     Day: [
       {
@@ -106,7 +105,6 @@ const RAW_DATA = {
       },
     ],
   },
-  // SHARED DATA
   shared: {
     Day: [
       {
@@ -173,75 +171,61 @@ const RAW_DATA = {
   },
 };
 
-// Mock Bar Data Generator
-const getBars = (tab, filterId) => {
-  if (tab === "Day")
-    return [
-      { label: "6am", height: filterId === "all" ? "20%" : "10%" },
-      { label: "9am", height: filterId === "all" ? "45%" : "30%" },
-      {
-        label: "12pm",
-        height: filterId === "all" ? "80%" : "90%",
-        active: true,
-      },
-      { label: "3pm", height: filterId === "all" ? "60%" : "40%" },
-      { label: "6pm", height: "70%" },
-      { label: "9pm", height: "30%" },
-    ];
-  if (tab === "Week")
-    return [
-      { label: "Mon", height: "40%" },
-      { label: "Tue", height: "35%" },
-      { label: "Wed", height: "70%", active: true },
-      { label: "Thu", height: "50%" },
-      { label: "Fri", height: "55%" },
-      { label: "Sat", height: "20%" },
-      { label: "Sun", height: "15%" },
-    ];
-  return [
-    { label: "W1", height: "60%" },
-    { label: "W2", height: "85%" },
-    { label: "W3", height: "40%" },
-    { label: "W4", height: "95%", active: true },
-  ];
+// --- HELPER: Get Icon based on device name ---
+const getCategoryIcon = (name) => {
+  const n = name.toLowerCase();
+  if (n.includes("air") || n.includes("ac") || n.includes("conditioner"))
+    return "ac-unit";
+  if (
+    n.includes("fridge") ||
+    n.includes("refrigerator") ||
+    n.includes("freezer")
+  )
+    return "kitchen";
+  if (n.includes("tv") || n.includes("vision")) return "tv";
+  if (n.includes("wash") || n.includes("laundry"))
+    return "local-laundry-service";
+  if (n.includes("light") || n.includes("lamp")) return "lightbulb";
+  if (n.includes("tool") || n.includes("drill")) return "handyman";
+  if (n.includes("garage")) return "garage";
+  if (n.includes("computer") || n.includes("pc")) return "computer";
+  return "bolt"; // Default fallback
+};
+
+// Mock Bar Heights
+const getBars = (tab) => {
+  if (tab === "Day") return [20, 45, 90, 60, 70, 30];
+  if (tab === "Week") return [40, 35, 70, 50, 55, 20, 15];
+  return [60, 85, 40, 95];
+};
+
+const getBarLabels = (tab) => {
+  if (tab === "Day") return ["6a", "9a", "12p", "3p", "6p", "9p"];
+  if (tab === "Week") return ["M", "T", "W", "T", "F", "S", "S"];
+  return ["W1", "W2", "W3", "W4"];
 };
 
 export default function AnalyticsScreen() {
   const navigation = useNavigation();
   const { theme, fontScale } = useTheme();
+  const scaledSize = (size) => size * fontScale;
 
-  const [activeScope, setActiveScope] = useState("personal"); // 'personal' | 'shared'
-  const [activeTab, setActiveTab] = useState("Week"); // 'Day', 'Week', 'Month'
+  const [activeScope, setActiveScope] = useState("personal");
+  const [activeTab, setActiveTab] = useState("Week");
   const [activeHubFilter, setActiveHubFilter] = useState("all");
 
-  const scaledSize = (size) => size * (fontScale || 1);
-
-  // --- DYNAMIC CALCULATION ---
   const currentHubList =
     activeScope === "personal" ? PERSONAL_HUBS : SHARED_HUBS;
   const rawDataList = RAW_DATA[activeScope][activeTab];
 
-  // 1. Filter Data based on selected Hub Chip
   const filteredData =
     activeHubFilter === "all"
       ? rawDataList
       : rawDataList.filter((item) => item.hubId === activeHubFilter);
 
-  // 2. Calculate Total
   const totalValue = filteredData.reduce((acc, item) => acc + item.cost, 0);
-
-  // 3. Labels
-  const labelMap = { Day: "TODAY", Week: "THIS WEEK", Month: "THIS MONTH" };
-  const comparisonMap = {
-    Day: "yesterday",
-    Week: "last week",
-    Month: "last month",
-  };
-
-  const isPositive = activeHubFilter === "all";
-  const comparisonText = isPositive
-    ? `+12% vs. ${comparisonMap[activeTab]}`
-    : `-5% vs. ${comparisonMap[activeTab]}`;
+  const bars = getBars(activeTab);
+  const labels = getBarLabels(activeTab);
 
   const handleScopeChange = (scope) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -256,8 +240,7 @@ export default function AnalyticsScreen() {
 
   return (
     <SafeAreaView
-      className="flex-1"
-      style={{ backgroundColor: theme.background }}
+      style={{ flex: 1, backgroundColor: theme.background }}
       edges={["top", "left", "right"]}
     >
       <StatusBar
@@ -265,423 +248,438 @@ export default function AnalyticsScreen() {
         backgroundColor={theme.background}
       />
 
+      {/* --- HEADER --- */}
       <View
-        className="flex-row items-center justify-center px-6 py-5 border-b"
         style={{
-          backgroundColor: theme.background,
-          borderBottomColor: theme.cardBorder,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingHorizontal: 24,
+          paddingVertical: 16,
         }}
       >
         <Text
-          className="font-bold"
-          style={{ color: theme.text, fontSize: scaledSize(16) }}
+          style={{
+            fontSize: scaledSize(20),
+            fontWeight: "bold",
+            color: theme.text,
+          }}
         >
-          Energy Insights
+          Analytics
         </Text>
+
+        {/* --- PILL SWITCHER --- */}
+        <View
+          style={{
+            flexDirection: "row",
+            backgroundColor: theme.buttonNeutral,
+            borderRadius: 20,
+            padding: 4,
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => handleScopeChange("personal")}
+            style={{
+              paddingVertical: 6,
+              paddingHorizontal: 16,
+              borderRadius: 16,
+              backgroundColor:
+                activeScope === "personal" ? theme.card : "transparent",
+              shadowColor: activeScope === "personal" ? "#000" : "transparent",
+              shadowOpacity: activeScope === "personal" ? 0.1 : 0,
+              shadowRadius: 2,
+              elevation: activeScope === "personal" ? 2 : 0,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: scaledSize(12),
+                fontWeight: "600",
+                color:
+                  activeScope === "personal" ? theme.text : theme.textSecondary,
+              }}
+            >
+              Personal
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => handleScopeChange("shared")}
+            style={{
+              paddingVertical: 6,
+              paddingHorizontal: 16,
+              borderRadius: 16,
+              backgroundColor:
+                activeScope === "shared" ? theme.card : "transparent",
+              shadowColor: activeScope === "shared" ? "#000" : "transparent",
+              shadowOpacity: activeScope === "shared" ? 0.1 : 0,
+              shadowRadius: 2,
+              elevation: activeScope === "shared" ? 2 : 0,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: scaledSize(12),
+                fontWeight: "600",
+                color:
+                  activeScope === "shared" ? theme.text : theme.textSecondary,
+              }}
+            >
+              Shared
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View className="px-6 pb-10 pt-6">
-          {/* --- SCOPE TOGGLE (Personal / Shared) --- */}
-          <View
-            className="flex-row p-1 rounded-xl mb-4"
-            style={{ backgroundColor: theme.buttonNeutral }}
-          >
-            <TouchableOpacity
-              onPress={() => handleScopeChange("personal")}
-              className="flex-1 py-2 rounded-lg items-center justify-center"
-              style={{
-                backgroundColor:
-                  activeScope === "personal" ? theme.card : "transparent",
-                shadowColor:
-                  activeScope === "personal" ? "#000" : "transparent",
-                shadowOpacity: activeScope === "personal" ? 0.1 : 0,
-                shadowRadius: 2,
-                elevation: activeScope === "personal" ? 2 : 0,
-              }}
-            >
-              <Text
-                className="font-bold"
-                style={{
-                  color:
-                    activeScope === "personal"
-                      ? theme.text
-                      : theme.textSecondary,
-                  fontSize: scaledSize(12),
-                }}
-              >
-                My Hubs
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => handleScopeChange("shared")}
-              className="flex-1 py-2 rounded-lg items-center justify-center"
-              style={{
-                backgroundColor:
-                  activeScope === "shared" ? theme.card : "transparent",
-                shadowColor: activeScope === "shared" ? "#000" : "transparent",
-                shadowOpacity: activeScope === "shared" ? 0.1 : 0,
-                shadowRadius: 2,
-                elevation: activeScope === "shared" ? 2 : 0,
-              }}
-            >
-              <Text
-                className="font-bold"
-                style={{
-                  color:
-                    activeScope === "shared" ? theme.text : theme.textSecondary,
-                  fontSize: scaledSize(12),
-                }}
-              >
-                Shared
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* --- HUB FILTER CHIPS (Horizontal Scroll) --- */}
-          <View style={{ marginBottom: 20 }}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingRight: 20 }}
-            >
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
+        {/* --- TIME PERIOD TABS --- */}
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "center",
+            marginTop: 8,
+            marginBottom: 24,
+            gap: 24,
+          }}
+        >
+          {["Day", "Week", "Month"].map((tab) => {
+            const isActive = activeTab === tab;
+            return (
               <TouchableOpacity
-                onPress={() => handleFilterChange("all")}
+                key={tab}
+                onPress={() => setActiveTab(tab)}
                 style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: 20,
-                  borderWidth: 1,
-                  marginRight: 8,
-                  backgroundColor:
-                    activeHubFilter === "all"
-                      ? theme.buttonPrimary
-                      : theme.card,
-                  borderColor:
-                    activeHubFilter === "all"
-                      ? theme.buttonPrimary
-                      : theme.cardBorder,
+                  borderBottomWidth: 2,
+                  borderBottomColor: isActive
+                    ? theme.buttonPrimary
+                    : "transparent",
+                  paddingBottom: 4,
                 }}
               >
                 <Text
                   style={{
-                    fontWeight: "bold",
-                    fontSize: scaledSize(11),
-                    color:
-                      activeHubFilter === "all" ? "#fff" : theme.textSecondary,
+                    fontSize: scaledSize(14),
+                    fontWeight: isActive ? "700" : "500",
+                    color: isActive ? theme.buttonPrimary : theme.textSecondary,
                   }}
                 >
-                  All
+                  {tab}
                 </Text>
               </TouchableOpacity>
+            );
+          })}
+        </View>
 
-              {currentHubList.map((hub) => {
-                const isActive = activeHubFilter === hub.id;
-                return (
-                  <TouchableOpacity
-                    key={hub.id}
-                    onPress={() => handleFilterChange(hub.id)}
-                    style={{
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      borderRadius: 20,
-                      borderWidth: 1,
-                      marginRight: 8,
-                      backgroundColor: isActive
-                        ? theme.buttonPrimary
-                        : theme.card,
-                      borderColor: isActive
-                        ? theme.buttonPrimary
-                        : theme.cardBorder,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontWeight: "bold",
-                        fontSize: scaledSize(11),
-                        color: isActive ? "#fff" : theme.textSecondary,
-                      }}
-                    >
-                      {activeScope === "shared"
-                        ? hub.name.split(" ")[0] + "'s"
-                        : hub.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          {/* --- TIME PERIOD PILLS --- */}
-          <View className="flex-row justify-between mb-8 mt-2">
-            {["Day", "Week", "Month"].map((tab) => {
-              const isActive = activeTab === tab;
-              return (
-                <TouchableOpacity
-                  key={tab}
-                  onPress={() => setActiveTab(tab)}
-                  className="flex-1 mx-1 py-1.5 rounded-full items-center justify-center border"
-                  style={{
-                    backgroundColor: isActive
-                      ? theme.buttonPrimary
-                      : "transparent",
-                    borderColor: isActive
-                      ? theme.buttonPrimary
-                      : theme.cardBorder,
-                  }}
-                >
-                  <Text
-                    className="font-bold uppercase"
-                    style={{
-                      fontSize: scaledSize(10),
-                      color: isActive ? "#FFFFFF" : theme.textSecondary,
-                    }}
-                  >
-                    {tab}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* --- TOTAL & COMPARISON --- */}
-          <View
-            className="items-center mb-8 border-b border-dashed pb-6"
-            style={{ borderBottomColor: theme.cardBorder }}
+        {/* --- HERO: TOTAL COST --- */}
+        <View style={{ alignItems: "center", marginBottom: 32 }}>
+          <Text
+            style={{
+              fontSize: scaledSize(12),
+              color: theme.textSecondary,
+              textTransform: "uppercase",
+              letterSpacing: 1,
+              marginBottom: 4,
+            }}
           >
+            Total Expenditure
+          </Text>
+          <Text
+            style={{
+              fontSize: scaledSize(40),
+              fontWeight: "bold",
+              color: theme.text,
+            }}
+          >
+            ₱
+            {totalValue.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </Text>
+          {/* Simple Trend Indicator */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginTop: 8,
+              backgroundColor: "rgba(34, 197, 94, 0.1)",
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 8,
+            }}
+          >
+            <MaterialIcons name="trending-up" size={14} color="#22c55e" />
             <Text
-              className="uppercase tracking-widest font-bold mb-1.5"
-              style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
-            >
-              {labelMap[activeTab]}
-            </Text>
-            <Text
-              className="font-bold mb-1.5"
-              style={{ color: theme.text, fontSize: scaledSize(36) }}
-            >
-              ₱{" "}
-              {totalValue.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </Text>
-
-            <View
-              className="flex-row items-center px-2 py-1 rounded-md gap-1"
               style={{
-                backgroundColor: isPositive
-                  ? `${theme.buttonDangerText}1A`
-                  : `${theme.buttonPrimary}1A`,
+                color: "#22c55e",
+                fontSize: scaledSize(12),
+                fontWeight: "600",
+                marginLeft: 4,
               }}
             >
-              <MaterialIcons
-                name={isPositive ? "trending-up" : "trending-down"}
-                size={scaledSize(14)}
-                color={
-                  isPositive ? theme.buttonDangerText : theme.buttonPrimary
-                }
-              />
-              <Text
-                style={{
-                  color: isPositive
-                    ? theme.buttonDangerText
-                    : theme.buttonPrimary,
-                  fontSize: scaledSize(12),
-                  fontWeight: "600",
-                }}
-              >
-                {comparisonText}
-              </Text>
-            </View>
-          </View>
-
-          {/* --- BAR CHART --- */}
-          <View
-            className="flex-row justify-between h-44 items-end mb-8 border-b pb-5 px-2"
-            style={{ borderBottomColor: theme.cardBorder }}
-          >
-            {getBars(activeTab, activeHubFilter).map((bar, index) => (
-              <Bar
-                key={index}
-                label={bar.label}
-                height={bar.height}
-                active={bar.active}
-                theme={theme}
-                scaledSize={scaledSize}
-                count={getBars(activeTab, activeHubFilter).length}
-              />
-            ))}
-          </View>
-
-          {/* --- DISTRIBUTION LIST --- */}
-          <View className="flex-row justify-between items-center mb-5">
-            <Text
-              className="font-semibold"
-              style={{ color: theme.text, fontSize: scaledSize(14) }}
-            >
-              Cost Distribution (
-              {activeHubFilter === "all"
-                ? activeScope === "shared"
-                  ? "All Shared"
-                  : "All Hubs"
-                : "Selected"}
-              )
+              +12% vs last {activeTab.toLowerCase()}
             </Text>
           </View>
+        </View>
+
+        {/* --- UPDATED GRAPH (With Grid Lines) --- */}
+        <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
+          <View
+            style={{
+              height: 180,
+              flexDirection: "row",
+              alignItems: "flex-end",
+              justifyContent: "space-between",
+              paddingTop: 20,
+            }}
+          >
+            {/* Background Grid Lines */}
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                { justifyContent: "space-between", paddingBottom: 20 },
+              ]}
+            >
+              <View
+                style={{
+                  borderTopWidth: 1,
+                  borderTopColor: theme.cardBorder,
+                  borderStyle: "dashed",
+                  opacity: 0.5,
+                }}
+              />
+              <View
+                style={{
+                  borderTopWidth: 1,
+                  borderTopColor: theme.cardBorder,
+                  borderStyle: "dashed",
+                  opacity: 0.5,
+                }}
+              />
+              <View
+                style={{
+                  borderTopWidth: 1,
+                  borderTopColor: theme.cardBorder,
+                  borderStyle: "dashed",
+                  opacity: 0.5,
+                }}
+              />
+              {/* X-Axis Line */}
+              <View
+                style={{
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.textSecondary,
+                  opacity: 0.2,
+                }}
+              />
+            </View>
+
+            {/* Bars */}
+            {bars.map((height, idx) => (
+              <View
+                key={idx}
+                style={{
+                  width: `${100 / bars.length}%`,
+                  alignItems: "center",
+                  zIndex: 1,
+                }}
+              >
+                <View
+                  style={{
+                    width: 8,
+                    borderTopLeftRadius: 4,
+                    borderTopRightRadius: 4,
+                    height: `${height}%`,
+                    backgroundColor:
+                      height > 80 ? theme.buttonPrimary : theme.buttonNeutral,
+                    opacity: height > 80 ? 1 : 0.6,
+                  }}
+                />
+                <Text
+                  style={{
+                    marginTop: 8,
+                    fontSize: scaledSize(10),
+                    color: theme.textSecondary,
+                    fontWeight: "600",
+                  }}
+                >
+                  {labels[idx]}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* --- FILTER CHIPS --- */}
+        <View style={{ paddingLeft: 24, marginBottom: 24 }}>
+          <Text
+            style={{
+              fontSize: scaledSize(13),
+              fontWeight: "600",
+              color: theme.text,
+              marginBottom: 10,
+            }}
+          >
+            Filter by Hub
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingRight: 24 }}
+          >
+            <TouchableOpacity
+              onPress={() => handleFilterChange("all")}
+              style={{
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 12,
+                backgroundColor:
+                  activeHubFilter === "all" ? theme.text : theme.buttonNeutral,
+                marginRight: 8,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: scaledSize(12),
+                  fontWeight: "600",
+                  color:
+                    activeHubFilter === "all"
+                      ? theme.background
+                      : theme.textSecondary,
+                }}
+              >
+                All
+              </Text>
+            </TouchableOpacity>
+
+            {currentHubList.map((hub) => (
+              <TouchableOpacity
+                key={hub.id}
+                onPress={() => handleFilterChange(hub.id)}
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 12,
+                  backgroundColor:
+                    activeHubFilter === hub.id
+                      ? theme.text
+                      : theme.buttonNeutral,
+                  marginRight: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: scaledSize(12),
+                    fontWeight: "600",
+                    color:
+                      activeHubFilter === hub.id
+                        ? theme.background
+                        : theme.textSecondary,
+                  }}
+                >
+                  {hub.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* --- BREAKDOWN LIST (Dynamic Icons) --- */}
+        <View style={{ paddingHorizontal: 24 }}>
+          <Text
+            style={{
+              fontSize: scaledSize(13),
+              fontWeight: "600",
+              color: theme.text,
+              marginBottom: 12,
+            }}
+          >
+            Breakdown
+          </Text>
 
           {filteredData.length > 0 ? (
             filteredData.map((item, index) => (
-              <DistributionItem
+              <View
                 key={index}
-                name={item.name}
-                location={item.location}
-                owner={item.owner}
-                cost={"₱ " + item.cost.toFixed(2)}
-                percent={item.percent}
-                color={theme.text}
-                theme={theme}
-                scaledSize={scaledSize}
-                isShared={activeScope === "shared"}
-              />
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: 16,
+                }}
+              >
+                {/* Dynamic Icon Box */}
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 12,
+                    backgroundColor: `${theme.buttonPrimary}15`,
+                  }}
+                >
+                  <MaterialIcons
+                    name={getCategoryIcon(item.name)} // DYNAMIC ICON HERE
+                    size={20}
+                    color={theme.buttonPrimary}
+                  />
+                </View>
+
+                {/* Details */}
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: scaledSize(14),
+                      fontWeight: "600",
+                      color: theme.text,
+                    }}
+                  >
+                    {item.name}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: scaledSize(12),
+                      color: theme.textSecondary,
+                    }}
+                  >
+                    {item.location}
+                  </Text>
+                </View>
+
+                {/* Cost & Bar */}
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text
+                    style={{
+                      fontSize: scaledSize(14),
+                      fontWeight: "bold",
+                      color: theme.text,
+                    }}
+                  >
+                    ₱{item.cost.toFixed(0)}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: scaledSize(11),
+                      color: theme.textSecondary,
+                    }}
+                  >
+                    {item.percent}
+                  </Text>
+                </View>
+              </View>
             ))
           ) : (
-            <Text
-              style={{
-                color: theme.textSecondary,
-                textAlign: "center",
-                marginTop: 20,
-              }}
-            >
-              No data for this selection.
-            </Text>
+            <View style={{ alignItems: "center", paddingVertical: 40 }}>
+              <Text style={{ color: theme.textSecondary }}>
+                No data available for this filter.
+              </Text>
+            </View>
           )}
         </View>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function Bar({ label, height, active, theme, scaledSize, count }) {
-  const barWidth = count > 10 ? "8%" : count > 5 ? "12%" : "20%";
-  return (
-    <View
-      className="items-center h-full justify-end"
-      style={{ width: barWidth }}
-    >
-      <View className="w-2.5 h-full justify-end">
-        <View
-          className="w-full rounded-full"
-          style={{
-            height: height,
-            backgroundColor: active ? theme.buttonPrimary : theme.cardBorder,
-          }}
-        />
-      </View>
-      <Text
-        className="mt-2.5"
-        style={{
-          color: active ? theme.text : theme.textSecondary,
-          fontWeight: active ? "700" : "500",
-          fontSize: scaledSize(10),
-        }}
-      >
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-function DistributionItem({
-  name,
-  location,
-  owner,
-  cost,
-  percent,
-  color,
-  theme,
-  scaledSize,
-  isShared,
-}) {
-  return (
-    <View className="mb-6">
-      <View className="flex-row justify-between items-start mb-2">
-        <View>
-          <Text
-            className="font-medium mb-1" // Added margin-bottom for spacing
-            style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
-          >
-            {name}
-          </Text>
-
-          {/* --- USER ICON LOGIC (FIXED) --- */}
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            {isShared && owner && (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: theme.buttonNeutral, // High contrast background
-                  paddingHorizontal: 6,
-                  paddingVertical: 2,
-                  borderRadius: 4,
-                  marginRight: 6,
-                }}
-              >
-                <MaterialIcons
-                  name="person"
-                  size={scaledSize(10)}
-                  color={theme.text}
-                  style={{ marginRight: 4 }}
-                />
-                <Text
-                  style={{
-                    color: theme.text,
-                    fontSize: scaledSize(10),
-                    fontWeight: "bold",
-                  }}
-                >
-                  {owner.split(" ")[0]}
-                </Text>
-              </View>
-            )}
-            <Text
-              style={{
-                color: theme.textSecondary,
-                fontSize: scaledSize(10),
-                opacity: 0.7,
-              }}
-            >
-              {location}
-            </Text>
-          </View>
-          {/* ----------------------- */}
-        </View>
-
-        <Text
-          className="font-bold"
-          style={{ color: theme.text, fontSize: scaledSize(14) }}
-        >
-          {cost}
-        </Text>
-      </View>
-
-      <View
-        className="h-1.5 w-full rounded-full overflow-hidden mt-1"
-        style={{ backgroundColor: theme.cardBorder }}
-      >
-        <View
-          className="h-full rounded-full"
-          style={{ width: percent, backgroundColor: color }}
-        />
-      </View>
-
-      <Text
-        className="mt-1 text-right"
-        style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
-      >
-        {percent}
-      </Text>
-    </View>
   );
 }

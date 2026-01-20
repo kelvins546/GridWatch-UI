@@ -10,18 +10,21 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
 
 export default function ResetPasswordScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { theme, isDarkMode, fontScale } = useTheme();
+  const { theme, fontScale } = useTheme();
 
   const scaledSize = (size) => size * (fontScale || 1);
+  // Optional: Display the email passed from the previous screen for context
   const userEmail = route.params?.email || "your account";
 
   const [password, setPassword] = useState("");
@@ -38,11 +41,14 @@ export default function ResetPasswordScreen() {
     onPress: null,
   });
 
+  // Password Validation Logic
   const hasLength = password.length >= 8;
   const hasNumber = /\d/.test(password);
   const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password); // Added lower check for completeness
   const hasSpecial = /[!@#$%^&*(),.?":{}|<> ]/.test(password);
   const isMatch = password === confirmPassword && password.length > 0;
+  const isStrong = hasLength && hasNumber && hasUpper && hasSpecial && isMatch;
 
   const showModal = (type, title, message, onPress = null) => {
     setModalConfig({ type, title, message, onPress });
@@ -55,27 +61,76 @@ export default function ResetPasswordScreen() {
       return;
     }
 
-    if (!hasLength || !hasNumber || !hasUpper || !hasSpecial) {
+    if (!isStrong) {
       showModal("error", "Weak Password", "Please follow all requirements.");
       return;
     }
 
-    if (!isMatch) {
-      showModal("error", "Mismatch", "Passwords do not match.");
-      return;
-    }
-
     setIsLoading(true);
-    setTimeout(() => {
+
+    try {
+      // 1. Update Password in Supabase
+      const { error } = await supabase.auth.updateUser({
+        password: password,
+      });
+
+      if (error) throw error;
+
+      // 2. Success - Sign out to force re-login
+      await supabase.auth.signOut();
+
       setIsLoading(false);
       showModal(
         "success",
         "Success!",
-        "Password updated. Please log in again.",
-        () => navigation.reset({ index: 0, routes: [{ name: "Login" }] })
+        "Your password has been updated. Please log in with your new credentials.",
+        () => navigation.reset({ index: 0, routes: [{ name: "Login" }] }),
       );
-    }, 1500);
+    } catch (error) {
+      setIsLoading(false);
+      showModal("error", "Update Failed", error.message);
+    }
   };
+
+  // Styles matching ForgotPasswordScreen
+  const styles = StyleSheet.create({
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.8)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContainer: {
+      borderWidth: 1,
+      padding: 20,
+      borderRadius: 16,
+      width: 288,
+      alignItems: "center",
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+    },
+    modalTitle: {
+      fontWeight: "bold",
+      marginBottom: 8,
+      textAlign: "center",
+      color: theme.text,
+      fontSize: scaledSize(18),
+    },
+    modalBody: {
+      textAlign: "center",
+      marginBottom: 24,
+      lineHeight: 20,
+      color: theme.textSecondary,
+      fontSize: scaledSize(12),
+    },
+    modalButton: {
+      width: "100%",
+      height: 40,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+  });
 
   return (
     <SafeAreaView
@@ -87,6 +142,7 @@ export default function ResetPasswordScreen() {
         backgroundColor={theme.background}
       />
 
+      {/* Loading Overlay */}
       {isLoading && (
         <View className="absolute z-50 w-full h-full bg-black/70 justify-center items-center">
           <ActivityIndicator size="large" color={theme.buttonPrimary} />
@@ -101,32 +157,24 @@ export default function ResetPasswordScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            paddingHorizontal: 32,
+            paddingBottom: 40,
+          }}
           showsVerticalScrollIndicator={false}
         >
-          <View className="p-[30px]">
-            {/* Header */}
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              className="mb-6 flex-row items-center"
-            >
-              <MaterialIcons
-                name="arrow-back"
-                size={scaledSize(20)}
-                color={theme.textSecondary}
-              />
-              <Text
-                className="ml-2 font-medium"
-                style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
-              >
-                Back
-              </Text>
-            </TouchableOpacity>
-
-            <View className="items-center mb-8">
+          <View>
+            {/* Header Icon */}
+            <View className="items-center mb-10">
               <View
-                className="w-20 h-20 rounded-full items-center justify-center mb-4"
-                style={{ backgroundColor: `${theme.buttonPrimary}15` }}
+                className="w-20 h-20 rounded-full items-center justify-center mb-6"
+                style={{
+                  backgroundColor: `${theme.buttonPrimary}15`,
+                  borderWidth: 1,
+                  borderColor: `${theme.buttonPrimary}30`,
+                }}
               >
                 <MaterialIcons
                   name="security"
@@ -144,14 +192,14 @@ export default function ResetPasswordScreen() {
                 className="text-center text-sm"
                 style={{ color: theme.textSecondary }}
               >
-                Create a strong password for{" "}
+                Create a strong password for{"\n"}
                 <Text style={{ color: theme.text, fontWeight: "bold" }}>
                   {userEmail}
                 </Text>
               </Text>
             </View>
 
-            {/* Form */}
+            {/* Inputs */}
             <View className="mb-6">
               <Text
                 className="text-[11px] font-bold uppercase mb-2"
@@ -170,11 +218,11 @@ export default function ResetPasswordScreen() {
                   name="lock"
                   size={20}
                   color={theme.textSecondary}
-                  className="mr-3"
+                  style={{ marginRight: 12 }}
                 />
                 <TextInput
                   className="flex-1 text-sm"
-                  style={{ color: theme.text, marginLeft: 10 }}
+                  style={{ color: theme.text }}
                   placeholder="New Password"
                   placeholderTextColor={theme.textSecondary}
                   secureTextEntry={!showPass}
@@ -207,11 +255,11 @@ export default function ResetPasswordScreen() {
                   name="lock-outline"
                   size={20}
                   color={theme.textSecondary}
-                  className="mr-3"
+                  style={{ marginRight: 12 }}
                 />
                 <TextInput
                   className="flex-1 text-sm"
-                  style={{ color: theme.text, marginLeft: 10 }}
+                  style={{ color: theme.text }}
                   placeholder="Confirm Password"
                   placeholderTextColor={theme.textSecondary}
                   secureTextEntry={!showConfirm}
@@ -271,6 +319,7 @@ export default function ResetPasswordScreen() {
               </View>
             )}
 
+            {/* Submit Button */}
             <TouchableOpacity
               onPress={handleUpdatePassword}
               activeOpacity={0.8}
@@ -287,52 +336,71 @@ export default function ResetPasswordScreen() {
                 </Text>
               </View>
             </TouchableOpacity>
+
+            {/* Back Button (Moved to bottom) */}
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              disabled={isLoading}
+              className="mt-8 items-center justify-center flex-row"
+            >
+              <MaterialIcons
+                name="arrow-back"
+                size={scaledSize(18)}
+                color={theme.textSecondary}
+              />
+              <Text
+                className="font-medium text-sm ml-2"
+                style={{ color: theme.textSecondary }}
+              >
+                Back
+              </Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* COMPACT TIGHT MODAL */}
-      <Modal animationType="fade" transparent={true} visible={modalVisible}>
-        <View className="flex-1 justify-center items-center bg-black/80">
-          <View
-            className="w-[70%] max-w-[260px] border p-5 rounded-2xl items-center"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
-          >
-            {/* NO ICONS AS PER SETTINGS */}
-            <Text
-              className="text-lg font-bold mb-1 text-center"
-              style={{ color: theme.text }}
-            >
-              {modalConfig.title}
-            </Text>
-            <Text
-              className="text-xs text-center mb-5 leading-5"
-              style={{ color: theme.textSecondary }}
-            >
-              {modalConfig.message}
-            </Text>
+      {/* Alert Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => {
+          if (modalConfig.type === "error") setModalVisible(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>{modalConfig.title}</Text>
+            <Text style={styles.modalBody}>{modalConfig.message}</Text>
 
             <TouchableOpacity
-              style={{ width: "50%" }}
+              style={{ width: "100%" }}
               onPress={() => {
                 setModalVisible(false);
                 if (modalConfig.onPress) modalConfig.onPress();
               }}
             >
               <View
-                className="p-3 rounded-xl items-center"
-                style={{
-                  backgroundColor:
-                    modalConfig.type === "success"
-                      ? theme.buttonPrimary
-                      : theme.buttonDangerText,
-                }}
+                style={[
+                  styles.modalButton,
+                  {
+                    backgroundColor:
+                      modalConfig.type === "success"
+                        ? theme.buttonPrimary
+                        : theme.buttonDangerText,
+                  },
+                ]}
               >
-                <Text className="font-bold text-xs text-white uppercase tracking-wider">
-                  {modalConfig.type === "success" ? "OK" : "TRY AGAIN"}
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontWeight: "bold",
+                    fontSize: scaledSize(12),
+                    textTransform: "uppercase",
+                    letterSpacing: 1,
+                  }}
+                >
+                  {modalConfig.type === "success" ? "CONTINUE" : "TRY AGAIN"}
                 </Text>
               </View>
             </TouchableOpacity>

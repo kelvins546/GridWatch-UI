@@ -13,7 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-  Alert, // Added Alert for Google errors
+  Alert, // Added Alert just in case
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -21,11 +21,13 @@ import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 // 1. Import Supabase
 import { supabase } from "../../lib/supabase";
+
+// --- COMMENTED OUT FOR EXPO GO TESTING ---
 // 2. Import Google Sign In
-import {
-  GoogleSignin,
-  statusCodes,
-} from "@react-native-google-signin/google-signin";
+// import {
+//   GoogleSignin,
+//   statusCodes,
+// } from "@react-native-google-signin/google-signin";
 
 const ALLOWED_EMAIL_REGEX =
   /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
@@ -41,21 +43,51 @@ export default function LoginScreen() {
 
   const [touched, setTouched] = useState({});
   const [errors, setErrors] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
+
+  // UPDATED: Default to TRUE to check for session before showing form
+  const [isLoading, setIsLoading] = useState(true);
 
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [redirectOnClose, setRedirectOnClose] = useState(false);
 
   const floatAnim = useRef(new Animated.Value(0)).current;
 
-  // --- CONFIGURE GOOGLE SIGN IN ---
+  // --- NEW: CHECK FOR EXISTING SESSION ON MOUNT ---
   useEffect(() => {
-    GoogleSignin.configure({
-      scopes: ["email", "profile"],
-      webClientId:
-        "279998586082-buisq8vl4tnm3hrga2hb84raaghggnhf.apps.googleusercontent.com",
-    });
+    const checkUserSession = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (session) {
+          // User is already logged in, redirect immediately
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "MainApp" }],
+          });
+        } else {
+          // No user found, stop loading and show login form
+          setIsLoading(false);
+        }
+      } catch (error) {
+        // Error checking session, show login form
+        setIsLoading(false);
+      }
+    };
+
+    checkUserSession();
   }, []);
+
+  // --- CONFIGURE GOOGLE SIGN IN (COMMENTED OUT) ---
+  // useEffect(() => {
+  //   GoogleSignin.configure({
+  //     scopes: ["email", "profile"],
+  //     webClientId:
+  //       "279998586082-buisq8vl4tnm3hrga2hb84raaghggnhf.apps.googleusercontent.com",
+  //   });
+  // }, []);
 
   useEffect(() => {
     Animated.loop(
@@ -70,7 +102,7 @@ export default function LoginScreen() {
           duration: 1500,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     ).start();
   }, []);
 
@@ -96,13 +128,32 @@ export default function LoginScreen() {
     validateField(field, value);
   };
 
-  // --- GOOGLE SIGN IN LOGIC ---
-  const handleGoogleSignIn = async () => {
-    setIsLoading(true);
+  // --- HELPER: LOG LOGIN EVENT ---
+  const logLoginSuccess = async (userId, method) => {
     try {
-      // Force account picker
-      await GoogleSignin.signOut();
+      await supabase.from("app_notifications").insert({
+        user_id: userId,
+        title: "Login Successful",
+        body: `${method} Login • ${Platform.OS.toUpperCase()} • ${new Date().toLocaleTimeString()}`,
+      });
+    } catch (err) {
+      console.log("Failed to log login event:", err);
+    }
+  };
 
+  // --- GOOGLE SIGN IN LOGIC (COMMENTED OUT) ---
+  const handleGoogleSignIn = async () => {
+    // TEMPORARY ALERT FOR EXPO GO TESTING
+    Alert.alert(
+      "Notice",
+      "Google Sign-In is disabled in Expo Go. Please use Email/Password.",
+    );
+
+    /* setIsLoading(true);
+    setRedirectOnClose(false);
+
+    try {
+      await GoogleSignin.signOut();
       await GoogleSignin.hasPlayServices();
       const userInfo = await GoogleSignin.signIn();
       const idToken = userInfo.idToken || userInfo.data?.idToken;
@@ -115,17 +166,30 @@ export default function LoginScreen() {
 
         if (error) throw error;
 
-        // Check if New User or Existing (Same logic as AuthSelection)
         const user = data.user;
         const createdAt = new Date(user.created_at).getTime();
         const lastSignIn = new Date(user.last_sign_in_at).getTime();
-        const isNewUser = lastSignIn - createdAt < 2000;
-
-        setIsLoading(false);
+        // Check if created < 5 seconds ago
+        const isNewUser = lastSignIn - createdAt < 5000;
 
         if (isNewUser) {
-          navigation.navigate("SetupHub", { fromSignup: true });
+          // --- BUG FIX: Reject New Users ---
+          const { error: deleteError } =
+            await supabase.rpc("delete_own_account");
+
+          await supabase.auth.signOut();
+
+          setIsLoading(false);
+          setErrorMessage(
+            "No account found with this email. Please sign up first.",
+          );
+          setRedirectOnClose(true);
+          setErrorModalVisible(true);
         } else {
+          // --- EXISTING USER: SUCCESS ---
+          await logLoginSuccess(user.id, "Google");
+
+          setIsLoading(false);
           navigation.reset({
             index: 0,
             routes: [{ name: "MainApp" }],
@@ -143,9 +207,10 @@ export default function LoginScreen() {
         setErrorModalVisible(true);
       }
     }
+    */
   };
 
-  // --- SUPABASE EMAIL LOGIN LOGIC ---
+  // --- EMAIL LOGIN LOGIC ---
   const handleLogin = async () => {
     const formValues = { email, password };
     let isValid = true;
@@ -168,16 +233,30 @@ export default function LoginScreen() {
       password: password,
     });
 
-    setIsLoading(false);
-
     if (error) {
+      setIsLoading(false);
       setErrorMessage(error.message);
       setErrorModalVisible(true);
     } else {
+      // --- SUCCESSFUL LOGIN ---
+      if (data.user) {
+        await logLoginSuccess(data.user.id, "Email");
+      }
+
+      setIsLoading(false);
+
       navigation.reset({
         index: 0,
         routes: [{ name: "MainApp" }],
       });
+    }
+  };
+
+  const handleModalClose = () => {
+    setErrorModalVisible(false);
+    if (redirectOnClose) {
+      navigation.navigate("AuthSelection");
+      setRedirectOnClose(false);
     }
   };
 
@@ -238,11 +317,20 @@ export default function LoginScreen() {
         backgroundColor={theme.background}
       />
 
+      {/* Loading Overlay (Visible on Mount while checking session) */}
       {isLoading && (
         <View className="absolute z-50 w-full h-full bg-black/70 justify-center items-center">
-          <ActivityIndicator size="large" color={theme.primary} />
-          <Text className="mt-4 font-bold" style={{ color: theme.text }}>
-            Logging in...
+          <ActivityIndicator size="large" color="#B0B0B0" />
+          <Text
+            className="mt-3 font-medium"
+            style={{
+              color: "#B0B0B0",
+              fontSize: 12,
+              letterSpacing: 0.5,
+            }}
+          >
+            {/* Conditional text so it doesn't say "Logging in" on startup */}
+            {email ? "Logging in..." : "Loading..."}
           </Text>
         </View>
       )}
@@ -392,7 +480,7 @@ export default function LoginScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* --- ADDED: GOOGLE SIGN IN BUTTON --- */}
+            {/* --- GOOGLE SIGN IN BUTTON --- */}
             <View className="flex-row items-center my-6">
               <View
                 className="flex-1 h-[1px]"
@@ -465,18 +553,22 @@ export default function LoginScreen() {
         animationType="fade"
         transparent={true}
         visible={errorModalVisible}
-        onRequestClose={() => setErrorModalVisible(false)}
+        onRequestClose={handleModalClose}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Login Failed</Text>
+            <Text style={styles.modalTitle}>
+              {redirectOnClose ? "Account Not Found" : "Login Failed"}
+            </Text>
             <Text style={styles.modalBody}>{errorMessage}</Text>
 
             <TouchableOpacity
               style={styles.modalButton}
-              onPress={() => setErrorModalVisible(false)}
+              onPress={handleModalClose}
             >
-              <Text style={styles.modalButtonText}>TRY AGAIN</Text>
+              <Text style={styles.modalButtonText}>
+                {redirectOnClose ? "GO TO SIGNUP" : "TRY AGAIN"}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

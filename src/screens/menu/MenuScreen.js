@@ -44,7 +44,7 @@ export default function MenuScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchMenuProfile();
-    }, [])
+    }, []),
   );
 
   if (isLoading) {

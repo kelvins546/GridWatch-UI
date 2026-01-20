@@ -10,16 +10,19 @@ import {
   Modal,
   StyleSheet,
   ScrollView,
+  Alert, // Added Alert for Expo Go notification
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
 import { supabase } from "../../lib/supabase";
-import {
-  GoogleSignin,
-  statusCodes,
-} from "@react-native-google-signin/google-signin";
+
+// --- COMMENTED OUT FOR EXPO GO TESTING ---
+// import {
+//   GoogleSignin,
+//   statusCodes,
+// } from "@react-native-google-signin/google-signin";
 
 // --- EMAILJS CONFIGURATION ---
 const EMAILJS_SERVICE_ID = "service_ah3k0xc";
@@ -57,13 +60,14 @@ export default function AuthSelectionScreen() {
     setAlertModalVisible(true);
   };
 
-  useEffect(() => {
-    GoogleSignin.configure({
-      scopes: ["email", "profile"],
-      webClientId:
-        "279998586082-buisq8vl4tnm3hrga2hb84raaghggnhf.apps.googleusercontent.com",
-    });
-  }, []);
+  // --- CONFIGURE GOOGLE SIGN IN (COMMENTED OUT) ---
+  // useEffect(() => {
+  //   GoogleSignin.configure({
+  //     scopes: ["email", "profile"],
+  //     webClientId:
+  //       "279998586082-buisq8vl4tnm3hrga2hb84raaghggnhf.apps.googleusercontent.com",
+  //   });
+  // }, []);
 
   useEffect(() => {
     Animated.loop(
@@ -78,7 +82,7 @@ export default function AuthSelectionScreen() {
           duration: 1500,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     ).start();
   }, []);
 
@@ -107,7 +111,13 @@ export default function AuthSelectionScreen() {
 
   // --- STEP 1: NATIVE GOOGLE SIGN IN & PRE-CHECK ---
   const handleGoogleSignIn = async () => {
-    setLoadingMessage("Checking Account...");
+    // TEMPORARY ALERT FOR EXPO GO TESTING
+    Alert.alert(
+      "Notice",
+      "Google Sign-In is disabled in Expo Go. Please use Email.",
+    );
+
+    /* setLoadingMessage("Checking Account...");
     setIsLoading(true);
     try {
       await GoogleSignin.signOut();
@@ -151,6 +161,7 @@ export default function AuthSelectionScreen() {
       if (error.code === statusCodes.IN_PROGRESS) return;
       showModal("error", "Google Sign-In Error", error.message);
     }
+    */
   };
 
   // --- STEP 2A: EXISTING USER LOGIN ---
@@ -242,7 +253,7 @@ export default function AuthSelectionScreen() {
             avatar_url: meta.photo || null,
           },
         ],
-        { onConflict: "id" }
+        { onConflict: "id" },
       ); // Explicit conflict handling
 
       // --- CRITICAL FIX START ---

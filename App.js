@@ -4,6 +4,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import AppNavigator from "./src/navigation/AppNavigator";
 
 import { ThemeProvider } from "./src/context/ThemeContext";
+import { AuthProvider } from "./src/context/AuthContext"; // <--- IMPORT THIS
 
 const linking = {
   prefixes: ["gridwatch://", "exp://"],
@@ -18,9 +19,12 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <NavigationContainer linking={linking}>
-          <AppNavigator />
-        </NavigationContainer>
+        {/* WRAP AUTH PROVIDER HERE */}
+        <AuthProvider>
+          <NavigationContainer linking={linking}>
+            <AppNavigator />
+          </NavigationContainer>
+        </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

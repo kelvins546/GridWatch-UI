@@ -11,15 +11,27 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  Keyboard,
-  TouchableWithoutFeedback,
+  LayoutAnimation,
+  UIManager,
+  Alert,
+  Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import * as ImagePicker from "expo-image-picker";
+import * as Clipboard from "expo-clipboard";
 import { supabase } from "../../lib/supabase";
+import { decode } from "base64-arraybuffer";
+
+// Enable LayoutAnimation for Android
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // --- HELPER: PASSWORD STRENGTH CHECKER ---
 const checkPasswordStrength = (str) => {
@@ -60,13 +72,33 @@ export default function ProfileSettingsScreen() {
   const [showNewPass, setShowNewPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
 
+  // --- UI TOGGLES ---
+  const [isChangePasswordExpanded, setIsChangePasswordExpanded] =
+    useState(false);
+  const [isAccountControlExpanded, setIsAccountControlExpanded] =
+    useState(false);
+
+  // --- 2FA STATE ---
+  const [is2FAEnabled, setIs2FAEnabled] = useState(false);
+  const [mfaModalVisible, setMfaModalVisible] = useState(false);
+  const [mfaSecret, setMfaSecret] = useState("");
+  const [mfaFactorId, setMfaFactorId] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [isMfaLoading, setIsMfaLoading] = useState(false);
+
   // --- SECURITY GATE STATE ---
   const [isLoading, setIsLoading] = useState(true);
   const [hasPasswordSet, setHasPasswordSet] = useState(false);
-  const [isVerified, setIsVerified] = useState(false); // Controls visibility
+  const [isVerified, setIsVerified] = useState(false);
+
+  // Verification & Setup
   const [verificationPassword, setVerificationPassword] = useState("");
   const [showVerifyPass, setShowVerifyPass] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [setupPasswordMode, setSetupPasswordMode] = useState(false);
+  const [createPassword, setCreatePassword] = useState("");
+  const [confirmCreatePassword, setConfirmCreatePassword] = useState("");
+  const [showCreatePass, setShowCreatePass] = useState(false);
 
   const [modalConfig, setModalConfig] = useState({
     visible: false,
@@ -82,10 +114,40 @@ export default function ProfileSettingsScreen() {
   // --- PASSWORD ANALYSIS ---
   const passAnalysis = checkPasswordStrength(newPassword);
   const isMatch = newPassword === confirmPassword && newPassword.length > 0;
+  const createPassAnalysis = checkPasswordStrength(createPassword);
+  const isCreateMatch =
+    createPassword === confirmCreatePassword && createPassword.length > 0;
 
   useEffect(() => {
     fetchProfile();
+    checkMfaStatus();
   }, []);
+
+  const checkMfaStatus = async () => {
+    try {
+      // 1. Check Auth (Source of Truth)
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (error) throw error;
+      const totpFactor = data.totp.find((f) => f.status === "verified");
+      const isEnabled = !!totpFactor;
+
+      setIs2FAEnabled(isEnabled);
+      if (totpFactor) setMfaFactorId(totpFactor.id);
+
+      // 2. Sync DB if mismatch (Self-healing)
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from("users")
+          .update({ is_2fa_enabled: isEnabled })
+          .eq("id", user.id);
+      }
+    } catch (e) {
+      console.log("MFA Check Error:", e);
+    }
+  };
 
   const fetchProfile = async () => {
     setIsLoading(true);
@@ -98,26 +160,28 @@ export default function ProfileSettingsScreen() {
 
       if (user) {
         setEmail(user.email);
-
-        // Check if user is Email/Password based
         const isEmailProvider =
           user.app_metadata.provider === "email" ||
           (user.app_metadata.providers &&
             user.app_metadata.providers.includes("email"));
+        const hasMetadataPass = user.user_metadata?.has_password === true;
+        const passwordExists = isEmailProvider || hasMetadataPass;
 
-        setHasPasswordSet(isEmailProvider);
-        // If they have a password, they are NOT verified initially.
-        // If they logged in via Google/Apple (no password), they are auto-verified.
-        setIsVerified(!isEmailProvider);
+        setHasPasswordSet(passwordExists);
+        if (!passwordExists) {
+          setSetupPasswordMode(true);
+          setIsVerified(false);
+        } else {
+          setSetupPasswordMode(false);
+          setIsVerified(false);
+        }
 
-        const { data: profile, error: dbError } = await supabase
+        const { data: profile } = await supabase
           .from("users")
           .select("*")
           .eq("id", user.id)
           .single();
-
         const dbData = profile || {};
-
         const meta = user.user_metadata || {};
         const googleName = meta.full_name || meta.name || "";
         const googleParts = googleName.split(" ");
@@ -144,7 +208,6 @@ export default function ProfileSettingsScreen() {
         setZipCode(data.zipCode);
         setStreetAddress(data.streetAddress);
         setAvatarUrl(data.avatarUrl);
-
         setInitialData(data);
       }
     } catch (error) {
@@ -154,21 +217,166 @@ export default function ProfileSettingsScreen() {
     }
   };
 
+  // --- 2FA LOGIC ---
+  const handleToggle2FA = async () => {
+    if (is2FAEnabled) {
+      showModal(
+        "confirm",
+        "Disable 2FA?",
+        "Are you sure you want to turn off Two-Factor Authentication? Your account will be less secure.",
+        disable2FA,
+        null,
+        "Disable",
+        "Cancel",
+      );
+    } else {
+      startMfaEnrollment();
+    }
+  };
+
+  const startMfaEnrollment = async () => {
+    setIsMfaLoading(true);
+    try {
+      const { data, error } = await supabase.auth.mfa.enroll({
+        factorType: "totp",
+      });
+      if (error) throw error;
+
+      setMfaFactorId(data.id);
+      setMfaSecret(data.totp.secret);
+      setMfaCode("");
+      setMfaModalVisible(true);
+    } catch (error) {
+      showModal("error", "Enrollment Failed", error.message);
+    } finally {
+      setIsMfaLoading(false);
+    }
+  };
+
+  const verifyAndEnableMfa = async () => {
+    if (mfaCode.length !== 6) {
+      Alert.alert("Invalid Code", "Please enter the 6-digit code.");
+      return;
+    }
+    setIsMfaLoading(true);
+    try {
+      const challenge = await supabase.auth.mfa.challenge({
+        factorId: mfaFactorId,
+      });
+      if (challenge.error) throw challenge.error;
+
+      const verify = await supabase.auth.mfa.verify({
+        factorId: mfaFactorId,
+        challengeId: challenge.data.id,
+        code: mfaCode,
+      });
+
+      if (verify.error) throw verify.error;
+
+      // --- 2FA ENABLED SUCCESSFULLY ---
+      setIs2FAEnabled(true);
+      setMfaModalVisible(false);
+
+      // --- SYNC TO DATABASE ---
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from("users")
+          .update({ is_2fa_enabled: true }) // <--- UPDATES DB HERE
+          .eq("id", user.id);
+      }
+
+      showModal(
+        "success",
+        "2FA Enabled",
+        "Two-Factor Authentication is now active on your account.",
+      );
+    } catch (error) {
+      Alert.alert("Verification Failed", "Invalid code. Please try again.");
+    } finally {
+      setIsMfaLoading(false);
+    }
+  };
+
+  const disable2FA = async () => {
+    setIsMfaLoading(true);
+    try {
+      const { error } = await supabase.auth.mfa.unenroll({
+        factorId: mfaFactorId,
+      });
+      if (error) throw error;
+
+      setIs2FAEnabled(false);
+      setMfaFactorId("");
+
+      // --- SYNC TO DATABASE ---
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from("users")
+          .update({ is_2fa_enabled: false }) // <--- UPDATES DB HERE
+          .eq("id", user.id);
+      }
+
+      showModal("success", "2FA Disabled", "You have turned off 2FA.");
+    } catch (error) {
+      showModal("error", "Error", error.message);
+    } finally {
+      setIsMfaLoading(false);
+    }
+  };
+
+  const copyToClipboard = async () => {
+    await Clipboard.setStringAsync(mfaSecret);
+    Alert.alert("Copied!", "Secret key copied to clipboard.");
+  };
+
+  // --- EXISTING LOGIC ---
   const verifyIdentity = async () => {
     if (!verificationPassword) return;
     setIsVerifying(true);
-
     const { error } = await supabase.auth.signInWithPassword({
       email: email,
       password: verificationPassword,
     });
-
     setIsVerifying(false);
+    if (error) showModal("error", "Incorrect Password", "Please try again.");
+    else setIsVerified(true);
+  };
 
-    if (error) {
-      showModal("error", "Incorrect Password", "Please try again.");
-    } else {
+  const handleCreatePassword = async () => {
+    if (!createPassword || !confirmCreatePassword) return;
+    if (!createPassAnalysis.isValid) {
+      showModal(
+        "error",
+        "Weak Password",
+        "Please meet all password requirements.",
+      );
+      return;
+    }
+    if (createPassword !== confirmCreatePassword) {
+      showModal("error", "Mismatch", "Passwords do not match.");
+      return;
+    }
+    setIsVerifying(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: createPassword,
+        data: { has_password: true },
+      });
+      if (error) throw error;
+      setHasPasswordSet(true);
+      setSetupPasswordMode(false);
       setIsVerified(true);
+      showModal("success", "Password Set", "Your password has been created.");
+    } catch (error) {
+      showModal("error", "Error", error.message);
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -179,7 +387,7 @@ export default function ProfileSettingsScreen() {
     onConfirm = null,
     onCancel = null,
     confirmText = "Okay",
-    cancelText = "Cancel"
+    cancelText = "Cancel",
   ) => {
     setModalConfig({
       visible: true,
@@ -215,11 +423,11 @@ export default function ProfileSettingsScreen() {
       showModal(
         "confirm",
         "Unsaved Changes",
-        "You have unsaved changes. Discard them?",
+        "Discard changes?",
         () => navigation.goBack(),
         null,
         "Discard",
-        "Keep Editing"
+        "Keep Editing",
       );
     } else {
       navigation.goBack();
@@ -237,18 +445,35 @@ export default function ProfileSettingsScreen() {
     if (!result.canceled) setSelectedImage(result.assets[0]);
   };
 
+  const uploadImage = async (userId, imageAsset) => {
+    try {
+      const fileName = `${userId}/${Date.now()}.jpg`;
+      const fileData = decode(imageAsset.base64);
+      const { error } = await supabase.storage
+        .from("avatars")
+        .upload(fileName, fileData, {
+          contentType: "image/jpeg",
+          upsert: true,
+        });
+      if (error) throw error;
+      const { data } = supabase.storage.from("avatars").getPublicUrl(fileName);
+      return data.publicUrl;
+    } catch (error) {
+      return null;
+    }
+  };
+
   const handleSave = async () => {
     if (!firstName.trim()) {
       showModal("error", "Missing Info", "First Name is required.");
       return;
     }
-
     if (newPassword.length > 0) {
       if (!passAnalysis.isValid) {
         showModal(
           "error",
           "Weak Password",
-          "Please meet all password requirements."
+          "Please meet all password requirements.",
         );
         return;
       }
@@ -257,14 +482,18 @@ export default function ProfileSettingsScreen() {
         return;
       }
     }
-
     setIsLoading(true);
-
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("No user logged in");
+
+      let uploadedAvatarUrl = avatarUrl;
+      if (selectedImage) {
+        const publicUrl = await uploadImage(user.id, selectedImage);
+        if (publicUrl) uploadedAvatarUrl = publicUrl;
+      }
 
       const updates = {
         id: user.id,
@@ -275,19 +504,18 @@ export default function ProfileSettingsScreen() {
         city: city || "",
         zip_code: zipCode || "",
         street_address: streetAddress || "",
-        avatar_url: selectedImage ? selectedImage.uri : avatarUrl,
+        avatar_url: uploadedAvatarUrl,
         role: "resident",
         status: "active",
-        monthly_budget: 2000.0,
       };
 
       const { error: dbError } = await supabase.from("users").upsert(updates);
-
       if (dbError) throw dbError;
 
       if (newPassword) {
         const { error: passError } = await supabase.auth.updateUser({
           password: newPassword,
+          data: { has_password: true },
         });
         if (passError) throw passError;
       }
@@ -295,23 +523,14 @@ export default function ProfileSettingsScreen() {
       setInitialData({ ...initialData, ...updates, firstName, lastName });
       setNewPassword("");
       setConfirmPassword("");
+      setAvatarUrl(uploadedAvatarUrl);
       setSelectedImage(null);
-
-      showModal("success", "Saved", "Profile updated successfully.", () => {});
+      setIsChangePasswordExpanded(false);
+      showModal("success", "Saved", "Profile updated successfully.", null);
     } catch (error) {
       showModal("error", "Save Failed", error.message);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const performDeactivate = async () => {
-    try {
-      await supabase.auth.signOut();
-      setModalConfig((prev) => ({ ...prev, visible: false }));
-      navigation.reset({ index: 0, routes: [{ name: "Landing" }] });
-    } catch (error) {
-      console.log(error);
     }
   };
 
@@ -320,28 +539,33 @@ export default function ProfileSettingsScreen() {
       "delete",
       "Sign Out?",
       "This will sign you out of the app.",
-      performDeactivate,
+      async () => {
+        await supabase.auth.signOut();
+        setModalConfig((prev) => ({ ...prev, visible: false }));
+        navigation.reset({ index: 0, routes: [{ name: "Landing" }] });
+      },
       null,
       "Sign Out",
-      "Cancel"
+      "Cancel",
     );
   };
 
-  const initials = firstName
-    ? firstName.charAt(0).toUpperCase() +
-      (lastName ? lastName.charAt(0).toUpperCase() : "")
-    : email
-    ? email.charAt(0).toUpperCase()
-    : "?";
+  const togglePasswordExpand = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsChangePasswordExpanded(!isChangePasswordExpanded);
+  };
+
+  const toggleAccountControlExpand = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsAccountControlExpanded(!isAccountControlExpanded);
+  };
 
   const displayImageUri = selectedImage ? selectedImage.uri : avatarUrl;
-  const dangerColor = isDarkMode ? "#ff4444" : "#c62828";
-  const dangerBg = isDarkMode
-    ? "rgba(255, 68, 68, 0.05)"
-    : "rgba(198, 40, 40, 0.05)";
-  const dangerBorder = isDarkMode
-    ? "rgba(255, 68, 68, 0.3)"
-    : "rgba(198, 40, 40, 0.2)";
+  const initials = firstName
+    ? firstName.charAt(0)
+    : email
+      ? email.charAt(0)
+      : "?";
 
   if (isLoading && !modalConfig.visible) {
     return (
@@ -354,18 +578,6 @@ export default function ProfileSettingsScreen() {
         }}
       >
         <ActivityIndicator size="large" color="#B0B0B0" />
-        <Text
-          style={{
-            marginTop: 20,
-            color: "#B0B0B0",
-            fontSize: 12,
-            textAlign: "center",
-            width: "100%",
-            fontFamily: theme.fontRegular,
-          }}
-        >
-          Loading...
-        </Text>
       </View>
     );
   }
@@ -374,13 +586,14 @@ export default function ProfileSettingsScreen() {
     <SafeAreaView
       className="flex-1"
       style={{ backgroundColor: theme.background }}
-      edges={["top", "left", "right"]}
+      edges={["top", "left", "right", "bottom"]}
     >
       <StatusBar
         barStyle={theme.statusBarStyle}
         backgroundColor={theme.background}
       />
 
+      {/* HEADER */}
       <View
         className="flex-row items-center justify-center px-6 py-5 border-b"
         style={{
@@ -398,14 +611,12 @@ export default function ProfileSettingsScreen() {
             color={theme.textSecondary}
           />
         </TouchableOpacity>
-
         <Text
           className="font-bold"
           style={{ color: theme.text, fontSize: scaledSize(18) }}
         >
           Edit Profile
         </Text>
-
         {isVerified && (
           <TouchableOpacity
             onPress={handleSave}
@@ -421,13 +632,12 @@ export default function ProfileSettingsScreen() {
         )}
       </View>
 
-      {/* --- SECURITY GATE VIEW (FIXED KEYBOARD OFFSET) --- */}
       {!isVerified ? (
+        // --- SECURITY GATE ---
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          // IMPORTANT: This offset accounts for Header (~60) + Status Bar (~20-40)
-          keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 20}
         >
           <ScrollView
             contentContainerStyle={{
@@ -435,9 +645,8 @@ export default function ProfileSettingsScreen() {
               justifyContent: "center",
               alignItems: "center",
               padding: 32,
-              paddingBottom: 100, // Extra padding at bottom
+              paddingBottom: 150,
             }}
-            keyboardShouldPersistTaps="handled"
           >
             <View
               style={{
@@ -451,7 +660,7 @@ export default function ProfileSettingsScreen() {
               }}
             >
               <MaterialIcons
-                name="lock"
+                name={setupPasswordMode ? "lock-clock" : "lock"}
                 size={40}
                 color={theme.textSecondary}
               />
@@ -462,10 +671,9 @@ export default function ProfileSettingsScreen() {
                 fontWeight: "bold",
                 color: theme.text,
                 marginBottom: 8,
-                textAlign: "center",
               }}
             >
-              Security Verification
+              {setupPasswordMode ? "Setup Password" : "Security Verification"}
             </Text>
             <Text
               style={{
@@ -473,63 +681,119 @@ export default function ProfileSettingsScreen() {
                 color: theme.textSecondary,
                 textAlign: "center",
                 marginBottom: 32,
-                lineHeight: 22,
               }}
             >
-              To view or edit your personal details, please enter your current
-              password.
+              {setupPasswordMode
+                ? "To secure your account, you must set a password first."
+                : "To view or edit details, please enter your password."}
             </Text>
 
             <View style={{ width: "100%", maxWidth: 320 }}>
-              <InputGroup
-                label="Current Password"
-                icon="lock"
-                placeholder="Enter password"
-                isPassword
-                showPassword={showVerifyPass}
-                togglePassword={() => setShowVerifyPass(!showVerifyPass)}
-                value={verificationPassword}
-                onChangeText={setVerificationPassword}
-                theme={theme}
-                scaledSize={scaledSize}
-              />
-
-              <TouchableOpacity
-                onPress={verifyIdentity}
-                disabled={isVerifying || !verificationPassword}
-                style={{
-                  backgroundColor: theme.buttonPrimary,
-                  borderRadius: 12,
-                  height: 48,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginTop: 8,
-                  opacity: isVerifying || !verificationPassword ? 0.7 : 1,
-                }}
-              >
-                {isVerifying ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text
+              {setupPasswordMode ? (
+                <>
+                  <InputGroup
+                    label="Create Password"
+                    icon="lock"
+                    placeholder="New password"
+                    isPassword
+                    showPassword={showCreatePass}
+                    togglePassword={() => setShowCreatePass(!showCreatePass)}
+                    value={createPassword}
+                    onChangeText={setCreatePassword}
+                    theme={theme}
+                    scaledSize={scaledSize}
+                  />
+                  <InputGroup
+                    label="Confirm Password"
+                    icon="lock-outline"
+                    placeholder="Confirm new password"
+                    isPassword
+                    showPassword={showCreatePass}
+                    togglePassword={() => setShowCreatePass(!showCreatePass)}
+                    value={confirmCreatePassword}
+                    onChangeText={setConfirmCreatePassword}
+                    theme={theme}
+                    scaledSize={scaledSize}
+                  />
+                  <TouchableOpacity
+                    onPress={handleCreatePassword}
+                    disabled={isVerifying || !createPassword}
                     style={{
-                      color: "#fff",
-                      fontWeight: "bold",
-                      fontSize: scaledSize(14),
+                      backgroundColor: theme.buttonPrimary,
+                      borderRadius: 12,
+                      height: 48,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      marginTop: 8,
+                      opacity: 0.9,
                     }}
                   >
-                    Verify & Access
-                  </Text>
-                )}
-              </TouchableOpacity>
+                    {isVerifying ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontWeight: "bold",
+                          fontSize: scaledSize(14),
+                        }}
+                      >
+                        Set Password
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <InputGroup
+                    label="Current Password"
+                    icon="lock"
+                    placeholder="Enter password"
+                    isPassword
+                    showPassword={showVerifyPass}
+                    togglePassword={() => setShowVerifyPass(!showVerifyPass)}
+                    value={verificationPassword}
+                    onChangeText={setVerificationPassword}
+                    theme={theme}
+                    scaledSize={scaledSize}
+                  />
+                  <TouchableOpacity
+                    onPress={verifyIdentity}
+                    disabled={isVerifying || !verificationPassword}
+                    style={{
+                      backgroundColor: theme.buttonPrimary,
+                      borderRadius: 12,
+                      height: 48,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      marginTop: 8,
+                    }}
+                  >
+                    {isVerifying ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontWeight: "bold",
+                          fontSize: scaledSize(14),
+                        }}
+                      >
+                        Verify
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
       ) : (
-        /* --- MAIN PROFILE CONTENT (FIXED KEYBOARD OFFSET) --- */
+        // --- MAIN FORM ---
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={{ flex: 1 }}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 20}
         >
           <ScrollView
             showsVerticalScrollIndicator={false}
@@ -603,29 +867,26 @@ export default function ProfileSettingsScreen() {
                 </View>
               </View>
 
-              {/* FORM FIELDS */}
+              {/* PERSONAL INFO */}
               <Text
                 className="font-bold uppercase tracking-widest mb-3"
-                style={{
-                  color: theme.textSecondary,
-                  fontSize: scaledSize(10),
-                }}
+                style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
               >
                 Personal Information
               </Text>
               <InputGroup
                 label="First Name"
                 icon="person"
-                placeholder="Enter first name"
+                placeholder="First name"
                 value={firstName}
                 onChangeText={setFirstName}
                 theme={theme}
                 scaledSize={scaledSize}
               />
               <InputGroup
-                label="Last Name (Optional)"
+                label="Last Name"
                 icon="person-outline"
-                placeholder="Enter last name"
+                placeholder="Last name"
                 value={lastName}
                 onChangeText={setLastName}
                 theme={theme}
@@ -634,47 +895,43 @@ export default function ProfileSettingsScreen() {
               <InputGroup
                 label="Email Address"
                 icon="email"
-                placeholder="Email address"
                 value={email}
                 theme={theme}
                 scaledSize={scaledSize}
                 disabled
               />
 
+              {/* LOCATION */}
               <Text
                 className="font-bold uppercase tracking-widest mb-3 mt-5"
-                style={{
-                  color: theme.textSecondary,
-                  fontSize: scaledSize(10),
-                }}
+                style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
               >
-                Location Details
+                Location
               </Text>
               <InputGroup
                 label="Unit Number"
                 icon="apartment"
-                placeholder="Enter unit number"
+                placeholder="Unit no."
                 value={unitNumber}
                 onChangeText={setUnitNumber}
                 theme={theme}
                 scaledSize={scaledSize}
               />
               <InputGroup
-                label="Region / Province"
+                label="Region"
                 icon="map"
-                placeholder="Enter region"
+                placeholder="Region"
                 value={region}
                 onChangeText={setRegion}
                 theme={theme}
                 scaledSize={scaledSize}
               />
-
               <View className="flex-row gap-3">
                 <View className="flex-1">
                   <InputGroup
                     label="City"
                     icon="location-city"
-                    placeholder="Enter city"
+                    placeholder="City"
                     value={city}
                     onChangeText={setCity}
                     theme={theme}
@@ -683,7 +940,7 @@ export default function ProfileSettingsScreen() {
                 </View>
                 <View className="flex-[0.7]">
                   <InputGroup
-                    label="Zip Code"
+                    label="Zip"
                     icon="markunread-mailbox"
                     placeholder="0000"
                     value={zipCode}
@@ -695,157 +952,240 @@ export default function ProfileSettingsScreen() {
                   />
                 </View>
               </View>
-
               <InputGroup
-                label="Full Address"
+                label="Address"
                 icon="home"
-                placeholder="Enter full address"
+                placeholder="Full address"
                 value={streetAddress}
                 onChangeText={setStreetAddress}
                 theme={theme}
                 scaledSize={scaledSize}
               />
 
-              {/* SECURITY SECTION */}
+              {/* --- REFACTORED SECURITY SECTION (ROWS) --- */}
               <Text
                 className="font-bold uppercase tracking-widest mb-3 mt-5"
-                style={{
-                  color: theme.textSecondary,
-                  fontSize: scaledSize(10),
-                }}
+                style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
               >
-                Security
+                Security & Account
               </Text>
 
-              <InputGroup
-                label="Set a Password"
-                icon="lock"
-                placeholder="Create new password"
-                isPassword
-                showPassword={showNewPass}
-                togglePassword={() => setShowNewPass(!showNewPass)}
-                theme={theme}
-                value={newPassword}
-                onChangeText={setNewPassword}
-                scaledSize={scaledSize}
-              />
-
-              <InputGroup
-                label="Confirm Password"
-                icon="lock-outline"
-                placeholder="Confirm new password"
-                isPassword
-                showPassword={showConfirmPass}
-                togglePassword={() => setShowConfirmPass(!showConfirmPass)}
-                theme={theme}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                scaledSize={scaledSize}
-              />
-
-              {newPassword.length > 0 && (
-                <View
-                  className="mb-5 p-4 rounded-xl border"
-                  style={{
-                    backgroundColor: theme.buttonNeutral,
-                    borderColor:
-                      !passAnalysis.isValid ||
-                      (confirmPassword.length > 0 && !isMatch)
-                        ? theme.buttonDangerText
-                        : theme.cardBorder,
-                  }}
-                >
+              {/* 1. Change Password Row */}
+              <TouchableOpacity
+                onPress={togglePasswordExpand}
+                className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
+                style={{
+                  backgroundColor: theme.card,
+                  borderColor: theme.cardBorder,
+                }}
+              >
+                <View className="flex-row items-center">
+                  <MaterialIcons
+                    name="lock"
+                    size={scaledSize(22)}
+                    color={theme.icon}
+                  />
                   <Text
-                    className="text-[10px] font-bold uppercase mb-2"
-                    style={{ color: theme.textSecondary }}
+                    className="font-medium ml-3"
+                    style={{ color: theme.text, fontSize: scaledSize(14) }}
                   >
-                    Password Strength
+                    Change Password
                   </Text>
-                  <RequirementRow
-                    met={passAnalysis.hasLength}
-                    text="8+ characters"
+                </View>
+                <MaterialIcons
+                  name={
+                    isChangePasswordExpanded
+                      ? "keyboard-arrow-up"
+                      : "chevron-right"
+                  }
+                  size={scaledSize(22)}
+                  color={theme.textSecondary}
+                />
+              </TouchableOpacity>
+
+              {isChangePasswordExpanded && (
+                <View className="mb-4 pl-2">
+                  <InputGroup
+                    label="New Password"
+                    icon="lock"
+                    placeholder="New password"
+                    isPassword
+                    showPassword={showNewPass}
+                    togglePassword={() => setShowNewPass(!showNewPass)}
                     theme={theme}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    scaledSize={scaledSize}
                   />
-                  <RequirementRow
-                    met={passAnalysis.hasNumber}
-                    text="At least 1 number"
+                  <InputGroup
+                    label="Confirm Password"
+                    icon="lock-outline"
+                    placeholder="Confirm password"
+                    isPassword
+                    showPassword={showConfirmPass}
+                    togglePassword={() => setShowConfirmPass(!showConfirmPass)}
                     theme={theme}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    scaledSize={scaledSize}
                   />
-                  <RequirementRow
-                    met={passAnalysis.hasUpper}
-                    text="Uppercase letter"
-                    theme={theme}
-                  />
-                  <RequirementRow
-                    met={passAnalysis.hasLower}
-                    text="Lowercase letter"
-                    theme={theme}
-                  />
-                  <RequirementRow
-                    met={passAnalysis.hasSpecial}
-                    text="Special char (!@#$)"
-                    theme={theme}
-                  />
-                  <View
-                    className="h-[1px] my-2"
-                    style={{ backgroundColor: theme.cardBorder }}
-                  />
-                  <RequirementRow
-                    met={isMatch}
-                    text="Passwords match"
-                    theme={theme}
-                  />
+                  {newPassword.length > 0 && (
+                    <View
+                      className="p-4 rounded-xl border mb-2"
+                      style={{
+                        backgroundColor: theme.buttonNeutral,
+                        borderColor:
+                          !passAnalysis.isValid ||
+                          (!isMatch && confirmPassword.length > 0)
+                            ? theme.buttonDangerText
+                            : theme.cardBorder,
+                      }}
+                    >
+                      <RequirementRow
+                        met={passAnalysis.hasLength}
+                        text="8+ chars"
+                        theme={theme}
+                      />
+                      <RequirementRow
+                        met={passAnalysis.hasNumber}
+                        text="1+ number"
+                        theme={theme}
+                      />
+                      <RequirementRow
+                        met={passAnalysis.hasUpper}
+                        text="Uppercase"
+                        theme={theme}
+                      />
+                      <RequirementRow
+                        met={passAnalysis.hasSpecial}
+                        text="Special char"
+                        theme={theme}
+                      />
+                      <RequirementRow
+                        met={isMatch}
+                        text="Match"
+                        theme={theme}
+                      />
+                    </View>
+                  )}
                 </View>
               )}
 
-              {/* DEACTIVATE */}
+              {/* 2. Enable 2FA Row with CustomSwitch */}
               <View
-                className="border rounded-2xl p-5 mt-8"
+                className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
                 style={{
-                  backgroundColor: dangerBg,
-                  borderColor: dangerBorder,
+                  backgroundColor: theme.card,
+                  borderColor: theme.cardBorder,
                 }}
               >
-                <View className="flex-row items-center gap-2 mb-1.5">
+                <View className="flex-row items-center">
                   <MaterialIcons
-                    name="warning"
-                    size={scaledSize(18)}
-                    color={dangerColor}
+                    name="security"
+                    size={scaledSize(22)}
+                    color={theme.icon}
                   />
                   <Text
-                    className="font-bold"
-                    style={{ color: dangerColor, fontSize: scaledSize(14) }}
+                    className="font-medium ml-3"
+                    style={{ color: theme.text, fontSize: scaledSize(14) }}
                   >
-                    Deactivate Account
+                    Enable 2FA
                   </Text>
                 </View>
-                <Text
-                  className="leading-5 mb-4"
+                <CustomSwitch
+                  value={is2FAEnabled}
+                  onToggle={handleToggle2FA}
+                  theme={theme}
+                />
+              </View>
+
+              {/* 3. Account Ownership Row */}
+              <TouchableOpacity
+                onPress={toggleAccountControlExpand}
+                className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
+                style={{
+                  backgroundColor: theme.card,
+                  borderColor: theme.cardBorder,
+                }}
+              >
+                <View className="flex-row items-center">
+                  <MaterialIcons
+                    name="admin-panel-settings"
+                    size={scaledSize(22)}
+                    color={theme.icon}
+                  />
+                  <Text
+                    className="font-medium ml-3"
+                    style={{ color: theme.text, fontSize: scaledSize(14) }}
+                  >
+                    Account Control
+                  </Text>
+                </View>
+                <MaterialIcons
+                  name={
+                    isAccountControlExpanded
+                      ? "keyboard-arrow-up"
+                      : "chevron-right"
+                  }
+                  size={scaledSize(22)}
+                  color={theme.textSecondary}
+                />
+              </TouchableOpacity>
+
+              {isAccountControlExpanded && (
+                <View
+                  className="mb-6 p-4 rounded-xl border"
                   style={{
-                    color: theme.textSecondary,
-                    fontSize: scaledSize(12),
+                    backgroundColor: isDarkMode
+                      ? "rgba(255, 68, 68, 0.05)"
+                      : "rgba(198, 40, 40, 0.05)",
+                    borderColor: isDarkMode
+                      ? "rgba(255, 68, 68, 0.3)"
+                      : "rgba(198, 40, 40, 0.2)",
                   }}
                 >
-                  This will disable your access and disconnect all linked hubs.
-                </Text>
-                <TouchableOpacity
-                  className="w-full p-3 border rounded-xl items-center"
-                  style={{ borderColor: dangerColor }}
-                  onPress={confirmDeactivate}
-                >
                   <Text
-                    className="font-semibold"
-                    style={{ color: dangerColor, fontSize: scaledSize(12) }}
+                    className="font-bold mb-2"
+                    style={{
+                      color: isDarkMode ? "#ff4444" : "#c62828",
+                      fontSize: scaledSize(14),
+                    }}
                   >
                     Deactivate Account
                   </Text>
-                </TouchableOpacity>
-              </View>
+                  <Text
+                    className="mb-4"
+                    style={{
+                      color: theme.textSecondary,
+                      fontSize: scaledSize(12),
+                    }}
+                  >
+                    This will disable your access and disconnect all linked
+                    hubs.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={confirmDeactivate}
+                    className="w-full p-3 border rounded-xl items-center"
+                    style={{ borderColor: isDarkMode ? "#ff4444" : "#c62828" }}
+                  >
+                    <Text
+                      className="font-semibold"
+                      style={{
+                        color: isDarkMode ? "#ff4444" : "#c62828",
+                        fontSize: scaledSize(12),
+                      }}
+                    >
+                      Deactivate
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
       )}
 
+      {/* MODAL */}
       <CustomModal
         visible={modalConfig.visible}
         type={modalConfig.type}
@@ -859,11 +1199,170 @@ export default function ProfileSettingsScreen() {
         isDarkMode={isDarkMode}
         scaledSize={scaledSize}
       />
+
+      {/* --- 2FA SETUP MODAL --- */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={mfaModalVisible}
+        onRequestClose={() => {
+          if (!isMfaLoading) setMfaModalVisible(false);
+        }}
+      >
+        <View className="flex-1 justify-center items-center bg-black/90 p-6">
+          <View
+            className="w-full max-w-sm rounded-2xl p-6"
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+              borderWidth: 1,
+            }}
+          >
+            <Text
+              className="text-center font-bold mb-4"
+              style={{ color: theme.text, fontSize: scaledSize(18) }}
+            >
+              Setup 2FA
+            </Text>
+            <Text
+              className="text-center mb-6"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(13) }}
+            >
+              Copy this secret key into your Authenticator App (Google Auth,
+              Authy, etc.)
+            </Text>
+
+            {/* Secret Key Display */}
+            <TouchableOpacity
+              onPress={copyToClipboard}
+              className="p-4 rounded-xl mb-6 items-center border border-dashed"
+              style={{
+                borderColor: theme.textSecondary,
+                backgroundColor: theme.buttonNeutral,
+              }}
+            >
+              <Text
+                className="font-mono font-bold text-center mb-2"
+                style={{ color: theme.buttonPrimary, fontSize: scaledSize(16) }}
+              >
+                {mfaSecret}
+              </Text>
+              <Text
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(10),
+                  textTransform: "uppercase",
+                }}
+              >
+                Tap to Copy
+              </Text>
+            </TouchableOpacity>
+
+            <Text
+              className="mb-2 ml-1 font-bold uppercase"
+              style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
+            >
+              Enter 6-Digit Code
+            </Text>
+            <TextInput
+              style={{
+                backgroundColor: theme.buttonNeutral,
+                color: theme.text,
+                borderRadius: 12,
+                padding: 12,
+                textAlign: "center",
+                fontSize: scaledSize(18),
+                letterSpacing: 4,
+                borderWidth: 1,
+                borderColor: theme.cardBorder,
+                marginBottom: 20,
+              }}
+              placeholder="000 000"
+              placeholderTextColor={theme.textSecondary}
+              keyboardType="number-pad"
+              maxLength={6}
+              value={mfaCode}
+              onChangeText={setMfaCode}
+            />
+
+            <TouchableOpacity
+              onPress={verifyAndEnableMfa}
+              disabled={isMfaLoading}
+              style={{
+                backgroundColor: theme.buttonPrimary,
+                borderRadius: 12,
+                height: 48,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              {isMfaLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontWeight: "bold",
+                    fontSize: scaledSize(14),
+                  }}
+                >
+                  Verify & Enable
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setMfaModalVisible(false)}
+              disabled={isMfaLoading}
+              style={{ marginTop: 16, alignItems: "center" }}
+            >
+              <Text
+                style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+              >
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-// ... InputGroup, RequirementRow, CustomModal helper functions ...
+// --- COPIED CUSTOM SWITCH FROM SETTINGS ---
+function CustomSwitch({ value, onToggle, theme }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onToggle}
+      style={{
+        width: 42,
+        height: 26,
+        borderRadius: 16,
+        backgroundColor: value ? theme.buttonPrimary : theme.buttonNeutral,
+        padding: 2,
+        justifyContent: "center",
+        alignItems: value ? "flex-end" : "flex-start",
+      }}
+    >
+      <View
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          backgroundColor: "#FFFFFF",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 2.5,
+          elevation: 2,
+        }}
+      />
+    </TouchableOpacity>
+  );
+}
+
+// --- HELPERS ---
 function InputGroup({
   label,
   icon,
@@ -974,19 +1473,8 @@ function CustomModal({
   isDarkMode,
   scaledSize,
 }) {
-  let icon = "check-circle",
-    iconColor = theme.buttonPrimary,
-    buttonBg = theme.buttonPrimary;
-  if (type === "error") {
-    icon = "error-outline";
-    iconColor = "#ff4444";
-    buttonBg = "#ff4444";
-  } else if (type === "confirm" || type === "delete") {
-    icon = type === "delete" ? "report-problem" : "help-outline";
-    iconColor = type === "delete" ? "#ff4444" : "#ffaa00";
-    buttonBg = type === "delete" ? "#ff4444" : theme.buttonPrimary;
-  }
-
+  let buttonBg = theme.buttonPrimary;
+  if (type === "error" || type === "delete") buttonBg = "#ff4444";
   return (
     <Modal
       transparent={true}
@@ -996,37 +1484,28 @@ function CustomModal({
     >
       <View className="flex-1 bg-black/80 justify-center items-center z-50">
         <View
-          className="border p-6 rounded-2xl w-[75%] max-w-[280px] items-center"
+          className="border p-5 rounded-2xl w-72 items-center"
           style={{
             backgroundColor: theme.card,
             borderColor: theme.cardBorder,
           }}
         >
-          <MaterialIcons
-            name={icon}
-            size={scaledSize(48)}
-            color={iconColor}
-            style={{ marginBottom: 15 }}
-          />
           <Text
-            className="font-bold mb-2.5 text-center"
+            className="font-bold mb-2 text-center"
             style={{ color: theme.text, fontSize: scaledSize(18) }}
           >
             {title}
           </Text>
           <Text
             className="text-center mb-6 leading-5"
-            style={{
-              color: theme.textSecondary,
-              fontSize: scaledSize(13),
-            }}
+            style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
           >
             {msg}
           </Text>
           <View className="flex-row w-full justify-center gap-2.5">
             {onCancel && (
               <TouchableOpacity
-                className="flex-1 border h-10 justify-center items-center rounded-lg"
+                className="flex-1 border h-10 justify-center items-center rounded-xl"
                 style={{ borderColor: theme.textSecondary }}
                 onPress={onCancel}
               >
@@ -1039,16 +1518,13 @@ function CustomModal({
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              className="flex-1 rounded-lg h-10 justify-center items-center"
+              className="flex-1 h-10 justify-center items-center rounded-xl overflow-hidden"
               style={{ backgroundColor: buttonBg }}
               onPress={onConfirm}
             >
               <Text
                 className="font-bold"
-                style={{
-                  color: isDarkMode ? "#000" : "#fff",
-                  fontSize: scaledSize(12),
-                }}
+                style={{ color: "#fff", fontSize: scaledSize(12) }}
               >
                 {confirmText}
               </Text>

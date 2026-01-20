@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
 
 const ALLOWED_EMAIL_REGEX =
   /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
@@ -25,16 +26,19 @@ export default function ForgotPasswordScreen() {
   const { theme, fontScale } = useTheme();
   const scaledSize = (size) => size * fontScale;
 
+  // --- STATE ---
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [touched, setTouched] = useState(false);
   const [emailError, setEmailError] = useState(null);
 
+  // OTP State
   const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const [timer, setTimer] = useState(120);
+  const [timer, setTimer] = useState(180);
   const [canResend, setCanResend] = useState(false);
 
+  // Alert Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [modalConfig, setModalConfig] = useState({
     type: "error",
@@ -45,6 +49,7 @@ export default function ForgotPasswordScreen() {
 
   const inputRefs = useRef([]);
 
+  // --- EFFECTS ---
   useEffect(() => {
     let interval;
     if (otpModalVisible && timer > 0) {
@@ -57,6 +62,7 @@ export default function ForgotPasswordScreen() {
     return () => clearInterval(interval);
   }, [otpModalVisible, timer]);
 
+  // --- HELPERS ---
   const showModal = (type, title, message, onPress = null) => {
     setModalConfig({ type, title, message, onPress });
     setModalVisible(true);
@@ -70,53 +76,93 @@ export default function ForgotPasswordScreen() {
     return null;
   };
 
-  const handleEmailChange = (text) => {
-    setEmail(text);
-    setTouched(true);
-    setEmailError(validateEmail(text));
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
 
-  const handleSendOtp = async () => {
+  // --- LOGIC ---
+
+  const handleSendCode = async () => {
     setTouched(true);
     const error = validateEmail(email);
     setEmailError(error);
     if (error) return;
 
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+
+    try {
+      // 1. Send OTP via Supabase (Uses the custom HTML template you set in Dashboard)
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+      });
+
+      if (error) throw error;
+
       setOtpModalVisible(true);
-      setTimer(120);
+      setTimer(180);
       setCanResend(false);
       setOtp(["", "", "", "", "", ""]);
-    }, 1500);
+      setTimeout(() => inputRefs.current[0]?.focus(), 500);
+    } catch (err) {
+      showModal("error", "Failed", err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleVerify = async () => {
     const token = otp.join("");
-    if (token.length < 6) {
-      showModal(
-        "error",
-        "Incomplete Code",
-        "Please enter the full 6-digit code."
-      );
-      return;
-    }
+    if (token.length < 6) return;
 
     setIsLoading(true);
-    setTimeout(() => {
+
+    try {
+      // 2. Verify OTP (Logs user in securely)
+      const { error } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: token,
+        type: "email",
+      });
+
+      if (error) throw error;
+
+      setOtpModalVisible(false);
+      navigation.navigate("ResetPassword", { email: email });
+    } catch (err) {
+      showModal("error", "Verification Failed", "Invalid code or expired.");
+    } finally {
       setIsLoading(false);
-      if (token === "123456") {
-        setOtpModalVisible(false);
-        navigation.navigate("ResetPassword", { email: email });
-      } else {
-        showModal(
-          "error",
-          "Verification Failed",
-          "The code is incorrect. Use '123456'."
-        );
-      }
-    }, 1500);
+    }
+  };
+
+  const handleResend = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+    setCanResend(false);
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+      });
+      if (error) throw error;
+
+      setTimer(180);
+      setOtp(["", "", "", "", "", ""]);
+      inputRefs.current[0]?.focus();
+    } catch (err) {
+      showModal("error", "Resend Failed", err.message);
+      setCanResend(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailChange = (text) => {
+    setEmail(text);
+    setTouched(true);
+    setEmailError(validateEmail(text));
   };
 
   const handleOtpChange = (text, index) => {
@@ -127,22 +173,6 @@ export default function ForgotPasswordScreen() {
     if (text.length === 0 && index > 0) inputRefs.current[index - 1]?.focus();
   };
 
-  const handleResend = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      setTimer(120);
-      setCanResend(false);
-    }, 1000);
-  };
-
-  const formatTime = (seconds) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s < 10 ? "0" : ""}${s}`;
-  };
-
-  // --- STYLES (MATCHING SIGNUP SCREEN EXACTLY) ---
   const styles = StyleSheet.create({
     modalOverlay: {
       flex: 1,
@@ -150,23 +180,21 @@ export default function ForgotPasswordScreen() {
       justifyContent: "center",
       alignItems: "center",
     },
-    // Standard Modal (Alerts)
     modalContainer: {
       borderWidth: 1,
-      padding: 20, // p-5
-      borderRadius: 16, // rounded-2xl
-      width: 288, // w-72 (Standard)
+      padding: 20,
+      borderRadius: 16,
+      width: 288,
       alignItems: "center",
       backgroundColor: theme.card,
       borderColor: theme.cardBorder,
     },
-    // OTP Modal (Exception - Wider)
     otpModalContainer: {
       borderWidth: 1,
       padding: 24,
       borderRadius: 20,
       width: "85%",
-      maxWidth: 300, // Wider for inputs
+      maxWidth: 300,
       alignItems: "center",
       backgroundColor: theme.card,
       borderColor: theme.cardBorder,
@@ -192,7 +220,6 @@ export default function ForgotPasswordScreen() {
       alignItems: "center",
       justifyContent: "center",
     },
-    // OTP Inputs (Matching Signup)
     otpInput: {
       width: 42,
       height: 50,
@@ -204,7 +231,7 @@ export default function ForgotPasswordScreen() {
       backgroundColor: theme.buttonNeutral,
       borderColor: theme.cardBorder,
       color: theme.text,
-      marginHorizontal: 1, // Tight spacing
+      marginHorizontal: 1,
     },
   });
 
@@ -218,10 +245,14 @@ export default function ForgotPasswordScreen() {
         backgroundColor={theme.background}
       />
 
+      {/* --- UPDATED LOADING STATE --- */}
       {isLoading && (
         <View className="absolute z-50 w-full h-full bg-black/70 justify-center items-center">
-          <ActivityIndicator size="large" color={theme.buttonPrimary} />
-          <Text className="mt-4 font-bold" style={{ color: theme.text }}>
+          <ActivityIndicator size="large" color="#ffffff" />
+          <Text
+            className="mt-3 font-medium"
+            style={{ color: "#d1d5db", fontSize: scaledSize(12) }}
+          >
             Processing...
           </Text>
         </View>
@@ -232,11 +263,15 @@ export default function ForgotPasswordScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            paddingHorizontal: 32,
+            paddingBottom: 40,
+          }}
           showsVerticalScrollIndicator={false}
         >
-          <View className="p-[30px]">
-            {/* Header Icon Section */}
+          <View>
             <View className="items-center mb-10">
               <View
                 className="w-20 h-20 rounded-full items-center justify-center mb-6"
@@ -317,12 +352,16 @@ export default function ForgotPasswordScreen() {
                   autoCapitalize="none"
                   value={email}
                   onChangeText={handleEmailChange}
+                  editable={!isLoading}
                 />
               </View>
             </View>
 
-            {/* Send Code Button */}
-            <TouchableOpacity onPress={handleSendOtp} activeOpacity={0.8}>
+            <TouchableOpacity
+              onPress={handleSendCode}
+              activeOpacity={0.8}
+              disabled={isLoading}
+            >
               <View
                 className="p-4 rounded-2xl items-center shadow-sm"
                 style={{ backgroundColor: theme.buttonPrimary }}
@@ -336,9 +375,9 @@ export default function ForgotPasswordScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* Centered Back to Login Button */}
             <TouchableOpacity
               onPress={() => navigation.goBack()}
+              disabled={isLoading}
               className="mt-8 items-center justify-center flex-row"
             >
               <MaterialIcons
@@ -357,18 +396,23 @@ export default function ForgotPasswordScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* --- OTP MODAL (MATCHING SIGNUP EXCEPTION) --- */}
+      {/* OTP MODAL */}
       <Modal
         animationType="fade"
         transparent={true}
         visible={otpModalVisible}
-        onRequestClose={() => setOtpModalVisible(false)}
+        onRequestClose={() => {
+          if (!isLoading) setOtpModalVisible(false);
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.otpModalContainer}>
             <Text style={styles.modalTitle}>Verify Email</Text>
             <Text style={styles.modalBody}>
-              Enter the 6-digit code. (Use 123456)
+              Enter the 6-digit code sent to{"\n"}
+              <Text style={{ fontWeight: "bold", color: theme.text }}>
+                {email}
+              </Text>
             </Text>
 
             <View
@@ -390,6 +434,7 @@ export default function ForgotPasswordScreen() {
                   onChangeText={(text) => handleOtpChange(text, index)}
                   placeholder="-"
                   placeholderTextColor={theme.textSecondary}
+                  editable={!isLoading}
                 />
               ))}
             </View>
@@ -397,6 +442,7 @@ export default function ForgotPasswordScreen() {
             <TouchableOpacity
               onPress={handleVerify}
               style={{ width: "100%", marginBottom: 12 }}
+              disabled={isLoading}
             >
               <View
                 style={[
@@ -404,21 +450,27 @@ export default function ForgotPasswordScreen() {
                   { backgroundColor: theme.buttonPrimary },
                 ]}
               >
-                <Text
-                  style={{
-                    color: theme.buttonPrimaryText,
-                    fontWeight: "bold",
-                    fontSize: scaledSize(12),
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                  }}
-                >
-                  VERIFY
-                </Text>
+                {isLoading ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={theme.buttonPrimaryText}
+                  />
+                ) : (
+                  <Text
+                    style={{
+                      color: theme.buttonPrimaryText,
+                      fontWeight: "bold",
+                      fontSize: scaledSize(12),
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                    }}
+                  >
+                    VERIFY
+                  </Text>
+                )}
               </View>
             </TouchableOpacity>
 
-            {/* Centered Bottom Layout like Signup */}
             <View style={{ width: "100%", alignItems: "center", gap: 12 }}>
               <TouchableOpacity disabled={!canResend} onPress={handleResend}>
                 <Text
@@ -434,12 +486,16 @@ export default function ForgotPasswordScreen() {
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => setOtpModalVisible(false)}>
+              <TouchableOpacity
+                onPress={() => setOtpModalVisible(false)}
+                disabled={isLoading}
+              >
                 <Text
                   style={{
                     color: theme.textSecondary,
                     fontSize: scaledSize(12),
                     textDecorationLine: "underline",
+                    opacity: isLoading ? 0.5 : 1,
                   }}
                 >
                   Cancel
@@ -450,7 +506,7 @@ export default function ForgotPasswordScreen() {
         </View>
       </Modal>
 
-      {/* --- STANDARD ALERT MODAL --- */}
+      {/* ERROR MODAL */}
       <Modal
         animationType="fade"
         transparent={true}

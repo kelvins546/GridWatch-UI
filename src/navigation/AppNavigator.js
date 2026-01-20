@@ -1,20 +1,30 @@
-import React, { useRef } from "react";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Animated, TouchableOpacity, View, Platform } from "react-native";
+import React, { useRef, useEffect, useState } from "react";
+import {
+  Animated,
+  TouchableOpacity,
+  View,
+  Platform,
+  ActivityIndicator,
+  Text,
+  StatusBar,
+} from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
+import { useNavigation } from "@react-navigation/native";
+import * as Notifications from "expo-notifications";
+import { supabase } from "../lib/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Auth Screens
+// --- IMPORTS ---
 import LandingScreen from "../screens/auth/LandingScreen";
 import AuthSelectionScreen from "../screens/auth/AuthSelectionScreen";
 import LoginScreen from "../screens/auth/LoginScreen";
 import SignupScreen from "../screens/auth/SignupScreen";
 import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
 import ResetPasswordScreen from "../screens/auth/ResetPasswordScreen";
-
-// Main Screens
 import HomeScreen from "../screens/home/HomeScreen";
 import SimpleHomeScreen from "../screens/home/SimpleHomeScreen";
 import AnalyticsScreen from "../screens/analytics/AnalyticsScreen";
@@ -22,8 +32,6 @@ import SimpleAnalyticsScreen from "../screens/analytics/SimpleAnalyticsScreen";
 import BudgetManagerScreen from "../screens/budgets/BudgetManagerScreen";
 import SimpleBudgetManagerScreen from "../screens/budgets/SimpleBudgetManagerScreen";
 import SettingsScreen from "../screens/settings/SettingsScreen";
-
-// Settings & Config
 import ProfileSettingsScreen from "../screens/settings/ProfileSettingsScreen";
 import DeviceConfigScreen from "../screens/settings/DeviceConfigScreen";
 import HelpSupportScreen from "../screens/settings/HelpSupportScreen";
@@ -32,22 +40,16 @@ import NotificationsScreen from "../screens/settings/NotificationsScreen";
 import NotificationSettingsScreen from "../screens/settings/NotificationSettingsScreen";
 import ProviderSetupScreen from "../screens/settings/ProviderSetupScreen";
 import DndCheckScreen from "../screens/settings/DndCheckScreen";
-
-// Budget Sub-screens
 import BudgetDeviceListScreen from "../screens/budgets/BudgetDeviceListScreen";
 import BudgetDetailScreen from "../screens/budgets/BudgetDetailScreen";
 import MonthlyBudgetScreen from "../screens/budgets/MonthlyBudgetScreen";
 import LimitDetailScreen from "../screens/budgets/LimitDetailScreen";
-
-// Menu & Hubs
 import MenuScreen from "../screens/menu/MenuScreen";
 import MyHubsScreen from "../screens/menu/MyHubsScreen";
 import SetupHubScreen from "../screens/menu/SetupHubScreen";
 import HubConfigScreen from "../screens/menu/HubConfigScreen";
 import FamilyAccessScreen from "../screens/menu/FamilyAccessScreen";
 import InvitationsScreen from "../screens/menu/InvitationsScreen";
-
-// Devices
 import FaultDetailScreen from "../screens/devices/FaultDetailScreen";
 import DeviceControlScreen from "../screens/devices/DeviceControlScreen";
 import DisconnectedScreen from "../screens/settings/DisconnectedScreen";
@@ -55,16 +57,22 @@ import DisconnectedScreen from "../screens/settings/DisconnectedScreen";
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-// Bouncing Tab Button Animation
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
 const BounceTabButton = ({ children, onPress }) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
-
   const handlePressIn = () =>
     Animated.spring(scaleValue, {
       toValue: 0.9,
       useNativeDriver: true,
     }).start();
-
   const handlePressOut = () => {
     Animated.spring(scaleValue, {
       toValue: 1,
@@ -74,7 +82,6 @@ const BounceTabButton = ({ children, onPress }) => {
     }).start();
     onPress();
   };
-
   return (
     <TouchableOpacity
       activeOpacity={1}
@@ -95,21 +102,14 @@ const BounceTabButton = ({ children, onPress }) => {
   );
 };
 
-// --- ROUTE WRAPPERS ---
-
-// Switches between Advanced and Simple Home
 const HomeRoute = () => {
   const { isAdvancedMode } = useTheme();
   return isAdvancedMode ? <HomeScreen /> : <SimpleHomeScreen />;
 };
-
-// Switches between Advanced and Simple Analytics
 const AnalyticsRoute = () => {
   const { isAdvancedMode } = useTheme();
   return isAdvancedMode ? <AnalyticsScreen /> : <SimpleAnalyticsScreen />;
 };
-
-// Switches between Advanced and Simple Budget Manager
 const BudgetRoute = () => {
   const { isAdvancedMode } = useTheme();
   return isAdvancedMode ? (
@@ -121,9 +121,15 @@ const BudgetRoute = () => {
 
 function BottomTabNavigator() {
   const { theme, fontScale } = useTheme();
-  const insets = useSafeAreaInsets();
-
+  const navigation = useNavigation();
   const scaledSize = (size) => size * fontScale;
+
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      () => navigation.navigate("Invitations"),
+    );
+    return () => subscription.remove();
+  }, []);
 
   return (
     <Tab.Navigator
@@ -132,20 +138,16 @@ function BottomTabNavigator() {
         tabBarHideOnKeyboard: true,
         tabBarStyle: {
           backgroundColor: theme.card,
-          borderTopColor: theme.cardBorder,
-          borderTopWidth: 1,
-          height: 60 + insets.bottom,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
-          paddingTop: 8,
+          borderTopWidth: 0,
+          height: Platform.OS === "ios" ? 95 : 75,
+          paddingBottom: Platform.OS === "ios" ? 30 : 15,
+          paddingTop: 10,
           elevation: 0,
-          shadowOpacity: 0,
         },
         tabBarActiveTintColor: theme.buttonPrimary,
-        tabBarInactiveTintColor: theme.textSecondary,
         tabBarLabelStyle: {
-          fontSize: scaledSize(10),
-          fontWeight: "600",
-          paddingBottom: 4,
+          fontSize: 10,
+          marginBottom: 0,
         },
       }}
     >
@@ -209,81 +211,266 @@ function BottomTabNavigator() {
   );
 }
 
-// --- UPDATED APP NAVIGATOR ---
-// Now accepts 'initialSession' to determine start screen
-export default function AppNavigator({ initialSession }) {
-  const { isDarkMode } = useTheme();
+export default function AppNavigator() {
+  const { isDarkMode, theme } = useTheme(); // Added theme here
+  // --- 1. DIRECTLY USE authUser (REMOVED LOCAL STATE to prevent sync lag) ---
+  const { user: authUser, isLoading } = useAuth();
 
+  const notifiedIds = useRef(new Set());
+
+  useEffect(() => {
+    async function setupChannel() {
+      if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync("default", {
+          name: "default",
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: "#00A651",
+        });
+      }
+    }
+    setupChannel();
+
+    const loadHistory = async () => {
+      try {
+        const history = await AsyncStorage.getItem("gridwatch_pushed_ids");
+        if (history) {
+          const parsedIds = JSON.parse(history);
+          parsedIds.forEach((id) => notifiedIds.current.add(id));
+        }
+      } catch (error) {
+        console.log("Failed to load notification history", error);
+      }
+    };
+    loadHistory();
+  }, []);
+
+  const sendUniqueNotification = async (id, title, body) => {
+    if (notifiedIds.current.has(id)) {
+      return false;
+    }
+    notifiedIds.current.add(id);
+    try {
+      await AsyncStorage.setItem(
+        "gridwatch_pushed_ids",
+        JSON.stringify(Array.from(notifiedIds.current)),
+      );
+    } catch (e) {
+      console.log("Failed to save history", e);
+    }
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: title,
+        body: body,
+        sound: true,
+      },
+      trigger: null,
+    });
+    return true;
+  };
+
+  useEffect(() => {
+    // --- UPDATED: Use authUser directly instead of currentUser ---
+    if (!authUser || !authUser.email) return;
+
+    const myEmail = authUser.email.trim().toLowerCase();
+    const myId = authUser.id;
+
+    const checkDatabase = async () => {
+      try {
+        const { data: invites } = await supabase
+          .from("hub_invites")
+          .select("id, email, status")
+          .eq("status", "pending");
+
+        if (invites && invites.length > 0) {
+          invites.forEach(async (invite) => {
+            if (invite.email.trim().toLowerCase() === myEmail) {
+              await sendUniqueNotification(
+                invite.id,
+                "New Invitation",
+                "You have a pending GridWatch invitation!",
+              );
+            }
+          });
+        }
+
+        const { data: appNotifs } = await supabase
+          .from("app_notifications")
+          .select("*")
+          .eq("user_id", myId)
+          .eq("is_read", false);
+
+        if (appNotifs && appNotifs.length > 0) {
+          appNotifs.forEach(async (notif) => {
+            const sent = await sendUniqueNotification(
+              notif.id,
+              notif.title,
+              notif.body,
+            );
+            if (sent) {
+              console.log("🔔 NEW NOTIFICATION SENT:", notif.title);
+              await supabase
+                .from("app_notifications")
+                .update({ is_read: true })
+                .eq("id", notif.id);
+            }
+          });
+        }
+      } catch (err) {
+        console.log("Polling Exception:", err);
+      }
+    };
+
+    checkDatabase();
+    const intervalId = setInterval(checkDatabase, 15000);
+
+    const channel = supabase
+      .channel("global_alerts")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "hub_invites" },
+        async (payload) => {
+          if (!payload.new || !payload.new.email) return;
+          if (payload.new.email.trim().toLowerCase() === myEmail) {
+            await sendUniqueNotification(
+              payload.new.id,
+              "New Invitation",
+              "You have been invited to join a Hub!",
+            );
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "app_notifications" },
+        async (payload) => {
+          if (payload.new.user_id === myId) {
+            console.log("✅ REALTIME RECEIVED:", payload.new.title);
+            await sendUniqueNotification(
+              payload.new.id,
+              payload.new.title,
+              payload.new.body,
+            );
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(intervalId);
+    };
+  }, [authUser]); // Depend on authUser directly
+
+  // --- 2. THE STANDARDIZED LOADING SCREEN ---
+  // This blocks the app from rendering unti auth is settled
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: isDarkMode ? "#0f0f0f" : "#ffffff", // Match your app bg
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <StatusBar
+          barStyle={isDarkMode ? "light-content" : "dark-content"}
+          backgroundColor={isDarkMode ? "#0f0f0f" : "#ffffff"}
+        />
+        {/* MATCHING YOUR STANDARD LOADING STYLE */}
+        <ActivityIndicator size="large" color="#B0B0B0" />
+        <Text
+          style={{
+            color: "#B0B0B0",
+            marginTop: 15,
+            fontWeight: "500",
+            fontSize: 12, // Strict size 12
+            letterSpacing: 0.5,
+            textAlign: "center",
+            width: "100%",
+          }}
+        >
+          Loading GridWatch...
+        </Text>
+      </View>
+    );
+  }
+
+  // --- 3. CONDITIONAL RENDERING ---
   return (
     <Stack.Navigator
-      // Logic: If session exists, go to MainApp. If not, go to Landing.
-      initialRouteName={initialSession ? "MainApp" : "Landing"}
       screenOptions={{
         headerShown: false,
-        animation: "slide_from_right",
-        presentation: "card",
         contentStyle: { backgroundColor: isDarkMode ? "#0f0f0f" : "#ffffff" },
       }}
     >
-      {/* Auth Stack */}
-      <Stack.Screen name="Landing" component={LandingScreen} />
-      <Stack.Screen name="AuthSelection" component={AuthSelectionScreen} />
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Signup" component={SignupScreen} />
-      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-      <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+      {authUser ? (
+        // --- AUTHENTICATED GROUP ---
+        <Stack.Group>
+          <Stack.Screen name="MainApp" component={BottomTabNavigator} />
+          <Stack.Screen
+            name="ProfileSettings"
+            component={ProfileSettingsScreen}
+          />
+          <Stack.Screen name="DeviceConfig" component={DeviceConfigScreen} />
+          <Stack.Screen name="Notifications" component={NotificationsScreen} />
+          <Stack.Screen
+            name="NotificationSettings"
+            component={NotificationSettingsScreen}
+          />
+          <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
+          <Stack.Screen name="AboutUs" component={AboutUsScreen} />
+          <Stack.Screen name="ProviderSetup" component={ProviderSetupScreen} />
 
-      {/* Main Tab Stack */}
-      <Stack.Screen name="MainApp" component={BottomTabNavigator} />
+          <Stack.Screen
+            name="BudgetDeviceList"
+            component={BudgetDeviceListScreen}
+          />
+          <Stack.Screen name="BudgetDetail" component={BudgetDetailScreen} />
+          <Stack.Screen name="MonthlyBudget" component={MonthlyBudgetScreen} />
+          <Stack.Screen name="LimitDetail" component={LimitDetailScreen} />
 
-      {/* Settings Stack */}
-      <Stack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
-      <Stack.Screen name="DeviceConfig" component={DeviceConfigScreen} />
-      <Stack.Screen name="Notifications" component={NotificationsScreen} />
-      <Stack.Screen
-        name="NotificationSettings"
-        component={NotificationSettingsScreen}
-      />
-      <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
-      <Stack.Screen name="AboutUs" component={AboutUsScreen} />
-      <Stack.Screen name="ProviderSetup" component={ProviderSetupScreen} />
+          <Stack.Screen name="MyHubs" component={MyHubsScreen} />
+          <Stack.Screen name="SetupHub" component={SetupHubScreen} />
+          <Stack.Screen name="HubConfig" component={HubConfigScreen} />
+          <Stack.Screen name="FamilyAccess" component={FamilyAccessScreen} />
+          <Stack.Screen name="Invitations" component={InvitationsScreen} />
 
-      {/* Budget Stack */}
-      <Stack.Screen
-        name="BudgetDeviceList"
-        component={BudgetDeviceListScreen}
-      />
-      <Stack.Screen name="BudgetDetail" component={BudgetDetailScreen} />
-      <Stack.Screen name="MonthlyBudget" component={MonthlyBudgetScreen} />
-      <Stack.Screen name="LimitDetail" component={LimitDetailScreen} />
+          <Stack.Screen name="Disconnected" component={DisconnectedScreen} />
+          <Stack.Screen name="FaultDetail" component={FaultDetailScreen} />
+          <Stack.Screen name="DeviceControl" component={DeviceControlScreen} />
 
-      {/* Menu & Hubs Stack */}
-      <Stack.Screen name="MyHubs" component={MyHubsScreen} />
-      <Stack.Screen name="SetupHub" component={SetupHubScreen} />
-      <Stack.Screen name="HubConfig" component={HubConfigScreen} />
-      <Stack.Screen name="FamilyAccess" component={FamilyAccessScreen} />
-      <Stack.Screen name="Invitations" component={InvitationsScreen} />
-
-      {/* Device & Status Stack */}
-      <Stack.Screen name="Disconnected" component={DisconnectedScreen} />
-      <Stack.Screen name="FaultDetail" component={FaultDetailScreen} />
-      <Stack.Screen name="DeviceControl" component={DeviceControlScreen} />
-
-      {/* Modals */}
-      <Stack.Screen
-        name="Menu"
-        component={MenuScreen}
-        options={{ presentation: "modal", animation: "slide_from_bottom" }}
-      />
-      <Stack.Screen
-        name="DndCheck"
-        component={DndCheckScreen}
-        options={{
-          presentation: "transparentModal",
-          animation: "fade",
-          headerShown: false,
-        }}
-      />
+          <Stack.Screen
+            name="Menu"
+            component={MenuScreen}
+            options={{ presentation: "modal", animation: "slide_from_bottom" }}
+          />
+          <Stack.Screen
+            name="DndCheck"
+            component={DndCheckScreen}
+            options={{
+              presentation: "transparentModal",
+              animation: "fade",
+              headerShown: false,
+            }}
+          />
+        </Stack.Group>
+      ) : (
+        // --- UNAUTHENTICATED GROUP ---
+        <Stack.Group>
+          <Stack.Screen name="Landing" component={LandingScreen} />
+          <Stack.Screen name="AuthSelection" component={AuthSelectionScreen} />
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Signup" component={SignupScreen} />
+          <Stack.Screen
+            name="ForgotPassword"
+            component={ForgotPasswordScreen}
+          />
+          <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+        </Stack.Group>
+      )}
     </Stack.Navigator>
   );
 }
