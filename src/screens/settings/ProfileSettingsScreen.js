@@ -64,7 +64,18 @@ export default function ProfileSettingsScreen() {
 
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
-  const [initialData, setInitialData] = useState({});
+
+  // Stores the 'clean' state (what is in the database)
+  const [initialData, setInitialData] = useState({
+    firstName: "",
+    lastName: "",
+    phoneNumber: "+63 ",
+    region: "",
+    city: "",
+    zipCode: "",
+    streetAddress: "",
+    avatarUrl: null,
+  });
 
   // Phone OTP
   const [phoneOtpVisible, setPhoneOtpVisible] = useState(false);
@@ -123,6 +134,7 @@ export default function ProfileSettingsScreen() {
         const isPhoneEmpty = !rawPhone || rawPhone.length < 5;
         setIsPhoneEditable(isPhoneEmpty);
 
+        // Set Form State
         setFirstName(firstNameVal);
         setLastName(lastNameVal);
         setPhoneNumber(formattedPhone);
@@ -130,10 +142,12 @@ export default function ProfileSettingsScreen() {
         setCity(dbData.city || "");
         setZipCode(dbData.zip_code || "");
         setStreetAddress(dbData.street_address || "");
-        setAvatarUrl(
-          dbData.avatar_url || meta.avatar_url || meta.picture || null,
-        );
 
+        const currentAvatar =
+          dbData.avatar_url || meta.avatar_url || meta.picture || null;
+        setAvatarUrl(currentAvatar);
+
+        // Set Initial Data for Comparison
         setInitialData({
           firstName: firstNameVal,
           lastName: lastNameVal,
@@ -142,8 +156,7 @@ export default function ProfileSettingsScreen() {
           city: dbData.city || "",
           zipCode: dbData.zip_code || "",
           streetAddress: dbData.street_address || "",
-          avatarUrl:
-            dbData.avatar_url || meta.avatar_url || meta.picture || null,
+          avatarUrl: currentAvatar,
         });
       }
     } catch (error) {
@@ -208,7 +221,6 @@ export default function ProfileSettingsScreen() {
         return;
       }
 
-      // No AI Check - Directly Set Image
       setSelectedImage(asset);
     }
   };
@@ -318,16 +330,21 @@ export default function ProfileSettingsScreen() {
       const { error: dbError } = await supabase.from("users").upsert(updates);
       if (dbError) throw dbError;
 
+      // --- CRITICAL FIX: RESET INITIAL DATA TO CURRENT STATE ---
+      // This tells the "Unsaved Changes" checker that everything is clean.
       setInitialData({
-        ...initialData,
-        ...updates,
-        firstName,
-        lastName,
-        phoneNumber,
+        firstName: firstName,
+        lastName: lastName,
+        phoneNumber: phoneNumber, // Use the formatted phone currently in state
+        region: region,
+        city: city,
+        zipCode: zipCode,
+        streetAddress: streetAddress,
+        avatarUrl: uploadedAvatarUrl,
       });
 
       setAvatarUrl(uploadedAvatarUrl);
-      setSelectedImage(null);
+      setSelectedImage(null); // Clear selected image
       setIsPhoneEditable(false);
 
       showModal("success", "Saved", "Profile details updated successfully.");
@@ -336,6 +353,20 @@ export default function ProfileSettingsScreen() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const hasUnsavedChanges = () => {
+    // We compare current state against the initialData snapshot
+    return (
+      firstName !== initialData.firstName ||
+      lastName !== initialData.lastName ||
+      phoneNumber !== initialData.phoneNumber ||
+      region !== initialData.region ||
+      city !== initialData.city ||
+      zipCode !== initialData.zipCode ||
+      streetAddress !== initialData.streetAddress ||
+      selectedImage !== null
+    );
   };
 
   const handleBackPress = () => {
@@ -375,19 +406,6 @@ export default function ProfileSettingsScreen() {
       confirmText: confirmText || "Okay",
       cancelText: cancelText || "Cancel",
     });
-
-  const hasUnsavedChanges = () => {
-    return (
-      firstName !== initialData.firstName ||
-      lastName !== initialData.lastName ||
-      phoneNumber !== initialData.phoneNumber ||
-      region !== initialData.region ||
-      city !== initialData.city ||
-      zipCode !== initialData.zipCode ||
-      streetAddress !== initialData.streetAddress ||
-      selectedImage !== null
-    );
-  };
 
   const displayImageUri = selectedImage ? selectedImage.uri : avatarUrl;
   const initials = firstName ? firstName.charAt(0) : "?";
@@ -548,7 +566,7 @@ export default function ProfileSettingsScreen() {
               scaledSize={scaledSize}
             />
             <InputGroup
-              label="Last Name"
+              label="Last Name (OPTIONAL)"
               icon="person-outline"
               placeholder="Last name"
               value={lastName}
@@ -1036,6 +1054,7 @@ function InputGroup({
   );
 }
 
+// --- FIXED CUSTOM MODAL STYLING FOR BALANCE ---
 function CustomModal({
   visible,
   type,
@@ -1075,11 +1094,25 @@ function CustomModal({
           >
             {msg}
           </Text>
-          <View className="flex-row w-full justify-center gap-2.5">
+          <View
+            style={{
+              flexDirection: "row",
+              width: "100%",
+              justifyContent: "space-between",
+              gap: 10,
+            }}
+          >
             {onCancel && (
               <TouchableOpacity
-                className="flex-1 border h-10 justify-center items-center rounded-xl"
-                style={{ borderColor: theme.textSecondary }}
+                style={{
+                  flex: 1,
+                  borderWidth: 1,
+                  borderColor: theme.textSecondary,
+                  height: 40,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  borderRadius: 12,
+                }}
                 onPress={onCancel}
               >
                 <Text
@@ -1091,8 +1124,15 @@ function CustomModal({
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              className="flex-1 h-10 justify-center items-center rounded-xl overflow-hidden"
-              style={{ backgroundColor: buttonBg }}
+              style={{
+                flex: 1,
+                backgroundColor: buttonBg,
+                height: 40,
+                justifyContent: "center",
+                alignItems: "center",
+                borderRadius: 12,
+                overflow: "hidden",
+              }}
               onPress={onConfirm}
             >
               <Text

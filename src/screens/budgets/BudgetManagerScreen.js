@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo, useEffect } from "react";
+import React, { useRef, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -51,13 +51,37 @@ export default function BudgetManagerScreen() {
   const [monthlyBudget, setMonthlyBudget] = useState(2800);
   const [billingDate, setBillingDate] = useState("15");
 
+  // --- HELPER: ORDINAL SUFFIX (st, nd, rd, th) ---
+  const getOrdinalSuffix = (day) => {
+    const d = parseInt(day);
+    if (d > 3 && d < 21) return "th"; // Covers 11th, 12th, 13th
+    switch (d % 10) {
+      case 1:
+        return "st";
+      case 2:
+        return "nd";
+      case 3:
+        return "rd";
+      default:
+        return "th";
+    }
+  };
+
+  // --- CALENDAR LOGIC ---
   const today = new Date();
-  const daysInMonth = new Date(
-    today.getFullYear(),
-    today.getMonth() + 1,
-    0,
-  ).getDate();
-  const billingDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const currentMonthName = today.toLocaleString("default", { month: "long" });
+  const currentYear = today.getFullYear();
+
+  const daysInMonth = new Date(currentYear, today.getMonth() + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentYear, today.getMonth(), 1).getDay();
+
+  // Generate calendar grid
+  const calendarData = [
+    ...Array(firstDayOfMonth).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
+  const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   // --- DATA SOURCES ---
   const PERSONAL_HUBS = [
@@ -107,7 +131,6 @@ export default function BudgetManagerScreen() {
   // --- CALCULATIONS ---
   const sourceData = activeTab === "personal" ? PERSONAL_HUBS : SHARED_HUBS;
 
-  // Filter list for display
   const displayList =
     activeHubFilter === "all"
       ? sourceData
@@ -176,8 +199,10 @@ export default function BudgetManagerScreen() {
   };
 
   const handleDateSelect = (day) => {
-    setBillingDate(day.toString());
-    setShowDatePicker(false);
+    if (day) {
+      setBillingDate(day.toString());
+      setShowDatePicker(false);
+    }
   };
 
   const handleBudgetChange = (text) => {
@@ -202,7 +227,6 @@ export default function BudgetManagerScreen() {
       shadowOpacity: 0.1,
       shadowRadius: 12,
     },
-    // Modals
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.7)",
@@ -213,7 +237,8 @@ export default function BudgetManagerScreen() {
       borderWidth: 1,
       padding: 20,
       borderRadius: 16,
-      width: 288,
+      width: "90%",
+      maxWidth: 400,
       alignItems: "center",
       backgroundColor: theme.card,
       borderColor: theme.cardBorder,
@@ -287,7 +312,6 @@ export default function BudgetManagerScreen() {
           Budget
         </Text>
 
-        {/* --- PILL SWITCHER --- */}
         <View
           style={{
             flexDirection: "row",
@@ -364,7 +388,6 @@ export default function BudgetManagerScreen() {
             <Animated.View
               style={[styles.card, { transform: [{ scale: scaleAnim }] }]}
             >
-              {/* Top Row */}
               <View
                 style={{
                   flexDirection: "row",
@@ -403,7 +426,6 @@ export default function BudgetManagerScreen() {
                 />
               </View>
 
-              {/* Progress Bar */}
               <View style={{ marginBottom: 16 }}>
                 <View
                   style={{
@@ -451,7 +473,6 @@ export default function BudgetManagerScreen() {
                 </View>
               </View>
 
-              {/* Footer */}
               <View
                 style={{
                   flexDirection: "row",
@@ -477,7 +498,7 @@ export default function BudgetManagerScreen() {
                 />
                 <StatItem
                   label="Reset Date"
-                  value={`Every ${billingDate}th`}
+                  value={`Every ${billingDate}${getOrdinalSuffix(billingDate)}`}
                   icon="event-repeat"
                   theme={theme}
                   scaledSize={scaledSize}
@@ -487,7 +508,7 @@ export default function BudgetManagerScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* --- HUB FILTER CHIPS --- */}
+        {/* --- HUB FILTER --- */}
         <View style={{ paddingLeft: 24, marginBottom: 20 }}>
           <Text
             style={{
@@ -618,7 +639,8 @@ export default function BudgetManagerScreen() {
                   fontWeight: "bold",
                 }}
               >
-                {billingDate}th
+                {billingDate}
+                {getOrdinalSuffix(billingDate)}
               </Text>
             </View>
           </TouchableOpacity>
@@ -673,7 +695,7 @@ export default function BudgetManagerScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* --- HUB ALLOCATION LIST (CARD STYLE) --- */}
+        {/* --- HUB LIST --- */}
         <View style={{ paddingHorizontal: 24 }}>
           <Text
             style={{
@@ -811,6 +833,7 @@ export default function BudgetManagerScreen() {
         </View>
       </Modal>
 
+      {/* --- DATE PICKER MODAL (TRUE CALENDAR) --- */}
       <Modal visible={showDatePicker} transparent animationType="slide">
         <View
           style={{
@@ -825,14 +848,14 @@ export default function BudgetManagerScreen() {
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               padding: 24,
-              maxHeight: "60%",
+              maxHeight: "70%",
             }}
           >
             <View
               style={{
                 flexDirection: "row",
                 justifyContent: "space-between",
-                marginBottom: 20,
+                marginBottom: 16,
               }}
             >
               <Text
@@ -842,7 +865,7 @@ export default function BudgetManagerScreen() {
                   color: theme.text,
                 }}
               >
-                Billing Cycle Start Day
+                Start Date ({currentMonthName})
               </Text>
               <TouchableOpacity onPress={() => setShowDatePicker(false)}>
                 <MaterialIcons
@@ -852,37 +875,76 @@ export default function BudgetManagerScreen() {
                 />
               </TouchableOpacity>
             </View>
-            <FlatList
-              data={billingDays}
-              numColumns={5}
-              keyExtractor={(i) => i.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => handleDateSelect(item)}
+
+            {/* DAY HEADERS */}
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                marginBottom: 10,
+              }}
+            >
+              {weekDays.map((day) => (
+                <View
+                  key={day}
                   style={{
                     flex: 1,
-                    aspectRatio: 1,
-                    margin: 4,
-                    borderRadius: 8,
-                    justifyContent: "center",
                     alignItems: "center",
-                    backgroundColor:
-                      item.toString() === billingDate
-                        ? primaryColor
-                        : theme.buttonNeutral,
                   }}
                 >
                   <Text
                     style={{
-                      color:
-                        item.toString() === billingDate ? "#fff" : theme.text,
+                      color: theme.textSecondary,
                       fontWeight: "bold",
+                      fontSize: scaledSize(12),
                     }}
                   >
-                    {item}
+                    {day}
                   </Text>
-                </TouchableOpacity>
-              )}
+                </View>
+              ))}
+            </View>
+
+            {/* CALENDAR GRID */}
+            <FlatList
+              data={calendarData}
+              numColumns={7}
+              keyExtractor={(item, index) => index.toString()}
+              renderItem={({ item }) => {
+                // RENDER EMPTY SLOT
+                if (item === null) {
+                  return (
+                    <View style={{ flex: 1, aspectRatio: 1, margin: 2 }} />
+                  );
+                }
+                const isSelected = item.toString() === billingDate;
+                return (
+                  <TouchableOpacity
+                    onPress={() => handleDateSelect(item)}
+                    style={{
+                      flex: 1,
+                      aspectRatio: 1,
+                      margin: 2,
+                      borderRadius: 8,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      backgroundColor: isSelected
+                        ? primaryColor
+                        : theme.buttonNeutral,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: isSelected ? "#fff" : theme.text,
+                        fontWeight: "bold",
+                        fontSize: scaledSize(14),
+                      }}
+                    >
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }}
             />
           </View>
         </View>
@@ -947,7 +1009,6 @@ function StatItem({ label, value, icon, theme, scaledSize }) {
   );
 }
 
-// CARD STYLE RESTORED
 function HubListItem({ data, theme, primaryColor, scaledSize, onPress }) {
   const usagePercent = Math.min((data.totalSpending / data.limit) * 100, 100);
   return (

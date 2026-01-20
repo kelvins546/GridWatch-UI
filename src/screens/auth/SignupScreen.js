@@ -19,7 +19,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import { supabase } from "../../lib/supabase";
 
-// --- CHANGED: USE LOCAL COMPONENT INSTEAD OF BROKEN LIBRARY ---
+// --- CUSTOM LOCAL COMPONENT ---
 import FirebaseRecaptcha from "../../components/FirebaseRecaptcha";
 
 // --- FIREBASE IMPORTS ---
@@ -384,13 +384,13 @@ export default function SignupScreen() {
     startPhoneVerification();
   };
 
-  // --- 1. FIREBASE REAL SMS SEND (USING LOCAL COMPONENT) ---
-  // --- 1. FIREBASE REAL SMS SEND (USING LOCAL COMPONENT) ---
+  // --- 1. FIREBASE REAL SMS SEND ---
   const startPhoneVerification = async () => {
     try {
       const rawPhone = phoneNumber.replace(/\s/g, "");
       const fullPhoneNumber = `+63${rawPhone}`;
 
+      // [NOTE] This works for Real SMS automatically if SHA-1 is set in Firebase
       const phoneProvider = new PhoneAuthProvider(auth);
       const verificationId = await phoneProvider.verifyPhoneNumber(
         fullPhoneNumber,
@@ -404,17 +404,21 @@ export default function SignupScreen() {
       setCanResendPhone(false);
       setPhoneOtp(["", "", "", "", "", ""]);
     } catch (err) {
-      // ALWAYS TURN OFF LOADING
+      // --- FIX: HANDLE CANCEL GRACEFULLY ---
       setIsLoading(false);
 
-      // LOGIC: If user cancelled, just return. Don't show alert.
       if (err.message && err.message.includes("cancelled")) {
         console.log("User cancelled recaptcha");
-        return;
+        return; // Stop here, no alert
       }
 
       console.log("SMS Error:", err);
-      Alert.alert("SMS Failed", `${err.message}`);
+      // Only show alert for real errors
+      if (err.code === "auth/quota-exceeded") {
+        Alert.alert("Limit Reached", "SMS quota exceeded. Try a test number.");
+      } else {
+        Alert.alert("SMS Failed", `${err.message}`);
+      }
     }
   };
 
@@ -691,13 +695,14 @@ export default function SignupScreen() {
     <SafeAreaView
       className="flex-1"
       style={{ backgroundColor: theme.background }}
+      edges={["top", "left", "right"]}
     >
       <StatusBar
         barStyle={theme.statusBarStyle}
         backgroundColor={theme.background}
       />
 
-      {/* --- CHANGED: USING THE LOCAL COMPONENT HERE --- */}
+      {/* --- RECAPTCHA COMPONENT --- */}
       <FirebaseRecaptcha
         ref={recaptchaVerifier}
         firebaseConfig={firebaseConfig}
@@ -715,6 +720,44 @@ export default function SignupScreen() {
         </View>
       )}
 
+      {/* --- STANDARDIZED HEADER --- */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingHorizontal: 24,
+          paddingVertical: 20,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.cardBorder,
+          backgroundColor: theme.background,
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <MaterialIcons
+            name="arrow-back"
+            size={scaledSize(24)}
+            color={theme.textSecondary}
+          />
+        </TouchableOpacity>
+
+        <Text
+          style={{
+            fontSize: scaledSize(18),
+            fontWeight: "700",
+            color: theme.text,
+            textAlign: "center",
+          }}
+        >
+          Create Account
+        </Text>
+
+        <View style={{ width: scaledSize(24) }} />
+      </View>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -728,14 +771,8 @@ export default function SignupScreen() {
           }}
           showsVerticalScrollIndicator={false}
         >
-          <View className="mt-8">
+          <View className="mt-4">
             <View className="mb-6">
-              <Text
-                className="text-[28px] font-extrabold mb-1"
-                style={{ color: theme.text }}
-              >
-                Create Account
-              </Text>
               <Text className="text-sm" style={{ color: theme.textSecondary }}>
                 {getStepTitle()}
               </Text>

@@ -172,7 +172,10 @@ export default function NotificationsScreen() {
           borderBottomColor: theme.cardBorder,
         }}
       >
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{ zIndex: 10 }}
+        >
           <MaterialIcons
             name="arrow-back"
             size={scaledSize(24)}
@@ -180,19 +183,26 @@ export default function NotificationsScreen() {
           />
         </TouchableOpacity>
 
-        <Text
+        <View
           style={{
-            flex: 1,
-            textAlign: "center",
-            fontWeight: "bold",
-            color: theme.text,
-            fontSize: scaledSize(18),
+            position: "absolute",
+            left: 0,
+            right: 0,
+            alignItems: "center",
           }}
         >
-          Activity Logs
-        </Text>
+          <Text
+            style={{
+              fontWeight: "bold",
+              color: theme.text,
+              fontSize: scaledSize(18),
+            }}
+          >
+            Activity Logs
+          </Text>
+        </View>
 
-        <TouchableOpacity onPress={handleMarkAllRead}>
+        <TouchableOpacity onPress={handleMarkAllRead} style={{ zIndex: 10 }}>
           <Text
             style={{
               color: theme.buttonPrimary,

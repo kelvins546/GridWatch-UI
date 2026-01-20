@@ -1,5 +1,4 @@
 import React, { useRef, useEffect, useState, useMemo, forwardRef } from "react";
-
 import {
   View,
   Text,
@@ -16,12 +15,12 @@ import {
   UIManager,
   StyleSheet,
 } from "react-native";
-
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useIsFocused } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase"; // Import Supabase
 
 if (
   Platform.OS === "android" &&
@@ -220,6 +219,7 @@ const TOUR_STEPS = [
 export default function HomeScreen() {
   const { theme, isDarkMode, fontScale } = useTheme();
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
   const scaledSize = (size) => size * (fontScale || 1);
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -230,6 +230,7 @@ export default function HomeScreen() {
   // --- STATE ---
   const [activeTab, setActiveTab] = useState("personal");
   const [activeHubFilter, setActiveHubFilter] = useState("all");
+  const [unreadCount, setUnreadCount] = useState(0); // Notification Count State
 
   // --- REFS ---
   const menuRef = useRef(null);
@@ -247,6 +248,57 @@ export default function HomeScreen() {
   const primaryColor = isDarkMode ? theme.buttonPrimary : "#00995e";
   const dangerColor = isDarkMode ? theme.buttonDangerText : "#cc0000";
   const warningColor = isDarkMode ? "#ffaa00" : "#ff9900";
+
+  // --- NOTIFICATION LISTENER ---
+  useEffect(() => {
+    let subscription;
+
+    const fetchUnreadCount = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Initial Fetch
+        const { count, error } = await supabase
+          .from("app_notifications")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("is_read", false);
+
+        if (!error) setUnreadCount(count || 0);
+
+        // Realtime Subscription
+        subscription = supabase
+          .channel("home_notif_count")
+          .on(
+            "postgres_changes",
+            {
+              event: "*", // Listen to INSERT and UPDATE
+              schema: "public",
+              table: "app_notifications",
+              filter: `user_id=eq.${user.id}`,
+            },
+            () => {
+              // Re-fetch count on any change
+              fetchUnreadCount();
+            },
+          )
+          .subscribe();
+      } catch (e) {
+        console.log("Notif Count Error:", e);
+      }
+    };
+
+    if (isFocused) {
+      fetchUnreadCount();
+    }
+
+    return () => {
+      if (subscription) supabase.removeChannel(subscription);
+    };
+  }, [isFocused]);
 
   // --- FILTER LOGIC ---
   useEffect(() => {
@@ -550,12 +602,16 @@ export default function HomeScreen() {
             size={28}
             color={theme.text}
           />
-          <View
-            className="absolute 0 0 bg-[#ff4d4d] rounded-[7px] w-3.5 h-3.5 justify-center items-center border-2"
-            style={{ borderColor: theme.background, top: 4, right: 4 }}
-          >
-            <Text className="text-white text-[8px] font-bold">2</Text>
-          </View>
+          {unreadCount > 0 && (
+            <View
+              className="absolute 0 0 bg-[#ff4d4d] rounded-[7px] w-3.5 h-3.5 justify-center items-center border-2"
+              style={{ borderColor: theme.background, top: 4, right: 4 }}
+            >
+              <Text className="text-white text-[8px] font-bold">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -955,13 +1011,50 @@ const DeviceItem = forwardRef(
     // ... Copy exact DeviceItem logic from previous prompts (kept brief here to fit response limit)
     // The previous logic for DeviceItem with the card styling and status badges is retained.
     const scale = useRef(new Animated.Value(1)).current;
-    // ... animation logic ...
 
-    // Placeholder return to show structure (assume full implementation as before)
+    // --- Device Item Logic Re-implementation ---
+    const handlePressIn = () => {
+      Animated.spring(scale, {
+        toValue: 0.96,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    const handlePressOut = () => {
+      Animated.spring(scale, {
+        toValue: 1,
+        friction: 3,
+        tension: 40,
+        useNativeDriver: true,
+      }).start();
+      if (onPress) onPress();
+    };
+
+    let statusColor = "#22c55e"; // Success green
+    let bgColor = isDarkMode
+      ? "rgba(34, 197, 94, 0.15)"
+      : "rgba(0, 153, 94, 0.15)";
+    let borderColor = "transparent";
+
+    if (data.type === "warning") {
+      statusColor = "#ffaa00"; // Warning Orange
+      bgColor = isDarkMode
+        ? "rgba(255, 170, 0, 0.15)"
+        : "rgba(179, 116, 0, 0.1)";
+    } else if (data.type === "critical") {
+      statusColor = isDarkMode ? "#ff4444" : "#cc0000"; // Critical Red
+      bgColor = isDarkMode ? "rgba(255, 68, 68, 0.15)" : "rgba(204, 0, 0, 0.1)";
+      borderColor = statusColor;
+    } else if (data.type === "off") {
+      statusColor = theme.textSecondary;
+      bgColor = theme.buttonNeutral;
+    }
+
     return (
       <TouchableOpacity
         ref={ref}
-        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
         activeOpacity={1}
         className="w-full mb-3"
       >
@@ -969,16 +1062,81 @@ const DeviceItem = forwardRef(
           className="w-full rounded-[20px] p-4 flex-row items-center border"
           style={{
             backgroundColor: theme.card,
-            borderColor: theme.cardBorder,
+            borderColor:
+              data.type === "critical" ? borderColor : theme.cardBorder,
             transform: [{ scale }],
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            elevation: 2,
           }}
         >
-          {/* ... Device Content ... */}
-          <View className="flex-1">
-            <Text style={{ color: theme.text, fontWeight: "bold" }}>
-              {data.name}
-            </Text>
+          <View
+            className="w-12 h-12 rounded-2xl items-center justify-center mr-4"
+            style={{ backgroundColor: bgColor }}
+          >
+            <MaterialIcons name={data.icon} size={24} color={statusColor} />
           </View>
+
+          <View className="flex-1 justify-center">
+            <View className="flex-row items-center justify-between mb-1">
+              <Text
+                className="font-bold"
+                style={{ color: theme.text, fontSize: scaledSize(15) }}
+              >
+                {data.name}
+              </Text>
+              {data.tag && (
+                <View
+                  className="px-2 py-0.5 rounded text-xs font-bold"
+                  style={{
+                    backgroundColor: theme.buttonNeutral,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: theme.textSecondary,
+                      fontSize: 9,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {data.tag}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <View className="flex-row items-center">
+              <Text
+                style={{
+                  color:
+                    data.type === "off" ? theme.textSecondary : statusColor,
+                  fontWeight: "600",
+                  fontSize: scaledSize(12),
+                  marginRight: 8,
+                }}
+              >
+                {data.cost}
+              </Text>
+              {data.watts !== "0 W" && (
+                <Text
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(12),
+                  }}
+                >
+                  • {data.watts}
+                </Text>
+              )}
+            </View>
+          </View>
+
+          <MaterialIcons
+            name="chevron-right"
+            size={24}
+            color={theme.textSecondary}
+          />
         </Animated.View>
       </TouchableOpacity>
     );
@@ -994,11 +1152,79 @@ const TourOverlay = ({
   onSkip,
   scaledSize,
 }) => {
-  // ... Keep exact TourOverlay logic ...
   if (!layout) return null;
+  // Placeholder structure, actual implementation should render the spotlight/overlay
   return (
-    <Modal transparent visible={true}>
-      <View></View>
+    <Modal transparent visible={true} animationType="fade">
+      <View style={{ flex: 1 }}>
+        {/* Simplified Overlay for context */}
+        <TouchableOpacity
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.7)",
+          }}
+          onPress={onNext}
+        />
+        <View
+          style={{
+            position: "absolute",
+            top: layout.y,
+            left: layout.x,
+            width: layout.width,
+            height: layout.height,
+            borderColor: "white",
+            borderWidth: 2,
+            borderRadius: step.shape === "circle" ? layout.width / 2 : 12,
+          }}
+        />
+        <View
+          style={{
+            position: "absolute",
+            top: layout.y + layout.height + 20,
+            left: 20,
+            right: 20,
+            backgroundColor: theme.card,
+            padding: 20,
+            borderRadius: 16,
+          }}
+        >
+          <Text
+            style={{
+              fontWeight: "bold",
+              fontSize: 18,
+              color: theme.text,
+              marginBottom: 8,
+            }}
+          >
+            {step.title}
+          </Text>
+          <Text
+            style={{
+              color: theme.textSecondary,
+              marginBottom: 16,
+              lineHeight: 20,
+            }}
+          >
+            {step.description}
+          </Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+            <TouchableOpacity onPress={onSkip} style={{ marginRight: 20 }}>
+              <Text style={{ color: theme.textSecondary, fontWeight: "bold" }}>
+                Skip
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onNext}>
+              <Text style={{ color: theme.buttonPrimary, fontWeight: "bold" }}>
+                Next
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
     </Modal>
-  ); // Placeholder
+  );
 };

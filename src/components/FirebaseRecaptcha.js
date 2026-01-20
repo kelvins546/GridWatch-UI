@@ -217,7 +217,7 @@ const FirebaseRecaptcha = forwardRef(
                 originWhitelist={["*"]}
                 source={{
                   html,
-                  baseUrl: "https://gridwatch-auth.firebaseapp.com",
+                  baseUrl: "https://gridwatch-9f80e.firebaseapp.com",
                 }}
                 javaScriptEnabled={true}
                 onMessage={handleMessage}

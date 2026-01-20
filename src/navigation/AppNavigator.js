@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Text,
   StatusBar,
+  Alert, // Added Alert
 } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -17,6 +18,7 @@ import { useNavigation } from "@react-navigation/native";
 import * as Notifications from "expo-notifications";
 import { supabase } from "../lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants"; // Needed for project ID
 
 // --- IMPORTS ---
 import LandingScreen from "../screens/auth/LandingScreen";
@@ -33,7 +35,7 @@ import BudgetManagerScreen from "../screens/budgets/BudgetManagerScreen";
 import SimpleBudgetManagerScreen from "../screens/budgets/SimpleBudgetManagerScreen";
 import SettingsScreen from "../screens/settings/SettingsScreen";
 import ProfileSettingsScreen from "../screens/settings/ProfileSettingsScreen";
-import AccountSettingsScreen from "../screens/settings/AccountSettingsScreen"; // NEW IMPORT
+import AccountSettingsScreen from "../screens/settings/AccountSettingsScreen";
 import DeviceConfigScreen from "../screens/settings/DeviceConfigScreen";
 import HelpSupportScreen from "../screens/settings/HelpSupportScreen";
 import AboutUsScreen from "../screens/settings/AboutUsScreen";
@@ -66,6 +68,55 @@ Notifications.setNotificationHandler({
     shouldSetBadge: true,
   }),
 });
+
+// --- NEW: Function to register for push notifications ---
+async function registerForPushNotificationsAsync() {
+  let token;
+
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("default", {
+      name: "default",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#00A651",
+    });
+  }
+
+  // Check existing permission
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+
+  // If not granted, ask for it
+  if (existingStatus !== "granted") {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+
+  if (finalStatus !== "granted") {
+    console.log("Failed to get push token for push notification!");
+    return;
+  }
+
+  // Get the token
+  try {
+    const projectId =
+      Constants?.expoConfig?.extra?.eas?.projectId ||
+      Constants?.easConfig?.projectId;
+    if (!projectId) {
+      // console.log("Project ID not found (Development Mode)");
+    }
+    token = (
+      await Notifications.getExpoPushTokenAsync({
+        projectId: projectId, // Important for EAS Build
+      })
+    ).data;
+    console.log("Expo Push Token:", token);
+  } catch (e) {
+    console.log("Error fetching token:", e);
+  }
+
+  return token;
+}
 
 const BounceTabButton = ({ children, onPress }) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
@@ -127,7 +178,16 @@ function BottomTabNavigator() {
 
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener(
-      () => navigation.navigate("Invitations"),
+      (response) => {
+        // Handle deep linking or navigation based on notification data
+        const data = response.notification.request.content.data;
+        if (data?.screen) {
+          navigation.navigate(data.screen);
+        } else {
+          // Default behavior
+          navigation.navigate("Invitations");
+        }
+      },
     );
     return () => subscription.remove();
   }, []);
@@ -217,18 +277,22 @@ export default function AppNavigator() {
   const { user: authUser, isLoading } = useAuth();
   const notifiedIds = useRef(new Set());
 
+  // --- INITIALIZE NOTIFICATIONS & PERMISSIONS ---
   useEffect(() => {
-    async function setupChannel() {
-      if (Platform.OS === "android") {
-        await Notifications.setNotificationChannelAsync("default", {
-          name: "default",
-          importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: "#00A651",
-        });
+    // 1. Setup & Request Permissions
+    registerForPushNotificationsAsync().then(async (token) => {
+      if (token && authUser) {
+        // Optional: Save this token to your backend/Supabase 'users' table
+        // so you can send remote pushes later.
+        /*
+          await supabase
+            .from('users')
+            .update({ push_token: token })
+            .eq('id', authUser.id);
+        */
+        console.log("Push Token ready:", token);
       }
-    }
-    setupChannel();
+    });
 
     const loadHistory = async () => {
       try {
@@ -242,7 +306,7 @@ export default function AppNavigator() {
       }
     };
     loadHistory();
-  }, []);
+  }, [authUser]);
 
   const sendUniqueNotification = async (id, title, body) => {
     if (notifiedIds.current.has(id)) {
@@ -274,8 +338,10 @@ export default function AppNavigator() {
     const myEmail = authUser.email.trim().toLowerCase();
     const myId = authUser.id;
 
+    // --- POLLING (Fallback for Database changes) ---
     const checkDatabase = async () => {
       try {
+        // Check Pending Invites
         const { data: invites } = await supabase
           .from("hub_invites")
           .select("id, email, status")
@@ -293,6 +359,7 @@ export default function AppNavigator() {
           });
         }
 
+        // Check Unread App Notifications
         const { data: appNotifs } = await supabase
           .from("app_notifications")
           .select("*")
@@ -308,10 +375,14 @@ export default function AppNavigator() {
             );
             if (sent) {
               console.log("🔔 NEW NOTIFICATION SENT:", notif.title);
+              // Mark as read immediately to avoid re-notifying on next poll
+              // (Optional: depends on your logic preference)
+              /*
               await supabase
                 .from("app_notifications")
                 .update({ is_read: true })
                 .eq("id", notif.id);
+              */
             }
           });
         }
@@ -323,6 +394,7 @@ export default function AppNavigator() {
     checkDatabase();
     const intervalId = setInterval(checkDatabase, 15000);
 
+    // --- REALTIME SUBSCRIPTION ---
     const channel = supabase
       .channel("global_alerts")
       .on(
@@ -407,7 +479,6 @@ export default function AppNavigator() {
             name="ProfileSettings"
             component={ProfileSettingsScreen}
           />
-          {/* --- ADDED ACCOUNT SETTINGS --- */}
           <Stack.Screen
             name="AccountSettings"
             component={AccountSettingsScreen}
