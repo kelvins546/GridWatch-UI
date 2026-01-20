@@ -13,8 +13,8 @@ import {
   Platform,
   LayoutAnimation,
   UIManager,
-  Alert,
   Switch,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -44,6 +44,31 @@ const checkPasswordStrength = (str) => {
   return { hasLength, hasNumber, hasUpper, hasLower, hasSpecial, isValid };
 };
 
+// --- HELPER: PHONE NUMBER FORMATTER (+63 Strict) ---
+const formatPhoneNumber = (text) => {
+  if (!text) return "+63 ";
+
+  // Remove non-numeric characters
+  let cleaned = text.replace(/\D/g, "");
+
+  // If it starts with '63', keep it. If '0', strip it.
+  if (cleaned.startsWith("63")) {
+    cleaned = cleaned.substring(2);
+  } else if (cleaned.startsWith("0")) {
+    cleaned = cleaned.substring(1);
+  }
+
+  // Limit to 10 digits (9XX XXX XXXX)
+  const trimmed = cleaned.slice(0, 10);
+
+  let formatted = "+63";
+  if (trimmed.length > 0) formatted += " " + trimmed.substring(0, 3);
+  if (trimmed.length > 3) formatted += " " + trimmed.substring(3, 6);
+  if (trimmed.length > 6) formatted += " " + trimmed.substring(6, 10);
+
+  return formatted;
+};
+
 export default function ProfileSettingsScreen() {
   const navigation = useNavigation();
   const { theme, isDarkMode, fontScale } = useTheme();
@@ -54,6 +79,7 @@ export default function ProfileSettingsScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("+63 ");
 
   const [unitNumber, setUnitNumber] = useState("");
   const [region, setRegion] = useState("");
@@ -125,7 +151,6 @@ export default function ProfileSettingsScreen() {
 
   const checkMfaStatus = async () => {
     try {
-      // 1. Check Auth (Source of Truth)
       const { data, error } = await supabase.auth.mfa.listFactors();
       if (error) throw error;
       const totpFactor = data.totp.find((f) => f.status === "verified");
@@ -134,7 +159,6 @@ export default function ProfileSettingsScreen() {
       setIs2FAEnabled(isEnabled);
       if (totpFactor) setMfaFactorId(totpFactor.id);
 
-      // 2. Sync DB if mismatch (Self-healing)
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -191,6 +215,9 @@ export default function ProfileSettingsScreen() {
         const data = {
           firstName: dbData.first_name || googleFirst || "",
           lastName: dbData.last_name || googleLast || "",
+          phoneNumber: dbData.phone_number
+            ? formatPhoneNumber(dbData.phone_number)
+            : "+63 ",
           unitNumber: "",
           region: dbData.region || "",
           city: dbData.city || "",
@@ -202,6 +229,7 @@ export default function ProfileSettingsScreen() {
 
         setFirstName(data.firstName);
         setLastName(data.lastName);
+        setPhoneNumber(data.phoneNumber);
         setUnitNumber(data.unitNumber);
         setRegion(data.region);
         setCity(data.city);
@@ -217,7 +245,7 @@ export default function ProfileSettingsScreen() {
     }
   };
 
-  // --- 2FA LOGIC ---
+  // --- 2FA LOGIC (With Robust Cleanup) ---
   const handleToggle2FA = async () => {
     if (is2FAEnabled) {
       showModal(
@@ -234,9 +262,26 @@ export default function ProfileSettingsScreen() {
     }
   };
 
+  // 1. CLEANUP OLD FACTORS ON START
+  const cleanupUnverifiedFactors = async () => {
+    try {
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (!error && data.totp) {
+        const unverified = data.totp.filter((f) => f.status === "unverified");
+        for (const factor of unverified) {
+          await supabase.auth.mfa.unenroll({ factorId: factor.id });
+        }
+      }
+    } catch (e) {
+      console.log("Cleanup warning:", e);
+    }
+  };
+
   const startMfaEnrollment = async () => {
     setIsMfaLoading(true);
     try {
+      await cleanupUnverifiedFactors(); // Remove any stale attempts first
+
       const { data, error } = await supabase.auth.mfa.enroll({
         factorType: "totp",
       });
@@ -253,9 +298,19 @@ export default function ProfileSettingsScreen() {
     }
   };
 
+  // 2. CLEANUP ON CANCEL (Explicit Function)
+  const handleCancelMfaSetup = async () => {
+    if (mfaFactorId) {
+      // If we have an ID but didn't verify, delete it immediately
+      await supabase.auth.mfa.unenroll({ factorId: mfaFactorId });
+      setMfaFactorId("");
+    }
+    setMfaModalVisible(false);
+  };
+
   const verifyAndEnableMfa = async () => {
     if (mfaCode.length !== 6) {
-      Alert.alert("Invalid Code", "Please enter the 6-digit code.");
+      showModal("error", "Invalid Code", "Please enter the 6-digit code.");
       return;
     }
     setIsMfaLoading(true);
@@ -273,18 +328,16 @@ export default function ProfileSettingsScreen() {
 
       if (verify.error) throw verify.error;
 
-      // --- 2FA ENABLED SUCCESSFULLY ---
       setIs2FAEnabled(true);
       setMfaModalVisible(false);
 
-      // --- SYNC TO DATABASE ---
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
         await supabase
           .from("users")
-          .update({ is_2fa_enabled: true }) // <--- UPDATES DB HERE
+          .update({ is_2fa_enabled: true })
           .eq("id", user.id);
       }
 
@@ -294,7 +347,11 @@ export default function ProfileSettingsScreen() {
         "Two-Factor Authentication is now active on your account.",
       );
     } catch (error) {
-      Alert.alert("Verification Failed", "Invalid code. Please try again.");
+      showModal(
+        "error",
+        "Verification Failed",
+        "Invalid code. Please try again.",
+      );
     } finally {
       setIsMfaLoading(false);
     }
@@ -311,14 +368,13 @@ export default function ProfileSettingsScreen() {
       setIs2FAEnabled(false);
       setMfaFactorId("");
 
-      // --- SYNC TO DATABASE ---
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
         await supabase
           .from("users")
-          .update({ is_2fa_enabled: false }) // <--- UPDATES DB HERE
+          .update({ is_2fa_enabled: false })
           .eq("id", user.id);
       }
 
@@ -332,10 +388,9 @@ export default function ProfileSettingsScreen() {
 
   const copyToClipboard = async () => {
     await Clipboard.setStringAsync(mfaSecret);
-    Alert.alert("Copied!", "Secret key copied to clipboard.");
+    showModal("success", "Copied!", "Secret key copied to clipboard.");
   };
 
-  // --- EXISTING LOGIC ---
   const verifyIdentity = async () => {
     if (!verificationPassword) return;
     setIsVerifying(true);
@@ -468,6 +523,7 @@ export default function ProfileSettingsScreen() {
       showModal("error", "Missing Info", "First Name is required.");
       return;
     }
+
     if (newPassword.length > 0) {
       if (!passAnalysis.isValid) {
         showModal(
@@ -892,6 +948,18 @@ export default function ProfileSettingsScreen() {
                 theme={theme}
                 scaledSize={scaledSize}
               />
+              {/* PHONE (READ-ONLY) */}
+              <InputGroup
+                label="Phone Number"
+                icon="phone"
+                placeholder="09XX XXX XXXX"
+                value={phoneNumber}
+                onChangeText={() => {}}
+                keyboardType="phone-pad"
+                theme={theme}
+                scaledSize={scaledSize}
+                disabled
+              />
               <InputGroup
                 label="Email Address"
                 icon="email"
@@ -962,7 +1030,7 @@ export default function ProfileSettingsScreen() {
                 scaledSize={scaledSize}
               />
 
-              {/* --- REFACTORED SECURITY SECTION (ROWS) --- */}
+              {/* SECURITY */}
               <Text
                 className="font-bold uppercase tracking-widest mb-3 mt-5"
                 style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
@@ -970,7 +1038,7 @@ export default function ProfileSettingsScreen() {
                 Security & Account
               </Text>
 
-              {/* 1. Change Password Row */}
+              {/* 1. Change Password */}
               <TouchableOpacity
                 onPress={togglePasswordExpand}
                 className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
@@ -1071,7 +1139,7 @@ export default function ProfileSettingsScreen() {
                 </View>
               )}
 
-              {/* 2. Enable 2FA Row with CustomSwitch */}
+              {/* 2. Enable 2FA */}
               <View
                 className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
                 style={{
@@ -1099,7 +1167,7 @@ export default function ProfileSettingsScreen() {
                 />
               </View>
 
-              {/* 3. Account Ownership Row */}
+              {/* 3. Account Ownership */}
               <TouchableOpacity
                 onPress={toggleAccountControlExpand}
                 className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
@@ -1200,22 +1268,43 @@ export default function ProfileSettingsScreen() {
         scaledSize={scaledSize}
       />
 
-      {/* --- 2FA SETUP MODAL --- */}
+      {/* 2FA SETUP MODAL - WITH "CLICK OUTSIDE" FIX */}
       <Modal
         animationType="slide"
         transparent={true}
         visible={mfaModalVisible}
         onRequestClose={() => {
-          if (!isMfaLoading) setMfaModalVisible(false);
+          if (!isMfaLoading) handleCancelMfaSetup();
         }}
       >
-        <View className="flex-1 justify-center items-center bg-black/90 p-6">
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "rgba(0,0,0,0.9)",
+            padding: 24,
+          }}
+        >
+          {/* INVISIBLE BACKDROP TO CATCH CLICKS */}
+          <TouchableOpacity
+            style={[
+              { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
+            ]}
+            onPress={() => !isMfaLoading && handleCancelMfaSetup()}
+            activeOpacity={1}
+          />
+
+          {/* CONTENT */}
           <View
-            className="w-full max-w-sm rounded-2xl p-6"
             style={{
+              width: "100%",
+              maxWidth: 350,
               backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
+              borderRadius: 24,
+              padding: 24,
               borderWidth: 1,
+              borderColor: theme.cardBorder,
             }}
           >
             <Text
@@ -1228,11 +1317,8 @@ export default function ProfileSettingsScreen() {
               className="text-center mb-6"
               style={{ color: theme.textSecondary, fontSize: scaledSize(13) }}
             >
-              Copy this secret key into your Authenticator App (Google Auth,
-              Authy, etc.)
+              Copy this secret key into your Authenticator App
             </Text>
-
-            {/* Secret Key Display */}
             <TouchableOpacity
               onPress={copyToClipboard}
               className="p-4 rounded-xl mb-6 items-center border border-dashed"
@@ -1257,7 +1343,6 @@ export default function ProfileSettingsScreen() {
                 Tap to Copy
               </Text>
             </TouchableOpacity>
-
             <Text
               className="mb-2 ml-1 font-bold uppercase"
               style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
@@ -1284,7 +1369,6 @@ export default function ProfileSettingsScreen() {
               value={mfaCode}
               onChangeText={setMfaCode}
             />
-
             <TouchableOpacity
               onPress={verifyAndEnableMfa}
               disabled={isMfaLoading}
@@ -1310,9 +1394,8 @@ export default function ProfileSettingsScreen() {
                 </Text>
               )}
             </TouchableOpacity>
-
             <TouchableOpacity
-              onPress={() => setMfaModalVisible(false)}
+              onPress={handleCancelMfaSetup}
               disabled={isMfaLoading}
               style={{ marginTop: 16, alignItems: "center" }}
             >
@@ -1329,7 +1412,6 @@ export default function ProfileSettingsScreen() {
   );
 }
 
-// --- COPIED CUSTOM SWITCH FROM SETTINGS ---
 function CustomSwitch({ value, onToggle, theme }) {
   return (
     <TouchableOpacity
@@ -1362,7 +1444,6 @@ function CustomSwitch({ value, onToggle, theme }) {
   );
 }
 
-// --- HELPERS ---
 function InputGroup({
   label,
   icon,
@@ -1378,6 +1459,7 @@ function InputGroup({
   disabled,
   theme,
   scaledSize,
+  placeholderTextColor,
 }) {
   return (
     <View className="mb-3">
@@ -1408,7 +1490,9 @@ function InputGroup({
           className="flex-1 h-full"
           style={{ color: theme.text, fontSize: scaledSize(14) }}
           placeholder={placeholder}
-          placeholderTextColor={theme.textSecondary}
+          placeholderTextColor={
+            placeholderTextColor || `${theme.textSecondary}80`
+          }
           secureTextEntry={isPassword && !showPassword}
           value={value}
           onChangeText={onChangeText}
@@ -1429,10 +1513,7 @@ function InputGroup({
       {error && (
         <Text
           className="italic mt-1 ml-1"
-          style={{
-            color: theme.buttonDangerText,
-            fontSize: scaledSize(10),
-          }}
+          style={{ color: theme.buttonDangerText, fontSize: scaledSize(10) }}
         >
           {error}
         </Text>
@@ -1485,10 +1566,7 @@ function CustomModal({
       <View className="flex-1 bg-black/80 justify-center items-center z-50">
         <View
           className="border p-5 rounded-2xl w-72 items-center"
-          style={{
-            backgroundColor: theme.card,
-            borderColor: theme.cardBorder,
-          }}
+          style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}
         >
           <Text
             className="font-bold mb-2 text-center"

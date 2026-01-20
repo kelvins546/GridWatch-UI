@@ -13,21 +13,20 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-  Alert, // Added Alert just in case
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
-// 1. Import Supabase
+// 1. Import Supabase & createClient
 import { supabase } from "../../lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 
-// --- COMMENTED OUT FOR EXPO GO TESTING ---
-// 2. Import Google Sign In
-// import {
-//   GoogleSignin,
-//   statusCodes,
-// } from "@react-native-google-signin/google-signin";
+import {
+  GoogleSignin,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 
 const ALLOWED_EMAIL_REGEX =
   /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
@@ -44,16 +43,21 @@ export default function LoginScreen() {
   const [touched, setTouched] = useState({});
   const [errors, setErrors] = useState({});
 
-  // UPDATED: Default to TRUE to check for session before showing form
   const [isLoading, setIsLoading] = useState(true);
 
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [redirectOnClose, setRedirectOnClose] = useState(false);
 
+  // --- 2FA STATE ---
+  const [mfaVisible, setMfaVisible] = useState(false);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaFactorId, setMfaFactorId] = useState(null);
+  const [googleIdToken, setGoogleIdToken] = useState(null);
+
   const floatAnim = useRef(new Animated.Value(0)).current;
 
-  // --- NEW: CHECK FOR EXISTING SESSION ON MOUNT ---
+  // --- 1. INITIAL SESSION CHECK ---
   useEffect(() => {
     const checkUserSession = async () => {
       try {
@@ -61,35 +65,38 @@ export default function LoginScreen() {
           data: { session },
         } = await supabase.auth.getSession();
 
+        // If we have a session on mount, check if it's fully verified
         if (session) {
-          // User is already logged in, redirect immediately
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "MainApp" }],
-          });
+          const { data: mfaData } =
+            await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+          // If we are logged in but stuck at AAL1 when we need AAL2, sign out.
+          if (
+            mfaData &&
+            mfaData.nextLevel === "aal2" &&
+            mfaData.currentLevel === "aal1"
+          ) {
+            await supabase.auth.signOut();
+            setIsLoading(false);
+          } else {
+            navigation.reset({ index: 0, routes: [{ name: "MainApp" }] });
+          }
         } else {
-          // No user found, stop loading and show login form
           setIsLoading(false);
         }
       } catch (error) {
-        // Error checking session, show login form
         setIsLoading(false);
       }
     };
-
     checkUserSession();
   }, []);
 
-  // --- CONFIGURE GOOGLE SIGN IN (COMMENTED OUT) ---
-  // useEffect(() => {
-  //   GoogleSignin.configure({
-  //     scopes: ["email", "profile"],
-  //     webClientId:
-  //       "279998586082-buisq8vl4tnm3hrga2hb84raaghggnhf.apps.googleusercontent.com",
-  //   });
-  // }, []);
-
+  // --- CONFIG ---
   useEffect(() => {
+    GoogleSignin.configure({
+      scopes: ["email", "profile"],
+      webClientId:
+        "279998586082-buisq8vl4tnm3hrga2hb84raaghggnhf.apps.googleusercontent.com",
+    });
     Animated.loop(
       Animated.sequence([
         Animated.timing(floatAnim, {
@@ -108,16 +115,12 @@ export default function LoginScreen() {
 
   const validateField = (field, value) => {
     let error = null;
-    switch (field) {
-      case "email":
-        if (!value) error = "Email is required";
-        else if (!ALLOWED_EMAIL_REGEX.test(value))
-          error = "Use a valid provider (Gmail, Yahoo, etc)";
-        break;
-      case "password":
-        if (!value) error = "Password is required";
-        break;
+    if (field === "email") {
+      if (!value) error = "Email is required";
+      else if (!ALLOWED_EMAIL_REGEX.test(value))
+        error = "Use a valid provider (Gmail, Yahoo, etc)";
     }
+    if (field === "password" && !value) error = "Password is required";
     setErrors((prev) => ({ ...prev, [field]: error }));
   };
 
@@ -128,7 +131,6 @@ export default function LoginScreen() {
     validateField(field, value);
   };
 
-  // --- HELPER: LOG LOGIN EVENT ---
   const logLoginSuccess = async (userId, method) => {
     try {
       await supabase.from("app_notifications").insert({
@@ -137,84 +139,14 @@ export default function LoginScreen() {
         body: `${method} Login • ${Platform.OS.toUpperCase()} • ${new Date().toLocaleTimeString()}`,
       });
     } catch (err) {
-      console.log("Failed to log login event:", err);
+      console.log(err);
     }
   };
 
-  // --- GOOGLE SIGN IN LOGIC (COMMENTED OUT) ---
-  const handleGoogleSignIn = async () => {
-    // TEMPORARY ALERT FOR EXPO GO TESTING
-    Alert.alert(
-      "Notice",
-      "Google Sign-In is disabled in Expo Go. Please use Email/Password.",
-    );
-
-    /* setIsLoading(true);
-    setRedirectOnClose(false);
-
-    try {
-      await GoogleSignin.signOut();
-      await GoogleSignin.hasPlayServices();
-      const userInfo = await GoogleSignin.signIn();
-      const idToken = userInfo.idToken || userInfo.data?.idToken;
-
-      if (idToken) {
-        const { data, error } = await supabase.auth.signInWithIdToken({
-          provider: "google",
-          token: idToken,
-        });
-
-        if (error) throw error;
-
-        const user = data.user;
-        const createdAt = new Date(user.created_at).getTime();
-        const lastSignIn = new Date(user.last_sign_in_at).getTime();
-        // Check if created < 5 seconds ago
-        const isNewUser = lastSignIn - createdAt < 5000;
-
-        if (isNewUser) {
-          // --- BUG FIX: Reject New Users ---
-          const { error: deleteError } =
-            await supabase.rpc("delete_own_account");
-
-          await supabase.auth.signOut();
-
-          setIsLoading(false);
-          setErrorMessage(
-            "No account found with this email. Please sign up first.",
-          );
-          setRedirectOnClose(true);
-          setErrorModalVisible(true);
-        } else {
-          // --- EXISTING USER: SUCCESS ---
-          await logLoginSuccess(user.id, "Google");
-
-          setIsLoading(false);
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "MainApp" }],
-          });
-        }
-      } else {
-        throw new Error("No ID token present!");
-      }
-    } catch (error) {
-      setIsLoading(false);
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-        return;
-      } else {
-        setErrorMessage(error.message);
-        setErrorModalVisible(true);
-      }
-    }
-    */
-  };
-
-  // --- EMAIL LOGIN LOGIC ---
+  // --- 2. HANDLE EMAIL LOGIN (SHADOW CLIENT) ---
   const handleLogin = async () => {
     const formValues = { email, password };
     let isValid = true;
-
     Object.keys(formValues).forEach((key) => {
       validateField(key, formValues[key]);
       if (!formValues[key] || errors[key]) isValid = false;
@@ -227,28 +159,216 @@ export default function LoginScreen() {
     }
 
     setIsLoading(true);
+    setGoogleIdToken(null);
 
+    try {
+      // SHADOW CHECK: Use a temp client that DOES NOT persist session
+      const tempClient = createClient(
+        supabase.supabaseUrl,
+        supabase.supabaseKey,
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+          },
+        },
+      );
+
+      const { data: tempData, error: tempError } =
+        await tempClient.auth.signInWithPassword({
+          email: email,
+          password: password,
+        });
+
+      if (tempError) {
+        setIsLoading(false);
+        setErrorMessage(tempError.message);
+        setErrorModalVisible(true);
+        return;
+      }
+
+      // Check 2FA on Shadow Client
+      const { data: factors } = await tempClient.auth.mfa.listFactors();
+      const totpFactor = factors?.totp?.find((f) => f.status === "verified");
+
+      if (totpFactor) {
+        // 2FA ENABLED: Halt. Show Modal. Main App is still logged out.
+        console.log("2FA Detected (Email). Prompting...");
+        setMfaFactorId(totpFactor.id);
+        setIsLoading(false);
+        setMfaVisible(true);
+      } else {
+        // 2FA DISABLED: Proceed to Real Login
+        await performRealEmailLogin();
+      }
+    } catch (e) {
+      console.log("Shadow Login Error", e);
+      setIsLoading(false);
+      setErrorMessage("An unexpected error occurred.");
+      setErrorModalVisible(true);
+    }
+  };
+
+  const performRealEmailLogin = async () => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email,
       password: password,
     });
+    if (!error) {
+      await logLoginSuccess(data.user.id, "Email");
+      navigation.reset({ index: 0, routes: [{ name: "MainApp" }] });
+    }
+    setIsLoading(false);
+  };
 
-    if (error) {
+  // --- 3. HANDLE GOOGLE LOGIN (SHADOW CLIENT) ---
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    setRedirectOnClose(false);
+    setGoogleIdToken(null);
+
+    try {
+      await GoogleSignin.signOut();
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.idToken || userInfo.data?.idToken;
+
+      if (idToken) {
+        // A. SHADOW CHECK: Validate Google Token on temp client first
+        const tempClient = createClient(
+          supabase.supabaseUrl,
+          supabase.supabaseKey,
+          {
+            auth: {
+              persistSession: false,
+              autoRefreshToken: false,
+              detectSessionInUrl: false,
+            },
+          },
+        );
+
+        const { data, error } = await tempClient.auth.signInWithIdToken({
+          provider: "google",
+          token: idToken,
+        });
+
+        if (error) throw error;
+
+        const user = data.user;
+        const createdAt = new Date(user.created_at).getTime();
+        const lastSignIn = new Date(user.last_sign_in_at).getTime();
+        const isNewUser = lastSignIn - createdAt < 5000;
+
+        // B. Check New User
+        if (isNewUser) {
+          // If new, delete on real DB
+          await tempClient.rpc("delete_own_account");
+
+          setIsLoading(false);
+          setErrorMessage(
+            "No account found with this email. Please sign up first.",
+          );
+          setRedirectOnClose(true);
+          setErrorModalVisible(true);
+          return;
+        }
+
+        // C. Check 2FA
+        const { data: factors } = await tempClient.auth.mfa.listFactors();
+        const totpFactor = factors?.totp?.find((f) => f.status === "verified");
+
+        if (totpFactor) {
+          // --- 2FA ENABLED ---
+          console.log("2FA Detected (Google). Prompting...");
+          // Store details for the REAL login later
+          setMfaFactorId(totpFactor.id);
+          setGoogleIdToken(idToken);
+          setIsLoading(false);
+          setMfaVisible(true);
+        } else {
+          // --- 2FA DISABLED ---
+          // Perform REAL login on main client
+          const { data: realData } = await supabase.auth.signInWithIdToken({
+            provider: "google",
+            token: idToken,
+          });
+          await logLoginSuccess(realData.user.id, "Google");
+          setIsLoading(false);
+          navigation.reset({ index: 0, routes: [{ name: "MainApp" }] });
+        }
+      } else {
+        throw new Error("No ID token present!");
+      }
+    } catch (error) {
       setIsLoading(false);
-      setErrorMessage(error.message);
+      if (error.code !== statusCodes.SIGN_IN_CANCELLED) {
+        setErrorMessage(error.message);
+        setErrorModalVisible(true);
+      }
+    }
+  };
+
+  // --- 4. VERIFY 2FA CODE & RE-LOGIN ---
+  const verifyMfaAndLogin = async () => {
+    if (mfaCode.length !== 6) {
+      setErrorMessage("Please enter a valid 6-digit code.");
       setErrorModalVisible(true);
-    } else {
-      // --- SUCCESSFUL LOGIN ---
-      if (data.user) {
-        await logLoginSuccess(data.user.id, "Email");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      let loginData, loginError;
+
+      // 1. Re-Login (Real Client)
+      if (googleIdToken) {
+        const res = await supabase.auth.signInWithIdToken({
+          provider: "google",
+          token: googleIdToken,
+        });
+        loginData = res.data;
+        loginError = res.error;
+      } else {
+        const res = await supabase.auth.signInWithPassword({
+          email: email,
+          password: password,
+        });
+        loginData = res.data;
+        loginError = res.error;
       }
 
+      if (loginError) throw loginError;
+
+      // 2. Challenge & Verify (Real Client)
+      const challenge = await supabase.auth.mfa.challenge({
+        factorId: mfaFactorId,
+      });
+      if (challenge.error) throw challenge.error;
+
+      const verify = await supabase.auth.mfa.verify({
+        factorId: mfaFactorId,
+        challengeId: challenge.data.id,
+        code: mfaCode,
+      });
+      if (verify.error) throw verify.error;
+
+      // 3. Success
+      const method = googleIdToken ? "Google + 2FA" : "Email + 2FA";
+      await logLoginSuccess(loginData.user.id, method);
+
+      setMfaVisible(false);
       setIsLoading(false);
+      setGoogleIdToken(null);
 
       navigation.reset({
         index: 0,
         routes: [{ name: "MainApp" }],
       });
+    } catch (error) {
+      setIsLoading(false);
+      setErrorMessage("Invalid Code. Please try again.");
+      setErrorModalVisible(true);
     }
   };
 
@@ -317,7 +437,6 @@ export default function LoginScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* Loading Overlay (Visible on Mount while checking session) */}
       {isLoading && (
         <View className="absolute z-50 w-full h-full bg-black/70 justify-center items-center">
           <ActivityIndicator size="large" color="#B0B0B0" />
@@ -329,8 +448,7 @@ export default function LoginScreen() {
               letterSpacing: 0.5,
             }}
           >
-            {/* Conditional text so it doesn't say "Logging in" on startup */}
-            {email ? "Logging in..." : "Loading..."}
+            {email ? "Processing..." : "Loading..."}
           </Text>
         </View>
       )}
@@ -521,7 +639,6 @@ export default function LoginScreen() {
                 </Text>
               </View>
             </TouchableOpacity>
-            {/* ------------------------------------- */}
 
             <View className="flex-row justify-center mt-[30px]">
               <Text style={{ color: theme.textSecondary }}>
@@ -549,6 +666,7 @@ export default function LoginScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {/* ERROR MODAL */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -568,6 +686,109 @@ export default function LoginScreen() {
             >
               <Text style={styles.modalButtonText}>
                 {redirectOnClose ? "GO TO SIGNUP" : "TRY AGAIN"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- MFA VERIFICATION MODAL (UPDATED DESIGN) --- */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={mfaVisible}
+        onRequestClose={() => {
+          if (!isLoading) {
+            setMfaVisible(false);
+            setGoogleIdToken(null);
+            setMfaCode("");
+          }
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContainer,
+              { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            ]}
+          >
+            {/* ICON REMOVED */}
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              Security Check
+            </Text>
+            <Text style={[styles.modalBody, { color: theme.textSecondary }]}>
+              Enter the 2FA code from your authenticator app to continue with
+              Google.
+            </Text>
+
+            <TextInput
+              style={{
+                backgroundColor: theme.buttonNeutral,
+                color: theme.text,
+                borderRadius: 12,
+                padding: 14,
+                textAlign: "center",
+                fontSize: 20,
+                letterSpacing: 6,
+                borderWidth: 1,
+                borderColor: theme.cardBorder,
+                marginBottom: 20,
+                width: "100%",
+              }}
+              placeholder="000 000"
+              placeholderTextColor={theme.textSecondary}
+              keyboardType="number-pad"
+              maxLength={6}
+              value={mfaCode}
+              onChangeText={setMfaCode}
+            />
+
+            <TouchableOpacity
+              onPress={verifyMfaAndLogin}
+              disabled={isLoading}
+              style={{ width: "100%" }}
+            >
+              <View
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: theme.buttonPrimary },
+                ]}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontWeight: "bold",
+                      fontSize: 12,
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                    }}
+                  >
+                    VERIFY
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                setMfaVisible(false);
+                setGoogleIdToken(null);
+                setMfaCode("");
+              }}
+              disabled={isLoading}
+              style={{ marginTop: 16 }}
+            >
+              <Text
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: "600",
+                }}
+              >
+                Cancel
               </Text>
             </TouchableOpacity>
           </View>

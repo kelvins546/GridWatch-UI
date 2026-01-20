@@ -19,8 +19,10 @@ import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import { supabase } from "../../lib/supabase";
 
+// --- CHANGED: USE LOCAL COMPONENT INSTEAD OF BROKEN LIBRARY ---
+import FirebaseRecaptcha from "../../components/FirebaseRecaptcha";
+
 // --- FIREBASE IMPORTS ---
-import { FirebaseRecaptchaVerifierModal } from "expo-firebase-recaptcha";
 import { PhoneAuthProvider, signInWithCredential } from "firebase/auth";
 import { auth, firebaseConfig } from "../../lib/firebaseConfig";
 
@@ -382,16 +384,12 @@ export default function SignupScreen() {
     startPhoneVerification();
   };
 
-  // --- 1. FIREBASE REAL SMS SEND (PATCHED) ---
+  // --- 1. FIREBASE REAL SMS SEND (USING LOCAL COMPONENT) ---
+  // --- 1. FIREBASE REAL SMS SEND (USING LOCAL COMPONENT) ---
   const startPhoneVerification = async () => {
     try {
       const rawPhone = phoneNumber.replace(/\s/g, "");
       const fullPhoneNumber = `+63${rawPhone}`;
-
-      // PATCH: Fix Firebase v9 crash with Expo
-      if (recaptchaVerifier.current && !recaptchaVerifier.current._reset) {
-        recaptchaVerifier.current._reset = () => {};
-      }
 
       const phoneProvider = new PhoneAuthProvider(auth);
       const verificationId = await phoneProvider.verifyPhoneNumber(
@@ -406,7 +404,15 @@ export default function SignupScreen() {
       setCanResendPhone(false);
       setPhoneOtp(["", "", "", "", "", ""]);
     } catch (err) {
+      // ALWAYS TURN OFF LOADING
       setIsLoading(false);
+
+      // LOGIC: If user cancelled, just return. Don't show alert.
+      if (err.message && err.message.includes("cancelled")) {
+        console.log("User cancelled recaptcha");
+        return;
+      }
+
       console.log("SMS Error:", err);
       Alert.alert("SMS Failed", `${err.message}`);
     }
@@ -691,10 +697,10 @@ export default function SignupScreen() {
         backgroundColor={theme.background}
       />
 
-      <FirebaseRecaptchaVerifierModal
+      {/* --- CHANGED: USING THE LOCAL COMPONENT HERE --- */}
+      <FirebaseRecaptcha
         ref={recaptchaVerifier}
         firebaseConfig={firebaseConfig}
-        attemptInvisibleVerification={false}
       />
 
       {isLoading && (

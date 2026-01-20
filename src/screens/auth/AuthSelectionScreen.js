@@ -10,19 +10,21 @@ import {
   Modal,
   StyleSheet,
   ScrollView,
-  Alert, // Added Alert for Expo Go notification
+  Alert,
+  TextInput, // Added for 2FA Input
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
+// 1. Import createClient for Shadow Check
 import { supabase } from "../../lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 
-// --- COMMENTED OUT FOR EXPO GO TESTING ---
-// import {
-//   GoogleSignin,
-//   statusCodes,
-// } from "@react-native-google-signin/google-signin";
+import {
+  GoogleSignin,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 
 // --- EMAILJS CONFIGURATION ---
 const EMAILJS_SERVICE_ID = "service_ah3k0xc";
@@ -55,19 +57,25 @@ export default function AuthSelectionScreen() {
   const [pendingIdToken, setPendingIdToken] = useState(null);
   const [pendingGoogleUser, setPendingGoogleUser] = useState(null);
 
+  // --- 2FA STATE (NEW) ---
+  const [mfaVisible, setMfaVisible] = useState(false);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaFactorId, setMfaFactorId] = useState(null);
+  // Re-using pendingIdToken for 2FA google auth as well
+
   const showModal = (type, title, message, onPress = null) => {
     setAlertConfig({ type, title, message, onPress });
     setAlertModalVisible(true);
   };
 
-  // --- CONFIGURE GOOGLE SIGN IN (COMMENTED OUT) ---
-  // useEffect(() => {
-  //   GoogleSignin.configure({
-  //     scopes: ["email", "profile"],
-  //     webClientId:
-  //       "279998586082-buisq8vl4tnm3hrga2hb84raaghggnhf.apps.googleusercontent.com",
-  //   });
-  // }, []);
+  // --- CONFIGURE GOOGLE SIGN IN ---
+  useEffect(() => {
+    GoogleSignin.configure({
+      scopes: ["email", "profile"],
+      webClientId:
+        "279998586082-buisq8vl4tnm3hrga2hb84raaghggnhf.apps.googleusercontent.com",
+    });
+  }, []);
 
   useEffect(() => {
     Animated.loop(
@@ -109,16 +117,26 @@ export default function AuthSelectionScreen() {
     }
   };
 
+  // --- LOG HELPER ---
+  const logLoginSuccess = async (userId, method) => {
+    try {
+      await supabase.from("app_notifications").insert({
+        user_id: userId,
+        title: "Login Successful",
+        body: `${method} Login • ${Platform.OS.toUpperCase()} • ${new Date().toLocaleTimeString()}`,
+      });
+    } catch (err) {
+      console.log("Log error", err);
+    }
+  };
+
   // --- STEP 1: NATIVE GOOGLE SIGN IN & PRE-CHECK ---
   const handleGoogleSignIn = async () => {
-    // TEMPORARY ALERT FOR EXPO GO TESTING
-    Alert.alert(
-      "Notice",
-      "Google Sign-In is disabled in Expo Go. Please use Email.",
-    );
-
-    /* setLoadingMessage("Checking Account...");
+    setLoadingMessage("Checking Account...");
     setIsLoading(true);
+    setPendingIdToken(null);
+    setPendingGoogleUser(null);
+
     try {
       await GoogleSignin.signOut();
       await GoogleSignin.hasPlayServices();
@@ -131,29 +149,82 @@ export default function AuthSelectionScreen() {
         throw new Error("Could not retrieve user details. Please try again.");
       }
 
-      const googleEmail = userObj.email;
+      // --- SHADOW CHECK (Does not persist session) ---
+      // We check Supabase status without logging the user into the app yet
+      const tempClient = createClient(
+        supabase.supabaseUrl,
+        supabase.supabaseKey,
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+          },
+        },
+      );
 
-      // PRE-CHECK DB
-      const { data: profileData } = await supabase
-        .from("users")
-        .select("id, first_name")
-        .eq("email", googleEmail)
-        .maybeSingle();
+      const { data: authData, error: authError } =
+        await tempClient.auth.signInWithIdToken({
+          provider: "google",
+          token: idToken,
+        });
 
-      setIsLoading(false);
+      if (authError) throw authError;
 
-      // Store for next step
-      setPendingIdToken(idToken);
-      setPendingGoogleUser(userObj);
+      const user = authData.user;
+      const createdAt = new Date(user.created_at).getTime();
+      const lastSignIn = new Date(user.last_sign_in_at).getTime();
+      const isNewUser = lastSignIn - createdAt < 5000;
 
-      const firstName = profileData?.first_name || "";
-      const isPlaceholder =
-        !firstName || firstName === "New" || firstName === "User";
+      if (isNewUser) {
+        // --- NEW USER FLOW ---
+        // Clean up the shadow user from auth (we will recreate properly in registration step)
+        await tempClient.rpc("delete_own_account");
 
-      if (profileData && !isPlaceholder) {
-        setExistingAccountModalVisible(true);
+        setIsLoading(false);
+        setPendingIdToken(idToken);
+        setPendingGoogleUser(userObj);
+        setTermsModalVisible(true); // Proceed to Terms -> Registration
       } else {
-        setTermsModalVisible(true);
+        // --- EXISTING USER FLOW ---
+
+        // Check 2FA using Shadow Client
+        const { data: factors } = await tempClient.auth.mfa.listFactors();
+        const totpFactor = factors?.totp?.find((f) => f.status === "verified");
+
+        if (totpFactor) {
+          // --- 2FA ENABLED: SHOW MODAL ---
+          setMfaFactorId(totpFactor.id);
+          setPendingIdToken(idToken); // Save token for verification
+          setIsLoading(false);
+          setMfaVisible(true);
+        } else {
+          // --- 2FA DISABLED: LOGIN IMMEDIATELY ---
+          // Now perform REAL login on main client
+          const { data: realData } = await supabase.auth.signInWithIdToken({
+            provider: "google",
+            token: idToken,
+          });
+
+          await logLoginSuccess(realData.user.id, "Google");
+
+          setIsLoading(false);
+          // Check if profile exists (double check) then redirect
+          const { data: profile } = await supabase
+            .from("users")
+            .select("id")
+            .eq("id", realData.user.id)
+            .maybeSingle();
+
+          if (profile) {
+            navigation.reset({ index: 0, routes: [{ name: "MainApp" }] });
+          } else {
+            // Rare edge case: Auth exists but no profile. Treat as new.
+            setPendingIdToken(idToken);
+            setPendingGoogleUser(userObj);
+            setTermsModalVisible(true);
+          }
+        }
       }
     } catch (error) {
       setIsLoading(false);
@@ -161,37 +232,66 @@ export default function AuthSelectionScreen() {
       if (error.code === statusCodes.IN_PROGRESS) return;
       showModal("error", "Google Sign-In Error", error.message);
     }
-    */
   };
 
-  // --- STEP 2A: EXISTING USER LOGIN ---
-  const handleContinueLogin = async () => {
-    setExistingAccountModalVisible(false);
+  // --- STEP 1.5: VERIFY 2FA ---
+  const verifyMfaAndLogin = async () => {
+    if (mfaCode.length !== 6) {
+      showModal("error", "Invalid Code", "Please enter 6 digits.");
+      return;
+    }
 
     setIsLoading(true);
-    setLoadingMessage("Verifying Account...");
+    setLoadingMessage("Verifying 2FA...");
 
     try {
-      const { error } = await supabase.auth.signInWithIdToken({
-        provider: "google",
-        token: pendingIdToken,
-      });
-
-      if (error) throw error;
-
-      setTimeout(() => setLoadingMessage("Syncing Data..."), 1000);
-      setTimeout(() => setLoadingMessage("Redirecting..."), 2000);
-      setTimeout(() => {
-        setIsLoading(false);
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "MainApp" }],
+      // 1. Real Login with Google Token
+      const { data: loginData, error: loginError } =
+        await supabase.auth.signInWithIdToken({
+          provider: "google",
+          token: pendingIdToken,
         });
-      }, 3000);
+
+      if (loginError) throw loginError;
+
+      // 2. Challenge & Verify
+      const challenge = await supabase.auth.mfa.challenge({
+        factorId: mfaFactorId,
+      });
+      if (challenge.error) throw challenge.error;
+
+      const verify = await supabase.auth.mfa.verify({
+        factorId: mfaFactorId,
+        challengeId: challenge.data.id,
+        code: mfaCode,
+      });
+      if (verify.error) throw verify.error;
+
+      // 3. Success
+      await logLoginSuccess(loginData.user.id, "Google + 2FA");
+
+      setMfaVisible(false);
+      setPendingIdToken(null);
+      setIsLoading(false);
+
+      navigation.reset({ index: 0, routes: [{ name: "MainApp" }] });
     } catch (error) {
       setIsLoading(false);
-      showModal("error", "Login Failed", error.message);
+      // Ensure clean state
+      await supabase.auth.signOut();
+      showModal(
+        "error",
+        "Verification Failed",
+        "Invalid code or token expired.",
+      );
     }
+  };
+
+  // --- STEP 2A: EXISTING USER LOGIN (Fallback for Email/Legacy flow) ---
+  const handleContinueLogin = async () => {
+    setExistingAccountModalVisible(false);
+    // ... existing logic for email fallback if needed, but Google flow above handles it now.
+    // Keeping this function if your UI still calls it for non-Google cases.
   };
 
   const handleCancelLogin = () => {
@@ -212,7 +312,7 @@ export default function AuthSelectionScreen() {
 
   const performNewUserRegistration = async () => {
     try {
-      // 1. Sign in to Supabase
+      // 1. Sign in to Supabase (Real Client)
       const { data, error } = await supabase.auth.signInWithIdToken({
         provider: "google",
         token: pendingIdToken,
@@ -254,18 +354,15 @@ export default function AuthSelectionScreen() {
           },
         ],
         { onConflict: "id" },
-      ); // Explicit conflict handling
+      );
 
-      // --- CRITICAL FIX START ---
-      // We check for errors, but since the user IS created in Auth and likely in DB (via trigger),
-      // we DO NOT block the flow. We log it and proceed.
       if (dbError) {
         console.log("Profile Upsert Note:", dbError.message);
-        // We continue intentionally.
       }
-      // --- CRITICAL FIX END ---
 
       await sendWelcomeEmail(user.email, firstName);
+      await logLoginSuccess(user.id, "Google Signup"); // Log signup event
+
       setIsLoading(false);
       setSuccessModalVisible(true);
     } catch (e) {
@@ -741,6 +838,107 @@ export default function AuthSelectionScreen() {
                 </View>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- NEW: 2FA VERIFICATION MODAL --- */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={mfaVisible}
+        onRequestClose={() => {
+          if (!isLoading) {
+            setMfaVisible(false);
+            setPendingIdToken(null);
+          }
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContainer,
+              { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              Security Check
+            </Text>
+            <Text style={[styles.modalBody, { color: theme.textSecondary }]}>
+              Enter the 2FA code from your authenticator app to continue with
+              Google.
+            </Text>
+
+            <TextInput
+              style={{
+                backgroundColor: theme.buttonNeutral,
+                color: theme.text,
+                borderRadius: 12,
+                padding: 14,
+                textAlign: "center",
+                fontSize: 20,
+                letterSpacing: 6,
+                borderWidth: 1,
+                borderColor: theme.cardBorder,
+                marginBottom: 20,
+                width: "100%",
+              }}
+              placeholder="000 000"
+              placeholderTextColor={theme.textSecondary}
+              keyboardType="number-pad"
+              maxLength={6}
+              value={mfaCode}
+              onChangeText={setMfaCode}
+            />
+
+            <TouchableOpacity
+              onPress={verifyMfaAndLogin}
+              disabled={isLoading}
+              style={{ width: "100%" }}
+            >
+              <View
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: theme.buttonPrimary },
+                ]}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontWeight: "bold",
+                      fontSize: 12,
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                    }}
+                  >
+                    VERIFY
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                setMfaVisible(false);
+                setPendingIdToken(null);
+                setMfaCode("");
+              }}
+              disabled={isLoading}
+              style={{ marginTop: 16 }}
+            >
+              <Text
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: "600",
+                }}
+              >
+                Cancel
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
