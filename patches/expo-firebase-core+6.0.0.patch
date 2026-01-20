@@ -1,8 +1,8 @@
 diff --git a/node_modules/expo-firebase-core/android/build.gradle b/node_modules/expo-firebase-core/android/build.gradle
-index 9bda09b..f339f51 100644
+index 9bda09b..0c38ef8 100644
 --- a/node_modules/expo-firebase-core/android/build.gradle
 +++ b/node_modules/expo-firebase-core/android/build.gradle
-@@ -1,99 +1,40 @@
+@@ -1,99 +1,42 @@
  apply plugin: 'com.android.library'
 -apply plugin: 'kotlin-android'
 -apply plugin: 'maven-publish'
@@ -64,7 +64,6 @@ index 9bda09b..f339f51 100644
 +        mavenCentral()
 +    }
 +    dependencies {
-+        // Use a modern Gradle version compatible with Android
 +        classpath 'com.android.tools.build:gradle:8.0.0'
      }
 -  }
@@ -72,7 +71,6 @@ index 9bda09b..f339f51 100644
  
  android {
 -  compileSdkVersion safeExtGet("compileSdkVersion", 31)
-+    // Necessary for new Android builds
 +    namespace "expo.modules.firebase.core"
 +    compileSdkVersion 34
  
@@ -120,9 +118,12 @@ index 9bda09b..f339f51 100644
 -  // for individual package versions for latest BOM version specified in react-native-firebase
 -  api 'com.google.firebase:firebase-core:21.1.0'
 -  api 'com.google.firebase:firebase-common:20.1.1'
--
++    implementation 'com.facebook.react:react-native:+'
+     
 -  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${getKotlinVersion()}"
-+    // Minimal dependency to keep the module compiling
-+    implementation 'com.facebook.react:react-native:+' 
++    // --- RESTORED DEPENDENCIES (Fixes "package com.google.firebase does not exist") ---
++    implementation project(':expo-modules-core')
++    implementation 'com.google.firebase:firebase-common:20.4.2'
++    implementation 'com.google.firebase:firebase-core:21.1.1' 
  }
 \ No newline at end of file
