@@ -1,0 +1,128 @@
+diff --git a/node_modules/expo-firebase-core/android/build.gradle b/node_modules/expo-firebase-core/android/build.gradle
+index 9bda09b..f339f51 100644
+--- a/node_modules/expo-firebase-core/android/build.gradle
++++ b/node_modules/expo-firebase-core/android/build.gradle
+@@ -1,99 +1,40 @@
+ apply plugin: 'com.android.library'
+-apply plugin: 'kotlin-android'
+-apply plugin: 'maven-publish'
+ 
+ group = 'host.exp.exponent'
+-version = '6.0.0'
++version = '1.0.0'
+ 
+ buildscript {
+-  def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+-  if (expoModulesCorePlugin.exists()) {
+-    apply from: expoModulesCorePlugin
+-    applyKotlinExpoModulesCorePlugin()
+-  }
+-
+-  // Simple helper that allows the root project to override versions declared by this library.
+-  ext.safeExtGet = { prop, fallback ->
+-    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+-  }
+-
+-  // Ensures backward compatibility
+-  ext.getKotlinVersion = {
+-    if (ext.has("kotlinVersion")) {
+-      ext.kotlinVersion()
+-    } else {
+-      ext.safeExtGet("kotlinVersion", "1.6.10")
+-    }
+-  }
+-
+-  repositories {
+-    mavenCentral()
+-  }
+-
+-  dependencies {
+-    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${getKotlinVersion()}")
+-  }
+-}
+-
+-// Creating sources with comments
+-task androidSourcesJar(type: Jar) {
+-  classifier = 'sources'
+-  from android.sourceSets.main.java.srcDirs
+-}
+-
+-afterEvaluate {
+-  publishing {
+-    publications {
+-      release(MavenPublication) {
+-        from components.release
+-        // Add additional sourcesJar to artifacts
+-        artifact(androidSourcesJar)
+-      }
+-    }
+     repositories {
+-      maven {
+-        url = mavenLocal().url
+-      }
++        google()
++        mavenCentral()
++    }
++    dependencies {
++        // Use a modern Gradle version compatible with Android
++        classpath 'com.android.tools.build:gradle:8.0.0'
+     }
+-  }
+ }
+ 
+ android {
+-  compileSdkVersion safeExtGet("compileSdkVersion", 31)
++    // Necessary for new Android builds
++    namespace "expo.modules.firebase.core"
++    compileSdkVersion 34
+ 
+-  compileOptions {
+-    sourceCompatibility JavaVersion.VERSION_11
+-    targetCompatibility JavaVersion.VERSION_11
+-  }
++    defaultConfig {
++        minSdkVersion 21
++        targetSdkVersion 34
++    }
+     
+-  kotlinOptions {
+-    jvmTarget = JavaVersion.VERSION_11.majorVersion
+-  }
++    lintOptions {
++        abortOnError false
++    }
++}
+ 
+-  defaultConfig {
+-    minSdkVersion safeExtGet("minSdkVersion", 21)
+-    targetSdkVersion safeExtGet("targetSdkVersion", 31)
+-    versionCode 10
+-    versionName '6.0.0'
+-  }
+-  lintOptions {
+-    abortOnError false
+-  }
++repositories {
++    google()
++    mavenCentral()
+ }
+ 
+ dependencies {
+-  implementation project(':expo-modules-core')
+-
+-  // We can't use BOM, cause it doesn't work with prebuilding and new autolinking.
+-  // > Could not find com.google.firebase:firebase-core:.
+-  // Required by:
+-  // project :expo > host.exp.exponent:expo-firebase-analytics:X.X.X
+-  // project :expo > host.exp.exponent:expo-firebase-core:X.X.X
+-  // api platform("com.google.firebase:firebase-bom:24.1.0")
+-  // See https://firebase.google.com/support/release-notes/android
+-  // for individual package versions for latest BOM version specified in react-native-firebase
+-  api 'com.google.firebase:firebase-core:21.1.0'
+-  api 'com.google.firebase:firebase-common:20.1.1'
+-
+-  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${getKotlinVersion()}"
++    // Minimal dependency to keep the module compiling
++    implementation 'com.facebook.react:react-native:+' 
+ }
+\ No newline at end of file
