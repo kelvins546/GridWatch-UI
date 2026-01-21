@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -11,9 +11,9 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  LayoutAnimation,
   UIManager,
   Alert,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -22,6 +22,11 @@ import { useTheme } from "../../context/ThemeContext";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../lib/supabase";
 import { decode } from "base64-arraybuffer";
+
+// --- FIREBASE IMPORTS ---
+import FirebaseRecaptcha from "../../components/FirebaseRecaptcha";
+import { PhoneAuthProvider, signInWithCredential } from "firebase/auth";
+import { auth, firebaseConfig } from "../../lib/firebaseConfig";
 
 // Enable LayoutAnimation for Android
 if (
@@ -49,11 +54,15 @@ export default function ProfileSettingsScreen() {
   const { theme, isDarkMode, fontScale } = useTheme();
   const scaledSize = (size) => size * (fontScale || 1);
 
+  // --- RECAPTCHA REF ---
+  const recaptchaVerifier = useRef(null);
+
   // --- STATE ---
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("+63 ");
+
   const [isPhoneEditable, setIsPhoneEditable] = useState(false);
 
   // Location State
@@ -65,7 +74,6 @@ export default function ProfileSettingsScreen() {
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
 
-  // Stores the 'clean' state (what is in the database)
   const [initialData, setInitialData] = useState({
     firstName: "",
     lastName: "",
@@ -80,10 +88,11 @@ export default function ProfileSettingsScreen() {
   // Phone OTP
   const [phoneOtpVisible, setPhoneOtpVisible] = useState(false);
   const [phoneOtpCode, setPhoneOtpCode] = useState("");
-  const [pendingPhone, setPendingPhone] = useState("");
+  const [verificationId, setVerificationId] = useState(null);
 
-  // Guidelines Modal
+  // Modals
   const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
 
   // Loading State
   const [isLoading, setIsLoading] = useState(true);
@@ -131,10 +140,10 @@ export default function ProfileSettingsScreen() {
 
         const rawPhone = dbData.phone_number;
         const formattedPhone = rawPhone ? formatPhoneNumber(rawPhone) : "+63 ";
-        const isPhoneEmpty = !rawPhone || rawPhone.length < 5;
-        setIsPhoneEditable(isPhoneEmpty);
 
-        // Set Form State
+        const hasExistingPhone = rawPhone && rawPhone.length > 5;
+        setIsPhoneEditable(!hasExistingPhone);
+
         setFirstName(firstNameVal);
         setLastName(lastNameVal);
         setPhoneNumber(formattedPhone);
@@ -147,7 +156,6 @@ export default function ProfileSettingsScreen() {
           dbData.avatar_url || meta.avatar_url || meta.picture || null;
         setAvatarUrl(currentAvatar);
 
-        // Set Initial Data for Comparison
         setInitialData({
           firstName: firstNameVal,
           lastName: lastNameVal,
@@ -170,49 +178,38 @@ export default function ProfileSettingsScreen() {
     setShowGuidelinesModal(true);
   };
 
-  // --- CAMERA & GALLERY HANDLERS ---
   const handleCamera = async () => {
     setShowGuidelinesModal(false);
-
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert(
-        "Permission Denied",
-        "Camera access is needed to take a photo.",
-      );
+      Alert.alert("Permission Denied", "Camera access is needed.");
       return;
     }
-
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ["images"],
-      allowsEditing: true, // Square crop enforced
+      allowsEditing: true,
       aspect: [1, 1],
       quality: 0.5,
       base64: true,
     });
-
     processPickedImage(result);
   };
 
   const handleGallery = async () => {
     setShowGuidelinesModal(false);
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      allowsEditing: true, // Square crop enforced
+      allowsEditing: true,
       aspect: [1, 1],
       quality: 0.5,
       base64: true,
     });
-
     processPickedImage(result);
   };
 
   const processPickedImage = (result) => {
     if (!result.canceled) {
       const asset = result.assets[0];
-
-      // File Size Check (< 5MB)
       const sizeInBytes = asset.base64.length * (3 / 4);
       const sizeInMB = sizeInBytes / (1024 * 1024);
 
@@ -220,7 +217,6 @@ export default function ProfileSettingsScreen() {
         showModal("error", "File Too Large", "Image must be under 5MB.");
         return;
       }
-
       setSelectedImage(asset);
     }
   };
@@ -243,6 +239,7 @@ export default function ProfileSettingsScreen() {
     }
   };
 
+  // --- SAVE BUTTON HANDLER ---
   const handleSave = async () => {
     if (!firstName.trim()) {
       showModal("error", "Missing Info", "First Name is required.");
@@ -260,17 +257,19 @@ export default function ProfileSettingsScreen() {
       const cleanPhone = phoneNumber.replace(/\s/g, "");
       const initialCleanPhone = initialData.phoneNumber.replace(/\s/g, "");
 
-      if (cleanPhone !== initialCleanPhone && cleanPhone.length > 4) {
-        setPendingPhone(cleanPhone);
-        const { error: otpError } = await supabase.auth.updateUser({
-          phone: cleanPhone,
-        });
-        if (otpError) throw otpError;
-        setIsLoading(false);
-        setPhoneOtpVisible(true);
-        return;
+      // --- CHECK IF PHONE CHANGED & NEEDS VERIFICATION ---
+      if (
+        isPhoneEditable &&
+        cleanPhone !== initialCleanPhone &&
+        cleanPhone.length > 9
+      ) {
+        // Wait a small tick to ensure UI updates aren't blocking
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await startPhoneVerification(cleanPhone);
+        return; // Stop here, wait for OTP
       }
 
+      // If phone didn't change, just save profile
       await finalizeProfileUpdate(user.id);
     } catch (error) {
       setIsLoading(false);
@@ -278,6 +277,46 @@ export default function ProfileSettingsScreen() {
     }
   };
 
+  // --- 1. START FIREBASE SMS ---
+  const startPhoneVerification = async (phone) => {
+    try {
+      let formatted = phone.replace(/\s/g, "");
+      if (!formatted.startsWith("+")) formatted = `+${formatted}`;
+
+      console.log("Attempting SMS to:", formatted);
+
+      if (!recaptchaVerifier.current) {
+        throw new Error(
+          "Recaptcha is not ready. Please wait a moment or restart the app.",
+        );
+      }
+
+      const phoneProvider = new PhoneAuthProvider(auth);
+      const vid = await phoneProvider.verifyPhoneNumber(
+        formatted,
+        recaptchaVerifier.current,
+      );
+
+      console.log("SMS Sent, Verification ID:", vid);
+      setVerificationId(vid);
+      setIsLoading(false);
+      setPhoneOtpVisible(true);
+      setPhoneOtpCode("");
+    } catch (err) {
+      setIsLoading(false);
+      console.log("SMS Error Details:", err);
+      if (err.message && err.message.includes("cancelled")) return;
+
+      let msg = err.message;
+      if (err.code === "auth/argument-error") {
+        msg =
+          "Internal Error: Recaptcha or Phone Number issue. Please try again.";
+      }
+      showModal("error", "SMS Failed", msg);
+    }
+  };
+
+  // --- 2. VERIFY FIREBASE OTP ---
   const verifyPhoneOtp = async () => {
     if (phoneOtpCode.length !== 6) {
       showModal("error", "Invalid Code", "Please enter 6 digits.");
@@ -285,23 +324,25 @@ export default function ProfileSettingsScreen() {
     }
     setIsLoading(true);
     try {
+      const credential = PhoneAuthProvider.credential(
+        verificationId,
+        phoneOtpCode,
+      );
+      await signInWithCredential(auth, credential);
+
+      setPhoneOtpVisible(false);
       const {
         data: { user },
-        error,
-      } = await supabase.auth.verifyOtp({
-        phone: pendingPhone,
-        token: phoneOtpCode,
-        type: "phone_change",
-      });
-      if (error) throw error;
-      setPhoneOtpVisible(false);
+      } = await supabase.auth.getUser();
       await finalizeProfileUpdate(user.id);
     } catch (error) {
       setIsLoading(false);
-      showModal("error", "Verification Failed", error.message);
+      console.log("OTP Error:", error);
+      showModal("error", "Verification Failed", "Invalid code or expired.");
     }
   };
 
+  // --- 3. UPDATE SUPABASE DATABASE ---
   const finalizeProfileUpdate = async (userId) => {
     try {
       let uploadedAvatarUrl = avatarUrl;
@@ -317,7 +358,9 @@ export default function ProfileSettingsScreen() {
         email: email,
         first_name: firstName,
         last_name: lastName || "",
-        phone_number: cleanPhone,
+        phone_number: isPhoneEditable
+          ? cleanPhone
+          : initialData.phoneNumber.replace(/\s/g, ""),
         region: region || "",
         city: city || "",
         zip_code: zipCode || "",
@@ -330,22 +373,21 @@ export default function ProfileSettingsScreen() {
       const { error: dbError } = await supabase.from("users").upsert(updates);
       if (dbError) throw dbError;
 
-      // --- CRITICAL FIX: RESET INITIAL DATA TO CURRENT STATE ---
-      // This tells the "Unsaved Changes" checker that everything is clean.
       setInitialData({
         firstName: firstName,
         lastName: lastName,
-        phoneNumber: phoneNumber, // Use the formatted phone currently in state
+        phoneNumber: phoneNumber,
         region: region,
         city: city,
         zipCode: zipCode,
         streetAddress: streetAddress,
-        avatarUrl: uploadedAvatarUrl,
+        avatar_url: uploadedAvatarUrl,
       });
 
       setAvatarUrl(uploadedAvatarUrl);
-      setSelectedImage(null); // Clear selected image
-      setIsPhoneEditable(false);
+      setSelectedImage(null);
+
+      if (cleanPhone.length > 5) setIsPhoneEditable(false);
 
       showModal("success", "Saved", "Profile details updated successfully.");
     } catch (error) {
@@ -356,7 +398,6 @@ export default function ProfileSettingsScreen() {
   };
 
   const hasUnsavedChanges = () => {
-    // We compare current state against the initialData snapshot
     return (
       firstName !== initialData.firstName ||
       lastName !== initialData.lastName ||
@@ -410,21 +451,6 @@ export default function ProfileSettingsScreen() {
   const displayImageUri = selectedImage ? selectedImage.uri : avatarUrl;
   const initials = firstName ? firstName.charAt(0) : "?";
 
-  if (isLoading && !modalConfig.visible && !phoneOtpVisible) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: theme.background,
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        <ActivityIndicator size="large" color="#B0B0B0" />
-      </View>
-    );
-  }
-
   return (
     <SafeAreaView
       className="flex-1"
@@ -435,6 +461,19 @@ export default function ProfileSettingsScreen() {
         barStyle={theme.statusBarStyle}
         backgroundColor={theme.background}
       />
+
+      {/* --- ALWAYS RENDERED RECAPTCHA --- */}
+      <FirebaseRecaptcha
+        ref={recaptchaVerifier}
+        firebaseConfig={firebaseConfig}
+      />
+
+      {/* --- LOADING OVERLAY --- */}
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#B0B0B0" />
+        </View>
+      )}
 
       <View
         className="flex-row items-center justify-center px-6 py-5 border-b"
@@ -485,7 +524,11 @@ export default function ProfileSettingsScreen() {
           <View className="p-6 pb-10">
             {/* AVATAR */}
             <View className="items-center mb-8">
-              <View className="relative w-24 h-24 mb-4">
+              <TouchableOpacity
+                onPress={() => displayImageUri && setIsPreviewVisible(true)}
+                activeOpacity={displayImageUri ? 0.8 : 1}
+                className="relative w-24 h-24 mb-4"
+              >
                 {displayImageUri ? (
                   <Image
                     source={{ uri: displayImageUri }}
@@ -511,6 +554,7 @@ export default function ProfileSettingsScreen() {
                     </Text>
                   </View>
                 )}
+
                 <TouchableOpacity
                   onPress={handleOpenImagePicker}
                   className="absolute bottom-0 right-0 w-8 h-8 rounded-full justify-center items-center border-[3px]"
@@ -525,7 +569,8 @@ export default function ProfileSettingsScreen() {
                     color={theme.text}
                   />
                 </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
+
               <View
                 className="px-3 py-1 rounded-xl border"
                 style={{
@@ -575,7 +620,11 @@ export default function ProfileSettingsScreen() {
               scaledSize={scaledSize}
             />
             <InputGroup
-              label="Phone Number"
+              label={
+                isPhoneEditable
+                  ? "Phone Number (Unverified)"
+                  : "Phone Number (Verified)"
+              }
               icon="phone"
               placeholder="09XX XXX XXXX"
               value={phoneNumber}
@@ -650,7 +699,7 @@ export default function ProfileSettingsScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* --- GUIDELINES MODAL --- */}
+      {/* --- REVERTED GUIDELINES MODAL --- */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -738,48 +787,6 @@ export default function ProfileSettingsScreen() {
                 }}
               >
                 • Aspect Ratio: 1:1 (Square)
-              </Text>
-
-              <Text
-                style={{
-                  fontWeight: "bold",
-                  color: theme.text,
-                  marginTop: 8,
-                  marginBottom: 4,
-                  fontSize: scaledSize(13),
-                }}
-              >
-                2. Content Guidelines
-              </Text>
-              <Text
-                style={{
-                  color: theme.textSecondary,
-                  fontSize: scaledSize(12),
-                  lineHeight: 18,
-                  marginBottom: 4,
-                }}
-              >
-                • Face Visibility: Face must be clearly visible.
-              </Text>
-              <Text
-                style={{
-                  color: theme.textSecondary,
-                  fontSize: scaledSize(12),
-                  lineHeight: 18,
-                  marginBottom: 4,
-                }}
-              >
-                • Subject: Must be a photo of you.
-              </Text>
-              <Text
-                style={{
-                  color: theme.textSecondary,
-                  fontSize: scaledSize(12),
-                  lineHeight: 18,
-                  marginBottom: 8,
-                }}
-              >
-                • No offensive content.
               </Text>
             </ScrollView>
 
@@ -904,13 +911,13 @@ export default function ProfileSettingsScreen() {
               className="text-center font-bold mb-4"
               style={{ color: theme.text, fontSize: scaledSize(18) }}
             >
-              Verify Phone Number
+              Verify Mobile Number
             </Text>
             <Text
               className="text-center mb-6"
               style={{ color: theme.textSecondary, fontSize: scaledSize(13) }}
             >
-              A code has been sent to {pendingPhone}
+              We sent a code to the number you provided.
             </Text>
             <TextInput
               style={{
@@ -963,12 +970,47 @@ export default function ProfileSettingsScreen() {
               style={{ marginTop: 16, alignItems: "center" }}
             >
               <Text
-                style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(14),
+                }}
               >
                 Cancel
               </Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </Modal>
+
+      {/* --- IMAGE PREVIEW MODAL --- */}
+      <Modal
+        visible={isPreviewVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsPreviewVisible(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.95)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => setIsPreviewVisible(false)}
+            style={{ position: "absolute", top: 50, right: 24, zIndex: 20 }}
+          >
+            <MaterialIcons name="close" size={32} color="white" />
+          </TouchableOpacity>
+
+          {displayImageUri && (
+            <Image
+              source={{ uri: displayImageUri }}
+              style={{ width: "90%", height: "80%" }}
+              resizeMode="contain"
+            />
+          )}
         </View>
       </Modal>
 
@@ -989,6 +1031,17 @@ export default function ProfileSettingsScreen() {
   );
 }
 
+const styles = StyleSheet.create({
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    zIndex: 999,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});
+
+// ... Helper Components ...
 function InputGroup({
   label,
   icon,
@@ -1054,7 +1107,6 @@ function InputGroup({
   );
 }
 
-// --- FIXED CUSTOM MODAL STYLING FOR BALANCE ---
 function CustomModal({
   visible,
   type,

@@ -75,7 +75,6 @@ const getRefinedSecurityMessage = (title, body) => {
   const b = body ? body.toLowerCase() : "";
 
   // 1. CONCURRENT LOGIN DETECTION
-  // If we receive "Login Successful" while the app is running, it's a concurrent login.
   if (t.includes("login successful")) {
     return {
       title: "Security Alert",
@@ -216,13 +215,12 @@ function BottomTabNavigator() {
     const subscription = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const data = response.notification.request.content.data;
-        // --- NAVIGATION LOGIC FIX ---
         if (data?.screen === "Invitations") {
           navigation.navigate("Invitations");
         } else if (data?.screen === "Notifications") {
           navigation.navigate("Notifications");
         } else {
-          navigation.navigate("Notifications"); // Default fallback
+          navigation.navigate("Notifications");
         }
       },
     );
@@ -314,6 +312,10 @@ export default function AppNavigator() {
   const { user: authUser, isLoading } = useAuth();
   const notifiedIds = useRef(new Set());
 
+  // --- NEW: Track if we just logged in ---
+  // Initialized to true, but we MUST reset it when authUser changes (login)
+  const isJustLoggedIn = useRef(true);
+
   useEffect(() => {
     registerForPushNotificationsAsync().then(async (token) => {
       if (token && authUser) {
@@ -333,13 +335,30 @@ export default function AppNavigator() {
       }
     };
     loadHistory();
-  }, [authUser]);
 
+    // --- COOLDOWN TIMER ---
+    // 1. FORCE RESET flag to true whenever authUser appears (Login Event)
+    if (authUser) {
+      isJustLoggedIn.current = true;
+      console.log("LOGIN DETECTED: Suppressing self-alerts for 15s...");
+    }
+
+    // 2. Start Timer to disable flag after 15 seconds
+    const timer = setTimeout(() => {
+      isJustLoggedIn.current = false;
+      console.log("COOLDOWN OVER: Security alerts enabled.");
+    }, 15000); // 15 seconds cooldown
+
+    return () => clearTimeout(timer);
+  }, [authUser]); // Dependencies: Runs whenever authUser changes
+
+  // --- MODIFIED: Added `silent` parameter ---
   const sendUniqueNotification = async (
     id,
     title,
     body,
     screen = "Notifications",
+    silent = false, // New param to suppress local display
   ) => {
     if (notifiedIds.current.has(id)) {
       return false;
@@ -353,12 +372,19 @@ export default function AppNavigator() {
     } catch (e) {
       console.log("Failed to save history", e);
     }
+
+    // IF SILENT IS TRUE, WE DO NOT SHOW THE BANNER
+    if (silent) {
+      console.log(`Silenced Notification: ${title}`);
+      return true;
+    }
+
     await Notifications.scheduleNotificationAsync({
       content: {
         title: title,
         body: body,
         sound: true,
-        data: { screen: screen }, // Pass screen for redirection
+        data: { screen: screen },
       },
       trigger: null,
     });
@@ -387,7 +413,7 @@ export default function AppNavigator() {
                 invite.id,
                 "New Invitation",
                 "You have a pending GridWatch invitation!",
-                "Invitations", // Redirect to Invitations screen
+                "Invitations",
               );
             }
           });
@@ -402,13 +428,23 @@ export default function AppNavigator() {
 
         if (appNotifs && appNotifs.length > 0) {
           appNotifs.forEach(async (notif) => {
-            // Apply refined message logic
             const { title, body } = getRefinedSecurityMessage(
               notif.title,
               notif.body,
             );
-            const sent = await sendUniqueNotification(notif.id, title, body);
-            if (sent) {
+
+            // --- FILTER: Is this a self-triggered login alert? ---
+            const isSelfLogin =
+              title === "Security Alert" && isJustLoggedIn.current;
+
+            const sent = await sendUniqueNotification(
+              notif.id,
+              title,
+              body,
+              "Notifications",
+              isSelfLogin, // Pass true to silence it
+            );
+            if (sent && !isSelfLogin) {
               console.log("🔔 NEW NOTIFICATION SENT:", title);
             }
           });
@@ -435,7 +471,7 @@ export default function AppNavigator() {
               payload.new.id,
               "New Invitation",
               "You have been invited to join a Hub!",
-              "Invitations", // Redirect to Invitations screen
+              "Invitations",
             );
           }
         },
@@ -446,14 +482,27 @@ export default function AppNavigator() {
         { event: "INSERT", schema: "public", table: "app_notifications" },
         async (payload) => {
           if (payload.new.user_id === myId) {
-            // Apply refined message logic for realtime alerts
             const { title, body } = getRefinedSecurityMessage(
               payload.new.title,
               payload.new.body,
             );
 
-            console.log("✅ REALTIME RECEIVED:", title);
-            await sendUniqueNotification(payload.new.id, title, body);
+            // --- FILTER: Is this a self-triggered login alert? ---
+            const isSelfLogin =
+              title === "Security Alert" && isJustLoggedIn.current;
+
+            console.log(
+              isSelfLogin ? "🔕 Self-Login Ignored" : "✅ REALTIME RECEIVED:",
+              title,
+            );
+
+            await sendUniqueNotification(
+              payload.new.id,
+              title,
+              body,
+              "Notifications",
+              isSelfLogin, // Pass true to silence it
+            );
           }
         },
       )

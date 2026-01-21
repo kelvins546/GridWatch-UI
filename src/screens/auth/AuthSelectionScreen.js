@@ -12,19 +12,32 @@ import {
   ScrollView,
   Alert,
   TextInput,
+  Platform, // Added Platform
+  UIManager, // Added UIManager
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
+
 // 1. Import Supabase & createClient
 import { supabase } from "../../lib/supabase";
 import { createClient } from "@supabase/supabase-js";
+
+// 2. Import Notifications to trigger manual push on login
+import * as Notifications from "expo-notifications";
 
 import {
   GoogleSignin,
   statusCodes,
 } from "@react-native-google-signin/google-signin";
+
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // --- EMAILJS CONFIGURATION ---
 const EMAILJS_SERVICE_ID = "service_ah3k0xc";
@@ -121,13 +134,33 @@ export default function AuthSelectionScreen() {
     }
   };
 
-  // --- LOG HELPER ---
+  // --- LOG HELPER (UPDATED) ---
   const logLoginSuccess = async (userId, method) => {
     try {
-      await supabase.from("app_notifications").insert({
+      const title = "Login Successful";
+      const body = `${method} Login • ${Platform.OS.toUpperCase()} • ${new Date().toLocaleTimeString()}`;
+
+      // 1. Insert into Database (So it shows in Logs)
+      const { error } = await supabase.from("app_notifications").insert({
         user_id: userId,
-        title: "Login Successful",
-        body: `${method} Login • ${Platform.OS.toUpperCase()} • ${new Date().toLocaleTimeString()}`,
+        title: title,
+        body: body,
+        is_read: false, // Explicitly set unread
+      });
+
+      if (error) {
+        console.log("DB Insert Error:", error.message);
+      }
+
+      // 2. Manually Trigger Push Notification (So it shows Banner)
+      // We do this manually because the AppNavigator listener might not be ready yet during login transition.
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: title,
+          body: body,
+          sound: true,
+        },
+        trigger: null, // Immediate
       });
     } catch (err) {
       console.log("Log error", err);
@@ -153,7 +186,10 @@ export default function AuthSelectionScreen() {
         token: idToken,
       });
 
-      await logLoginSuccess(realData.user.id, "Google");
+      // Log success before navigation
+      if (realData?.user) {
+        await logLoginSuccess(realData.user.id, "Google");
+      }
 
       setIsLoading(false);
       // Double check profile existence logic from original code
@@ -357,13 +393,15 @@ export default function AuthSelectionScreen() {
           refresh_token: session.refresh_token,
         });
 
+        // Log login success (2FA)
         await logLoginSuccess(session.user.id, "Google + 2FA");
 
         setMfaVisible(false);
         setPendingIdToken(null);
         setIsLoading(false);
 
-        // App.js listener handles navigation
+        // Navigation
+        navigation.reset({ index: 0, routes: [{ name: "MainApp" }] });
       } else {
         throw new Error("Failed to transfer session.");
       }
@@ -441,6 +479,8 @@ export default function AuthSelectionScreen() {
       if (dbError) console.log("Profile Upsert Note:", dbError.message);
 
       await sendWelcomeEmail(user.email, firstName);
+
+      // Log login success (Signup)
       await logLoginSuccess(user.id, "Google Signup");
 
       setIsLoading(false);

@@ -24,8 +24,8 @@ export default function ResetPasswordScreen() {
   const { theme, fontScale } = useTheme();
 
   const scaledSize = (size) => size * (fontScale || 1);
-  // Optional: Display the email passed from the previous screen for context
-  const userEmail = route.params?.email || "your account";
+  const userEmail = route.params?.email;
+  const userToken = route.params?.token;
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -41,11 +41,10 @@ export default function ResetPasswordScreen() {
     onPress: null,
   });
 
-  // Password Validation Logic
   const hasLength = password.length >= 8;
   const hasNumber = /\d/.test(password);
   const hasUpper = /[A-Z]/.test(password);
-  const hasLower = /[a-z]/.test(password); // Added lower check for completeness
+  const hasLower = /[a-z]/.test(password);
   const hasSpecial = /[!@#$%^&*(),.?":{}|<> ]/.test(password);
   const isMatch = password === confirmPassword && password.length > 0;
   const isStrong = hasLength && hasNumber && hasUpper && hasSpecial && isMatch;
@@ -69,14 +68,29 @@ export default function ResetPasswordScreen() {
     setIsLoading(true);
 
     try {
-      // 1. Update Password in Supabase
-      const { error } = await supabase.auth.updateUser({
+      // 1. Verify OTP first
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email: userEmail,
+        token: userToken,
+        type: "email",
+      });
+
+      if (verifyError) throw verifyError;
+
+      // --- FIX: EXPLICITLY SET SESSION ---
+      // This ensures updateUser has the auth context immediately
+      if (data?.session) {
+        await supabase.auth.setSession(data.session);
+      }
+
+      // 2. Update Password
+      const { error: updateError } = await supabase.auth.updateUser({
         password: password,
       });
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
-      // 2. Success - Sign out to force re-login
+      // 3. Success - Sign out so they can log in with new password
       await supabase.auth.signOut();
 
       setIsLoading(false);
@@ -92,7 +106,6 @@ export default function ResetPasswordScreen() {
     }
   };
 
-  // Styles matching ForgotPasswordScreen
   const styles = StyleSheet.create({
     modalOverlay: {
       flex: 1,
@@ -142,7 +155,6 @@ export default function ResetPasswordScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* Loading Overlay */}
       {isLoading && (
         <View className="absolute z-50 w-full h-full bg-black/70 justify-center items-center">
           <ActivityIndicator size="large" color={theme.buttonPrimary} />
@@ -166,7 +178,6 @@ export default function ResetPasswordScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View>
-            {/* Header Icon */}
             <View className="items-center mb-10">
               <View
                 className="w-20 h-20 rounded-full items-center justify-center mb-6"
@@ -199,7 +210,6 @@ export default function ResetPasswordScreen() {
               </Text>
             </View>
 
-            {/* Inputs */}
             <View className="mb-6">
               <Text
                 className="text-[11px] font-bold uppercase mb-2"
@@ -276,7 +286,6 @@ export default function ResetPasswordScreen() {
               </View>
             </View>
 
-            {/* Requirements Box */}
             {password.length > 0 && (
               <View
                 className="p-4 rounded-xl border mb-6"
@@ -319,7 +328,6 @@ export default function ResetPasswordScreen() {
               </View>
             )}
 
-            {/* Submit Button */}
             <TouchableOpacity
               onPress={handleUpdatePassword}
               activeOpacity={0.8}
@@ -337,7 +345,6 @@ export default function ResetPasswordScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* Back Button (Moved to bottom) */}
             <TouchableOpacity
               onPress={() => navigation.goBack()}
               disabled={isLoading}
@@ -359,7 +366,6 @@ export default function ResetPasswordScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Alert Modal */}
       <Modal
         animationType="fade"
         transparent={true}

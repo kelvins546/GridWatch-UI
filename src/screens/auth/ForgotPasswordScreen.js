@@ -93,7 +93,7 @@ export default function ForgotPasswordScreen() {
     setIsLoading(true);
 
     try {
-      // 1. Send OTP via Supabase (Uses the custom HTML template you set in Dashboard)
+      // 1. Send OTP via Supabase
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
       });
@@ -112,29 +112,20 @@ export default function ForgotPasswordScreen() {
     }
   };
 
-  const handleVerify = async () => {
+  // --- FIX: Pass Token, Don't Verify Here ---
+  const handleVerify = () => {
     const token = otp.join("");
-    if (token.length < 6) return;
-
-    setIsLoading(true);
-
-    try {
-      // 2. Verify OTP (Logs user in securely)
-      const { error } = await supabase.auth.verifyOtp({
-        email: email.trim(),
-        token: token,
-        type: "email",
-      });
-
-      if (error) throw error;
-
-      setOtpModalVisible(false);
-      navigation.navigate("ResetPassword", { email: email });
-    } catch (err) {
-      showModal("error", "Verification Failed", "Invalid code or expired.");
-    } finally {
-      setIsLoading(false);
+    if (token.length < 6) {
+      showModal("error", "Invalid Code", "Please enter a 6-digit code.");
+      return;
     }
+
+    // Close modal and pass token to ResetPasswordScreen
+    setOtpModalVisible(false);
+    navigation.navigate("ResetPassword", {
+      email: email,
+      token: token, // <--- Passing the token to next screen
+    });
   };
 
   const handleResend = async () => {
@@ -245,7 +236,6 @@ export default function ForgotPasswordScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- UPDATED LOADING STATE --- */}
       {isLoading && (
         <View className="absolute z-50 w-full h-full bg-black/70 justify-center items-center">
           <ActivityIndicator size="large" color="#ffffff" />
@@ -302,7 +292,6 @@ export default function ForgotPasswordScreen() {
               </Text>
             </View>
 
-            {/* Email Input */}
             <View className="mb-8">
               <View className="flex-row justify-between items-center mb-2">
                 <Text
@@ -396,7 +385,6 @@ export default function ForgotPasswordScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* OTP MODAL */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -465,7 +453,7 @@ export default function ForgotPasswordScreen() {
                       letterSpacing: 1,
                     }}
                   >
-                    VERIFY
+                    CONTINUE
                   </Text>
                 )}
               </View>
@@ -506,7 +494,6 @@ export default function ForgotPasswordScreen() {
         </View>
       </Modal>
 
-      {/* ERROR MODAL */}
       <Modal
         animationType="fade"
         transparent={true}
