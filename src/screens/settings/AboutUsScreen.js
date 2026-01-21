@@ -33,7 +33,7 @@ const TEAM_MEMBERS = [
   {
     name: "Natasha Pearl Alonzo",
     role: "Hardware Specialist/ Documentation",
-    image: null, // require('../../../assets/natasha.png')
+    image: require("../../../assets/natasha.png"),
   },
   {
     name: "Leo Carlo C. Atay",
@@ -43,7 +43,7 @@ const TEAM_MEMBERS = [
   {
     name: "Cielo P. Cortado",
     role: "UI/UX Designer/Documentation",
-    image: null, // require('../../../assets/cielo.png')
+    image: require("../../../assets/cielo.png"),
   },
   {
     name: "Francis Gian N. Felipe",
@@ -64,7 +64,7 @@ export default function AboutUsScreen() {
 
   const handleLinkPress = (url) => {
     Linking.openURL(url).catch((err) =>
-      console.error("An error occurred", err)
+      console.error("An error occurred", err),
     );
   };
 

@@ -23,6 +23,11 @@ import { useTheme } from "../../context/ThemeContext";
 import { supabase } from "../../lib/supabase";
 import { createClient } from "@supabase/supabase-js";
 
+// --- NEW: Notification Imports ---
+import * as Notifications from "expo-notifications";
+import * as Device from "expo-device";
+import Constants from "expo-constants";
+
 import {
   GoogleSignin,
   statusCodes,
@@ -30,6 +35,36 @@ import {
 
 const ALLOWED_EMAIL_REGEX =
   /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
+
+// --- NEW: Push Token Helper Function ---
+async function registerForPushNotificationsAsync() {
+  if (!Device.isDevice) return null;
+
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+
+  if (existingStatus !== "granted") {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+
+  if (finalStatus !== "granted") {
+    return null;
+  }
+
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+  if (!projectId) return null;
+
+  try {
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId,
+    });
+    return tokenData.data;
+  } catch (error) {
+    console.log("Error getting push token:", error);
+    return null;
+  }
+}
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -223,12 +258,24 @@ export default function LoginScreen() {
     }
   };
 
+  // --- MODIFIED: REAL EMAIL LOGIN WITH TOKEN ---
   const performRealEmailLogin = async () => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email,
       password: password,
     });
+
     if (!error) {
+      // 1. GET & SAVE PUSH TOKEN
+      const pushToken = await registerForPushNotificationsAsync();
+      if (pushToken && data?.user?.id) {
+        await supabase
+          .from("users")
+          .update({ expo_push_token: pushToken })
+          .eq("id", data.user.id);
+      }
+
+      // 2. LOG & NAVIGATE
       await logLoginSuccess(data.user.id, "Email");
       navigation.reset({ index: 0, routes: [{ name: "MainApp" }] });
     }
@@ -324,10 +371,22 @@ export default function LoginScreen() {
         setIsLoading(false);
         setMfaVisible(true);
       } else {
+        // --- MODIFIED: REAL GOOGLE LOGIN WITH TOKEN ---
         const { data: realData } = await supabase.auth.signInWithIdToken({
           provider: "google",
           token: idToken,
         });
+
+        // 1. GET & SAVE PUSH TOKEN
+        const pushToken = await registerForPushNotificationsAsync();
+        if (pushToken && realData?.user?.id) {
+          await supabase
+            .from("users")
+            .update({ expo_push_token: pushToken })
+            .eq("id", realData.user.id);
+        }
+
+        // 2. LOG & NAVIGATE
         await logLoginSuccess(realData.user.id, "Google");
         setIsLoading(false);
         navigation.reset({ index: 0, routes: [{ name: "MainApp" }] });
@@ -464,6 +523,15 @@ export default function LoginScreen() {
           access_token: session.access_token,
           refresh_token: session.refresh_token,
         });
+
+        // --- MODIFIED: SAVE PUSH TOKEN AFTER 2FA ---
+        const pushToken = await registerForPushNotificationsAsync();
+        if (pushToken && session?.user?.id) {
+          await supabase
+            .from("users")
+            .update({ expo_push_token: pushToken })
+            .eq("id", session.user.id);
+        }
 
         const method = googleIdToken ? "Google + 2FA" : "Email + 2FA";
         await logLoginSuccess(session.user.id, method);

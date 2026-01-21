@@ -24,53 +24,103 @@ export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // --- 1. HELPER: CATEGORIZE NOTIFICATIONS ---
-  const parseNotification = (note) => {
-    const title = note.title.toLowerCase();
-    const body = note.body.toLowerCase();
-    let type = "info";
-    let icon = "notifications";
-    let category = "system";
+  // --- 1. HELPER: STANDARDIZE DATA STRUCTURE ---
+  const normalizeData = (item, source) => {
+    let title, body, category, type, icon, dateObj, isRead;
 
-    if (title.includes("login") || title.includes("password")) {
-      category = "login";
-      type = title.includes("failed") ? "login_failed" : "login_success";
-      icon = title.includes("failed") ? "gpp-bad" : "lock-open";
-    } else if (title.includes("accepted")) {
-      type = "success";
-      icon = "check-circle";
-    } else if (title.includes("declined")) {
-      type = "critical";
-      icon = "cancel";
-    } else if (title.includes("fault") || body.includes("detected")) {
-      type = "critical";
-      icon = "error-outline";
-    } else if (title.includes("budget") || body.includes("limit")) {
-      type = "budget";
-      icon = "account-balance-wallet";
+    if (source === "invite") {
+      // --- HANDLE INVITES (hub_invites table) ---
+      title = "New Invitation";
+      body = "You have been invited to join a Hub! Tap to view.";
+      category = "system";
+      type = "success"; // Green check/person icon
+      icon = "person-add";
+      dateObj = new Date(item.created_at);
+      isRead = false; // Invites are always "unread" in logs until handled
+    } else {
+      // --- HANDLE APP NOTIFICATIONS (app_notifications table) ---
+      title = item.title;
+      body = item.body;
+      isRead = item.is_read;
+      dateObj = new Date(item.created_at);
+
+      const tLower = title.toLowerCase();
+      const bLower = body.toLowerCase();
+
+      // SECURITY INTERCEPTOR
+      if (
+        tLower.includes("login successful") || // Catch standard login
+        tLower.includes("other device") ||
+        bLower.includes("other device") ||
+        bLower.includes("someone login") ||
+        bLower.includes("did you just login")
+      ) {
+        // Only rewrite to "Alert" if we are viewing the log
+        // (You might want logic to distinguish 'my login' vs 'other login',
+        // but for safety, we highlight concurrent logins here if needed)
+        if (title === "Security Alert" || tLower.includes("other device")) {
+          category = "system";
+          type = "critical";
+          icon = "security";
+        } else {
+          // Standard login logs
+          category = "login";
+          type = "login_success";
+          icon = "lock-open";
+        }
+      } else {
+        // Standard Categorization
+        if (tLower.includes("login") || tLower.includes("password")) {
+          category = "login";
+          type = tLower.includes("failed") ? "login_failed" : "login_success";
+          icon = tLower.includes("failed") ? "gpp-bad" : "lock-open";
+        } else {
+          category = "system";
+          if (tLower.includes("accepted")) {
+            type = "success";
+            icon = "check-circle";
+          } else if (tLower.includes("declined")) {
+            type = "critical";
+            icon = "cancel";
+          } else if (tLower.includes("fault") || bLower.includes("detected")) {
+            type = "critical";
+            icon = "error-outline";
+          } else if (tLower.includes("budget") || bLower.includes("limit")) {
+            type = "budget";
+            icon = "account-balance-wallet";
+          } else {
+            type = "info";
+            icon = "notifications";
+          }
+        }
+      }
     }
 
-    const dateObj = new Date(note.created_at);
+    // Date Formatting
     const timeString =
       dateObj.toLocaleDateString() === new Date().toLocaleDateString()
-        ? dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        ? dateObj.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
         : dateObj.toLocaleDateString();
 
     return {
-      id: note.id,
+      id: item.id,
       type,
       icon,
       category,
-      title: note.title,
-      desc: note.body,
+      title,
+      desc: body,
       time: timeString,
-      unread: !note.is_read,
+      unread: !isRead,
       rawDate: dateObj,
+      source, // 'invite' or 'notification'
     };
   };
 
-  // --- 2. FETCH DATA ---
-  const fetchNotifications = async () => {
+  // --- 2. FETCH ALL DATA (NOTIFICATIONS + INVITES) ---
+  const fetchAllLogs = async () => {
     setLoading(true);
     try {
       const {
@@ -78,24 +128,42 @@ export default function NotificationsScreen() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
+      // A. Fetch Notifications
+      const { data: notifs, error: notifError } = await supabase
         .from("app_notifications")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (notifError) throw notifError;
 
-      const parsed = data.map(parseNotification);
-      setNotifications(parsed);
+      // B. Fetch Pending Invites
+      const { data: invites, error: inviteError } = await supabase
+        .from("hub_invites")
+        .select("*")
+        .eq("email", user.email) // Filter by email for invites
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+
+      if (inviteError) throw inviteError;
+
+      // C. Merge & Sort
+      const parsedNotifs = notifs.map((n) => normalizeData(n, "notification"));
+      const parsedInvites = invites.map((i) => normalizeData(i, "invite"));
+
+      const combined = [...parsedNotifs, ...parsedInvites].sort(
+        (a, b) => b.rawDate - a.rawDate,
+      );
+
+      setNotifications(combined);
     } catch (err) {
-      console.log("Error fetching notifications:", err.message);
+      console.log("Error fetching logs:", err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- 3. REALTIME LISTENER ---
+  // --- 3. REALTIME LISTENERS (BOTH TABLES) ---
   useEffect(() => {
     let subscription;
     const setupLive = async () => {
@@ -105,7 +173,8 @@ export default function NotificationsScreen() {
       if (!user) return;
 
       subscription = supabase
-        .channel("notif_screen_updates")
+        .channel("screen_logs")
+        // Listen for App Notifications
         .on(
           "postgres_changes",
           {
@@ -115,14 +184,38 @@ export default function NotificationsScreen() {
             filter: `user_id=eq.${user.id}`,
           },
           (payload) => {
-            const newNote = parseNotification(payload.new);
+            // Apply Concurrent Login Logic Here
+            let rawData = payload.new;
+            if (rawData.title.toLowerCase().includes("login successful")) {
+              rawData = {
+                ...rawData,
+                title: "Security Alert",
+                body: "New Login Detected: Did you just log in on another device? If not, please change your password immediately.",
+              };
+            }
+            const newNote = normalizeData(rawData, "notification");
             setNotifications((prev) => [newNote, ...prev]);
+          },
+        )
+        // Listen for New Invites
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "hub_invites",
+            filter: `email=eq.${user.email}`,
+          },
+          (payload) => {
+            const newInvite = normalizeData(payload.new, "invite");
+            setNotifications((prev) => [newInvite, ...prev]);
           },
         )
         .subscribe();
     };
+
     setupLive();
-    fetchNotifications();
+    fetchAllLogs();
 
     return () => {
       if (subscription) supabase.removeChannel(subscription);
@@ -136,10 +229,12 @@ export default function NotificationsScreen() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+      // Only mark app_notifications as read in DB
       await supabase
         .from("app_notifications")
         .update({ is_read: true })
         .eq("user_id", user.id);
+      // Invites remain "pending" in DB until accepted/declined in Invitations screen
     } catch (err) {
       console.log("Error marking read:", err);
     }
@@ -159,7 +254,7 @@ export default function NotificationsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- FIXED HEADER --- */}
+      {/* --- HEADER --- */}
       <View
         style={{
           flexDirection: "row",
@@ -238,7 +333,7 @@ export default function NotificationsScreen() {
         refreshControl={
           <RefreshControl
             refreshing={loading}
-            onRefresh={fetchNotifications}
+            onRefresh={fetchAllLogs}
             tintColor={theme.buttonPrimary}
           />
         }
@@ -271,6 +366,7 @@ export default function NotificationsScreen() {
                     theme={theme}
                     isDarkMode={isDarkMode}
                     scaledSize={scaledSize}
+                    navigation={navigation}
                   />
                 ))}
               </>
@@ -297,6 +393,7 @@ export default function NotificationsScreen() {
                   theme={theme}
                   isDarkMode={isDarkMode}
                   scaledSize={scaledSize}
+                  navigation={navigation}
                 />
               ))
             ) : (
@@ -340,7 +437,7 @@ function TabButton({ label, isActive, onPress, theme, scaledSize }) {
   );
 }
 
-function NotificationCard({ data, theme, isDarkMode, scaledSize }) {
+function NotificationCard({ data, theme, isDarkMode, scaledSize, navigation }) {
   let mainColor, bgColor;
 
   if (data.type === "critical" || data.type === "login_failed") {
@@ -349,77 +446,100 @@ function NotificationCard({ data, theme, isDarkMode, scaledSize }) {
   } else if (data.type === "budget") {
     mainColor = isDarkMode ? "#ffaa00" : "#b37400";
     bgColor = isDarkMode ? "rgba(255, 170, 0, 0.15)" : "rgba(179, 116, 0, 0.1)";
-  } else if (data.type === "offline") {
-    mainColor = theme.textSecondary;
-    bgColor = theme.buttonNeutral;
-  } else if (data.type === "login_success" || data.type === "security") {
+  } else if (data.type === "login_success") {
     mainColor = "#0055ff";
     bgColor = isDarkMode ? "rgba(0, 85, 255, 0.15)" : "rgba(0, 85, 255, 0.1)";
+  } else if (data.type === "success") {
+    mainColor = theme.buttonPrimary;
+    bgColor = isDarkMode ? "rgba(0, 255, 153, 0.15)" : "rgba(0, 153, 94, 0.15)";
   } else {
     mainColor = theme.buttonPrimary;
     bgColor = isDarkMode ? "rgba(0, 255, 153, 0.15)" : "rgba(0, 153, 94, 0.15)";
   }
 
+  // Handle tap for invites
+  const handlePress = () => {
+    if (data.source === "invite") {
+      navigation.navigate("Invitations");
+    }
+  };
+
   return (
-    <View
-      style={[
-        styles.card,
-        {
-          backgroundColor: theme.card,
-          borderColor: theme.cardBorder,
-          borderLeftColor: mainColor,
-        },
-      ]}
+    <TouchableOpacity
+      activeOpacity={data.source === "invite" ? 0.7 : 1}
+      onPress={handlePress}
     >
-      {data.unread && (
-        <View
-          style={[styles.unreadDot, { backgroundColor: theme.buttonPrimary }]}
-        />
-      )}
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: theme.card,
+            borderColor: theme.cardBorder,
+            borderLeftColor: mainColor,
+          },
+        ]}
+      >
+        {data.unread && (
+          <View
+            style={[styles.unreadDot, { backgroundColor: theme.buttonPrimary }]}
+          />
+        )}
 
-      <View style={[styles.iconBox, { backgroundColor: bgColor }]}>
-        <MaterialIcons
-          name={data.icon}
-          size={scaledSize(24)}
-          color={mainColor}
-        />
-      </View>
-
-      <View style={{ flex: 1 }}>
-        <View style={styles.cardHeader}>
-          <Text
-            style={[
-              styles.cardTitle,
-              { color: theme.text, fontSize: scaledSize(14) },
-            ]}
-          >
-            {data.title}
-          </Text>
-          <Text
-            style={[
-              styles.timeAgo,
-              { color: theme.textSecondary, fontSize: scaledSize(11) },
-            ]}
-          >
-            {data.time}
-          </Text>
+        <View style={[styles.iconBox, { backgroundColor: bgColor }]}>
+          <MaterialIcons
+            name={data.icon}
+            size={scaledSize(24)}
+            color={mainColor}
+          />
         </View>
-        <Text
-          style={[
-            styles.cardDesc,
-            { color: theme.textSecondary, fontSize: scaledSize(12) },
-          ]}
-        >
-          {data.desc}
-        </Text>
+
+        <View style={{ flex: 1 }}>
+          <View style={styles.cardHeader}>
+            <Text
+              style={[
+                styles.cardTitle,
+                { color: theme.text, fontSize: scaledSize(14) },
+              ]}
+            >
+              {data.title}
+            </Text>
+            <Text
+              style={[
+                styles.timeAgo,
+                { color: theme.textSecondary, fontSize: scaledSize(11) },
+              ]}
+            >
+              {data.time}
+            </Text>
+          </View>
+          <Text
+            style={[
+              styles.cardDesc,
+              { color: theme.textSecondary, fontSize: scaledSize(12) },
+            ]}
+          >
+            {data.desc}
+          </Text>
+          {data.source === "invite" && (
+            <Text
+              style={{
+                color: theme.buttonPrimary,
+                fontSize: scaledSize(10),
+                fontWeight: "bold",
+                marginTop: 4,
+              }}
+            >
+              Tap to manage invite →
+            </Text>
+          )}
+        </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  // Tab Styles
   tabContainer: {
     flexDirection: "row",
     paddingHorizontal: 24,

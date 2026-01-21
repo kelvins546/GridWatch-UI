@@ -12,8 +12,8 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-  Image, // Added Image
-  Keyboard, // Added Keyboard to dismiss on select
+  Image,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -61,6 +61,9 @@ export default function FamilyAccessScreen() {
   const [showHubModal, setShowHubModal] = useState(false);
   const [selectedHubs, setSelectedHubs] = useState([]);
   const [grantAllAccess, setGrantAllAccess] = useState(true);
+
+  // --- NEW: HUB DROPDOWN STATE ---
+  const [isHubDropdownOpen, setIsHubDropdownOpen] = useState(false);
 
   // Modals
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -354,10 +357,12 @@ export default function FamilyAccessScreen() {
   const toggleHubSelection = (hubId) => {
     if (selectedHubs.includes(hubId)) {
       setSelectedHubs(selectedHubs.filter((id) => id !== hubId));
+      // Removing a hub means we no longer have full access
       setGrantAllAccess(false);
     } else {
       const newSelection = [...selectedHubs, hubId];
       setSelectedHubs(newSelection);
+      // Check if all hubs are now selected
       if (newSelection.length === MOCK_HUBS.length) {
         setGrantAllAccess(true);
       }
@@ -572,14 +577,19 @@ export default function FamilyAccessScreen() {
             >
               Access Rights
             </Text>
+
+            {/* FULL ACCESS TOGGLE BUTTON */}
             <TouchableOpacity
               onPress={() => {
-                setSelectedMember(null);
-                setGrantAllAccess(true);
-                setSelectedHubs(MOCK_HUBS.map((h) => h.id));
-                setShowHubModal(true);
+                setGrantAllAccess(!grantAllAccess);
+                // Reset manual selection when toggling
+                if (!grantAllAccess) {
+                  setSelectedHubs(MOCK_HUBS.map((h) => h.id));
+                } else {
+                  setSelectedHubs([]);
+                }
               }}
-              className="flex-row items-center justify-between border rounded-xl px-4 mb-6"
+              className="flex-row items-center justify-between border rounded-xl px-4 mb-4"
               style={{
                 borderColor: theme.cardBorder,
                 backgroundColor: theme.background,
@@ -596,15 +606,135 @@ export default function FamilyAccessScreen() {
                   className="ml-3 font-medium"
                   style={{ color: theme.text, fontSize: scaledSize(14) }}
                 >
-                  {getAccessSummary()}
+                  Full Access (All Hubs)
                 </Text>
               </View>
-              <MaterialIcons
-                name="expand-more"
-                size={scaledSize(20)}
-                color={theme.textSecondary}
-              />
+              <View
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: grantAllAccess
+                    ? theme.buttonPrimary
+                    : theme.textSecondary,
+                  backgroundColor: grantAllAccess
+                    ? theme.buttonPrimary
+                    : "transparent",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                {grantAllAccess && (
+                  <MaterialIcons name="check" size={14} color="#fff" />
+                )}
+              </View>
             </TouchableOpacity>
+
+            {/* --- NEW: HUB DROPDOWN SELECTOR --- */}
+            <View>
+              <TouchableOpacity
+                onPress={() => {
+                  LayoutAnimation.configureNext(
+                    LayoutAnimation.Presets.easeInEaseOut,
+                  );
+                  setIsHubDropdownOpen(!isHubDropdownOpen);
+                }}
+                className="flex-row items-center justify-between border rounded-xl px-4 mb-4"
+                style={{
+                  borderColor: theme.cardBorder,
+                  backgroundColor: theme.background,
+                  height: scaledSize(48),
+                }}
+              >
+                <View className="flex-row items-center">
+                  <MaterialIcons
+                    name="grid-view"
+                    size={scaledSize(20)}
+                    color={theme.textSecondary}
+                  />
+                  <Text
+                    className="ml-3 font-medium"
+                    style={{ color: theme.text, fontSize: scaledSize(14) }}
+                  >
+                    {grantAllAccess
+                      ? "All Hubs Selected"
+                      : selectedHubs.length > 0
+                        ? `${selectedHubs.length} Hubs Selected`
+                        : "Select Hubs"}
+                  </Text>
+                </View>
+                <MaterialIcons
+                  name={isHubDropdownOpen ? "expand-less" : "expand-more"}
+                  size={24}
+                  color={theme.textSecondary}
+                />
+              </TouchableOpacity>
+
+              {/* Dropdown Content */}
+              {isHubDropdownOpen && (
+                <View className="mb-4 pl-2">
+                  {MOCK_HUBS.map((hub) => {
+                    const isSelected =
+                      selectedHubs.includes(hub.id) || grantAllAccess;
+                    return (
+                      <TouchableOpacity
+                        key={hub.id}
+                        onPress={() => {
+                          if (grantAllAccess) {
+                            // If full access was on, switch to manual mode with this item unchecked?
+                            // Usually better to just disable manual checks if Full Access is on, or auto-switch off full access.
+                            // Let's auto-switch off full access for granular control.
+                            setGrantAllAccess(false);
+                            const allIds = MOCK_HUBS.map((h) => h.id).filter(
+                              (id) => id !== hub.id,
+                            );
+                            setSelectedHubs(allIds);
+                          } else {
+                            toggleHubSelection(hub.id);
+                          }
+                        }}
+                        className="flex-row items-center py-2"
+                      >
+                        <View
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 4,
+                            borderWidth: 1,
+                            borderColor: isSelected
+                              ? theme.buttonPrimary
+                              : theme.textSecondary,
+                            backgroundColor: isSelected
+                              ? theme.buttonPrimary
+                              : "transparent",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            marginRight: 12,
+                          }}
+                        >
+                          {isSelected && (
+                            <MaterialIcons
+                              name="check"
+                              size={14}
+                              color="#fff"
+                            />
+                          )}
+                        </View>
+                        <Text
+                          style={{
+                            color: theme.text,
+                            fontSize: scaledSize(14),
+                          }}
+                        >
+                          {hub.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
 
             <TouchableOpacity
               onPress={handlePreInvite}

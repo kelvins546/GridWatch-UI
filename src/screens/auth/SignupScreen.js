@@ -565,7 +565,7 @@ export default function SignupScreen() {
           showModal(
             "success",
             "Success",
-            "Account has been verified and created.", // <--- EXACT TEXT REQUESTED
+            "Account has been verified and created.",
             handleFinalSignup,
           );
         }, 400);
@@ -720,17 +720,14 @@ export default function SignupScreen() {
         </View>
       )}
 
-      {/* --- STANDARDIZED HEADER --- */}
+      {/* --- CLEAN HEADER (NO TEXT) --- */}
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
-          justifyContent: "space-between",
           paddingHorizontal: 24,
-          paddingVertical: 20,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.cardBorder,
-          backgroundColor: theme.background,
+          paddingTop: 20,
+          paddingBottom: 10,
         }}
       >
         <TouchableOpacity
@@ -743,19 +740,6 @@ export default function SignupScreen() {
             color={theme.textSecondary}
           />
         </TouchableOpacity>
-
-        <Text
-          style={{
-            fontSize: scaledSize(18),
-            fontWeight: "700",
-            color: theme.text,
-            textAlign: "center",
-          }}
-        >
-          Create Account
-        </Text>
-
-        <View style={{ width: scaledSize(24) }} />
       </View>
 
       <KeyboardAvoidingView
@@ -771,8 +755,19 @@ export default function SignupScreen() {
           }}
           showsVerticalScrollIndicator={false}
         >
-          <View className="mt-4">
+          <View>
             <View className="mb-6">
+              {/* --- RESTORED CREATE ACCOUNT TEXT --- */}
+              <Text
+                style={{
+                  fontSize: scaledSize(28),
+                  fontWeight: "bold",
+                  color: theme.text,
+                  marginBottom: 8,
+                }}
+              >
+                Create Account
+              </Text>
               <Text className="text-sm" style={{ color: theme.textSecondary }}>
                 {getStepTitle()}
               </Text>
@@ -824,26 +819,6 @@ export default function SignupScreen() {
                   scaledSize={scaledSize}
                 />
                 <View className="flex-row gap-3 mt-4">
-                  <TouchableOpacity
-                    onPress={handleBackStep}
-                    activeOpacity={0.8}
-                    className="flex-1"
-                  >
-                    <View
-                      className="p-3 rounded-xl items-center border"
-                      style={{
-                        backgroundColor: theme.background,
-                        borderColor: theme.cardBorder,
-                      }}
-                    >
-                      <Text
-                        className="font-bold text-[15px]"
-                        style={{ color: theme.textSecondary }}
-                      >
-                        BACK
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
                   <TouchableOpacity
                     onPress={handleNextToLocation}
                     activeOpacity={0.8}

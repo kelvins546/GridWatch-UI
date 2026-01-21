@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   Text,
   StatusBar,
-  Alert, // Added Alert
+  Alert,
 } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -18,7 +18,7 @@ import { useNavigation } from "@react-navigation/native";
 import * as Notifications from "expo-notifications";
 import { supabase } from "../lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import Constants from "expo-constants"; // Needed for project ID
+import Constants from "expo-constants";
 
 // --- IMPORTS ---
 import LandingScreen from "../screens/auth/LandingScreen";
@@ -69,7 +69,49 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// --- NEW: Function to register for push notifications ---
+// --- HELPER: Refine Messages for PUSH BANNER ---
+const getRefinedSecurityMessage = (title, body) => {
+  const t = title ? title.toLowerCase() : "";
+  const b = body ? body.toLowerCase() : "";
+
+  // 1. CONCURRENT LOGIN DETECTION
+  // If we receive "Login Successful" while the app is running, it's a concurrent login.
+  if (t.includes("login successful")) {
+    return {
+      title: "Security Alert",
+      body: "New Login Detected: Did you just log in on another device? If not, please change your password immediately.",
+    };
+  }
+
+  // 2. SECURITY ALERTS
+  if (
+    t.includes("other device") ||
+    b.includes("other device") ||
+    t.includes("new device") ||
+    b.includes("new device") ||
+    t.includes("someone login") ||
+    t.includes("security")
+  ) {
+    return {
+      title: "Security Alert",
+      body: "New Login Detected: Did you just log in on another device? If not, please change your password immediately.",
+    };
+  }
+
+  // 3. INVITE ACCEPTED
+  if (t.includes("accepted")) {
+    return { title: "Invite Accepted ✅", body: body };
+  }
+
+  // 4. INVITE DECLINED
+  if (t.includes("declined")) {
+    return { title: "Invite Declined ❌", body: body };
+  }
+
+  return { title, body };
+};
+
+// --- Function to register for push notifications ---
 async function registerForPushNotificationsAsync() {
   let token;
 
@@ -82,11 +124,9 @@ async function registerForPushNotificationsAsync() {
     });
   }
 
-  // Check existing permission
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 
-  // If not granted, ask for it
   if (existingStatus !== "granted") {
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
@@ -97,17 +137,13 @@ async function registerForPushNotificationsAsync() {
     return;
   }
 
-  // Get the token
   try {
     const projectId =
       Constants?.expoConfig?.extra?.eas?.projectId ||
       Constants?.easConfig?.projectId;
-    if (!projectId) {
-      // console.log("Project ID not found (Development Mode)");
-    }
     token = (
       await Notifications.getExpoPushTokenAsync({
-        projectId: projectId, // Important for EAS Build
+        projectId: projectId,
       })
     ).data;
     console.log("Expo Push Token:", token);
@@ -179,13 +215,14 @@ function BottomTabNavigator() {
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener(
       (response) => {
-        // Handle deep linking or navigation based on notification data
         const data = response.notification.request.content.data;
-        if (data?.screen) {
-          navigation.navigate(data.screen);
-        } else {
-          // Default behavior
+        // --- NAVIGATION LOGIC FIX ---
+        if (data?.screen === "Invitations") {
           navigation.navigate("Invitations");
+        } else if (data?.screen === "Notifications") {
+          navigation.navigate("Notifications");
+        } else {
+          navigation.navigate("Notifications"); // Default fallback
         }
       },
     );
@@ -277,19 +314,9 @@ export default function AppNavigator() {
   const { user: authUser, isLoading } = useAuth();
   const notifiedIds = useRef(new Set());
 
-  // --- INITIALIZE NOTIFICATIONS & PERMISSIONS ---
   useEffect(() => {
-    // 1. Setup & Request Permissions
     registerForPushNotificationsAsync().then(async (token) => {
       if (token && authUser) {
-        // Optional: Save this token to your backend/Supabase 'users' table
-        // so you can send remote pushes later.
-        /*
-          await supabase
-            .from('users')
-            .update({ push_token: token })
-            .eq('id', authUser.id);
-        */
         console.log("Push Token ready:", token);
       }
     });
@@ -308,7 +335,12 @@ export default function AppNavigator() {
     loadHistory();
   }, [authUser]);
 
-  const sendUniqueNotification = async (id, title, body) => {
+  const sendUniqueNotification = async (
+    id,
+    title,
+    body,
+    screen = "Notifications",
+  ) => {
     if (notifiedIds.current.has(id)) {
       return false;
     }
@@ -326,6 +358,7 @@ export default function AppNavigator() {
         title: title,
         body: body,
         sound: true,
+        data: { screen: screen }, // Pass screen for redirection
       },
       trigger: null,
     });
@@ -338,10 +371,10 @@ export default function AppNavigator() {
     const myEmail = authUser.email.trim().toLowerCase();
     const myId = authUser.id;
 
-    // --- POLLING (Fallback for Database changes) ---
+    // --- CHECK DATABASE FOR MISSED ALERTS ---
     const checkDatabase = async () => {
       try {
-        // Check Pending Invites
+        // Check for PENDING INVITES
         const { data: invites } = await supabase
           .from("hub_invites")
           .select("id, email, status")
@@ -354,12 +387,13 @@ export default function AppNavigator() {
                 invite.id,
                 "New Invitation",
                 "You have a pending GridWatch invitation!",
+                "Invitations", // Redirect to Invitations screen
               );
             }
           });
         }
 
-        // Check Unread App Notifications
+        // Check for APP NOTIFICATIONS
         const { data: appNotifs } = await supabase
           .from("app_notifications")
           .select("*")
@@ -368,21 +402,14 @@ export default function AppNavigator() {
 
         if (appNotifs && appNotifs.length > 0) {
           appNotifs.forEach(async (notif) => {
-            const sent = await sendUniqueNotification(
-              notif.id,
+            // Apply refined message logic
+            const { title, body } = getRefinedSecurityMessage(
               notif.title,
               notif.body,
             );
+            const sent = await sendUniqueNotification(notif.id, title, body);
             if (sent) {
-              console.log("🔔 NEW NOTIFICATION SENT:", notif.title);
-              // Mark as read immediately to avoid re-notifying on next poll
-              // (Optional: depends on your logic preference)
-              /*
-              await supabase
-                .from("app_notifications")
-                .update({ is_read: true })
-                .eq("id", notif.id);
-              */
+              console.log("🔔 NEW NOTIFICATION SENT:", title);
             }
           });
         }
@@ -394,9 +421,10 @@ export default function AppNavigator() {
     checkDatabase();
     const intervalId = setInterval(checkDatabase, 15000);
 
-    // --- REALTIME SUBSCRIPTION ---
+    // --- REALTIME LISTENERS ---
     const channel = supabase
       .channel("global_alerts")
+      // 1. LISTEN FOR INVITES
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "hub_invites" },
@@ -407,21 +435,25 @@ export default function AppNavigator() {
               payload.new.id,
               "New Invitation",
               "You have been invited to join a Hub!",
+              "Invitations", // Redirect to Invitations screen
             );
           }
         },
       )
+      // 2. LISTEN FOR APP NOTIFICATIONS
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "app_notifications" },
         async (payload) => {
           if (payload.new.user_id === myId) {
-            console.log("✅ REALTIME RECEIVED:", payload.new.title);
-            await sendUniqueNotification(
-              payload.new.id,
+            // Apply refined message logic for realtime alerts
+            const { title, body } = getRefinedSecurityMessage(
               payload.new.title,
               payload.new.body,
             );
+
+            console.log("✅ REALTIME RECEIVED:", title);
+            await sendUniqueNotification(payload.new.id, title, body);
           }
         },
       )
