@@ -19,6 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { CameraView, useCameraPermissions } from "expo-camera"; // Added Camera
 import { supabase } from "../../lib/supabase";
 
 const { width } = Dimensions.get("window");
@@ -40,11 +41,15 @@ export default function SetupHubScreen() {
     ]);
   }, []);
 
+  // --- STATE (Merged) ---
   const [wifiSSID, setWifiSSID] = useState("");
   const [wifiPass, setWifiPass] = useState("");
   const [showPass, setShowPass] = useState(false);
 
+  const [permission, requestPermission] = useCameraPermissions(); // Camera Permission
   const [isScanning, setIsScanning] = useState(false);
+  const [scanned, setScanned] = useState(false);
+
   const [isPairing, setIsPairing] = useState(false);
   const [statusStep, setStatusStep] = useState("");
 
@@ -59,6 +64,8 @@ export default function SetupHubScreen() {
 
   // Logout Confirmation Modal State
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+
+  // --- HANDLERS (Merged Logic) ---
 
   const handleBack = () => {
     if (fromSignup) {
@@ -109,43 +116,177 @@ export default function SetupHubScreen() {
       }
     } catch (error) {
       console.log(
-        "Failed to open specific settings, fallback to general settings"
+        "Failed to open specific settings, fallback to general settings",
       );
       await Linking.openSettings();
     }
   };
 
-  const handleStartPairing = async () => {
-    if (!wifiSSID || !wifiPass) {
-      showAlert("Missing Info", "Please enter Wi-Fi Name and Password.");
+  // --- PAIRING LOGIC (From Functional Code) ---
+  const handleStartPairing = async (autoSSID = null, autoPass = null) => {
+    const targetSSID = autoSSID !== null ? autoSSID : wifiSSID;
+    const targetPass = autoPass !== null ? autoPass : wifiPass;
+
+    if (!targetSSID) {
+      showAlert("Missing Info", "Please scan a QR code or enter Wi-Fi Name.");
       return;
     }
 
     setIsPairing(true);
-    setStatusStep(`Connecting to Hub...`);
 
-    setTimeout(() => {
+    try {
+      setStatusStep(`Connecting to Hub...`);
+
+      const details = {
+        ssid: targetSSID,
+        pass: targetPass,
+      };
+
+      const formBody = Object.keys(details)
+        .map(
+          (key) =>
+            encodeURIComponent(key) + "=" + encodeURIComponent(details[key]),
+        )
+        .join("&");
+
+      // Artificial delay for UX
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       setStatusStep("Sending credentials...");
-      setTimeout(() => {
-        setStatusStep("Verifying with cloud...");
-        setTimeout(() => {
-          setStatusStep("Success! Connected.");
-          setTimeout(() => {
-            setIsPairing(false);
-            navigation.navigate("HubConfig", { hubId: "demo_hub_123" });
-          }, 1000);
-        }, 2000);
-      }, 2000);
-    }, 2000);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      console.log("Attempting fetch to 192.168.4.1...");
+
+      // Actual HTTP Request to the Hub
+      const response = await fetch("http://192.168.4.1/connect-hub", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        },
+        body: formBody,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Server Error: ${response.status}`);
+      }
+
+      const text = await response.text();
+      console.log("Hub Response:", text);
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        // Fallback parsing if JSON fails but response looks okay
+        if (
+          text.toLowerCase().includes("success") ||
+          text.includes("Connected")
+        ) {
+          data = { status: "success", hub_id: "unknown_hub" };
+        } else {
+          throw new Error("Invalid response from Hub");
+        }
+      }
+
+      if (data.status === "success") {
+        setStatusStep("Success! Connected.");
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        setIsPairing(false);
+        // Navigate to HubConfig with the real ID from the Hub
+        navigation.navigate("HubConfig", { hubId: data.hub_id });
+      } else {
+        throw new Error("Hub refused connection");
+      }
+    } catch (error) {
+      console.log("PAIRING ERROR:", error);
+
+      // --- FALLBACK CHECK: Verify via Supabase if direct connection failed ---
+      setStatusStep("Verifying with cloud...");
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+
+        const { data: verifiedHub, error: dbError } = await supabase
+          .from("hubs")
+          .select("serial_number")
+          .eq("wifi_ssid", targetSSID)
+          .eq("status", "online")
+          .order("last_seen", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (verifiedHub && !dbError) {
+          setIsPairing(false);
+          navigation.navigate("HubConfig", {
+            hubId: verifiedHub.serial_number,
+          });
+        } else {
+          throw error; // Re-throw original error if cloud check fails
+        }
+      } catch (cloudError) {
+        setIsPairing(false);
+        showAlert(
+          "Connection Failed",
+          `Could not reach Hub.\n\nDebug: ${error.message}\n\nTip: Ensure Mobile Data is OFF and you are connected to 'GridWatch-Setup'.`,
+          "error",
+        );
+      }
+    }
   };
 
-  const handleSimulateScan = () => {
+  // --- QR SCANNER LOGIC (From Functional Code) ---
+  const handleOpenScanner = async () => {
+    if (!permission) return;
+    if (!permission.granted) {
+      const result = await requestPermission();
+      if (!result.granted) return;
+    }
+    setScanned(false);
     setIsScanning(true);
-    setTimeout(() => {
-      setIsScanning(false);
-      setWifiSSID("PLDT_Home_FIBR");
-      setWifiPass("password123");
-    }, 2500);
+  };
+
+  const handleBarCodeScanned = ({ data }) => {
+    if (scanned) return;
+    setScanned(true);
+    setIsScanning(false);
+
+    let raw = data.trim();
+    let ssid = "";
+    let password = "";
+
+    // Parse QR formats (WIFI:S:ss;P:pp;;)
+    const ssidMatch = raw.match(/S:(.*?)(?:;|$)/i);
+    const passMatch = raw.match(/P:(.*?)(?:;|$)/i);
+
+    if (ssidMatch) {
+      ssid = ssidMatch[1];
+      if (passMatch) password = passMatch[1];
+    } else if (raw.includes(",")) {
+      const parts = raw.split(",");
+      if (parts.length >= 2) {
+        ssid = parts[0].trim();
+        password = parts[1].trim();
+      }
+    } else if (raw.includes(" ")) {
+      const lastSpaceIndex = raw.lastIndexOf(" ");
+      if (lastSpaceIndex > 0) {
+        ssid = raw.substring(0, lastSpaceIndex).trim();
+        password = raw.substring(lastSpaceIndex + 1).trim();
+      }
+    }
+
+    if (ssid) {
+      // Auto-start pairing if QR is valid
+      setWifiSSID(ssid);
+      setWifiPass(password);
+      handleStartPairing(ssid, password);
+    } else {
+      setWifiSSID(raw);
+      showAlert("Notice", "Could not read full credentials. SSID set.");
+    }
   };
 
   // --- STANDARD MODAL STYLES ---
@@ -228,7 +369,7 @@ export default function SetupHubScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- UPDATED HEADER (No Text, Adjusted Sizes) --- */}
+      {/* --- HEADER --- */}
       <View
         className="flex-row items-center justify-between px-6 py-5 border-b"
         style={{
@@ -251,7 +392,6 @@ export default function SetupHubScreen() {
           Connect Hub
         </Text>
 
-        {/* Placeholder for perfect center alignment */}
         <View style={{ width: scaledSize(20) }} />
       </View>
 
@@ -407,10 +547,7 @@ export default function SetupHubScreen() {
                   value={wifiSSID}
                   onChangeText={setWifiSSID}
                 />
-                <TouchableOpacity
-                  onPress={handleSimulateScan}
-                  className="p-2.5"
-                >
+                <TouchableOpacity onPress={handleOpenScanner} className="p-2.5">
                   <MaterialIcons
                     name="qr-code-scanner"
                     size={scaledSize(22)}
@@ -515,7 +652,7 @@ export default function SetupHubScreen() {
         </View>
       </Modal>
 
-      {/* --- SCANNING MODAL (UPDATED LOADER) --- */}
+      {/* --- SCANNING MODAL --- */}
       <Modal visible={isScanning} animationType="slide">
         <View className="flex-1 bg-black">
           <SafeAreaView edges={["top"]} className="bg-black z-20">
@@ -538,35 +675,24 @@ export default function SetupHubScreen() {
           </SafeAreaView>
 
           <View className="flex-1 justify-center items-center relative">
-            <View style={StyleSheet.absoluteFill} className="bg-gray-800" />
+            <CameraView
+              style={StyleSheet.absoluteFill}
+              facing="back"
+              onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+            />
+
             <View
               style={StyleSheet.absoluteFill}
               className="justify-center items-center"
             >
-              <View className="w-full h-full bg-black/60 absolute" />
-              <View className="w-64 h-64 bg-transparent justify-center items-center relative">
-                <View
-                  className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4"
-                  style={{ borderColor: theme.buttonPrimary }}
-                />
-                <View
-                  className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4"
-                  style={{ borderColor: theme.buttonPrimary }}
-                />
-                <View
-                  className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4"
-                  style={{ borderColor: theme.buttonPrimary }}
-                />
-                <View
-                  className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4"
-                  style={{ borderColor: theme.buttonPrimary }}
-                />
+              {/* Overlay with transparent center for frame effect */}
+              <View
+                className="w-64 h-64 border-4 rounded-xl justify-center items-center relative"
+                style={{ borderColor: theme.buttonPrimary }}
+              >
                 <View
                   className="w-[90%] h-[2px] opacity-70 shadow-lg"
-                  style={{
-                    backgroundColor: theme.buttonPrimary,
-                    shadowColor: theme.buttonPrimary,
-                  }}
+                  style={{ backgroundColor: theme.buttonPrimary }}
                 />
               </View>
               <Text
@@ -582,7 +708,6 @@ export default function SetupHubScreen() {
             edges={["bottom"]}
             className="bg-black p-8 items-center"
           >
-            {/* UPDATED LOADER AND TEXT STYLE */}
             <ActivityIndicator size="large" color="#B0B0B0" />
             <Text
               className="mt-3 font-medium"
@@ -598,7 +723,7 @@ export default function SetupHubScreen() {
         </View>
       </Modal>
 
-      {/* --- PAIRING SPINNER (UPDATED: NO CARD) --- */}
+      {/* --- PAIRING SPINNER (NO CARD - just text/spinner on bg) --- */}
       <Modal transparent visible={isPairing}>
         <View className="flex-1 justify-center items-center bg-black/80">
           <ActivityIndicator size="large" color="#B0B0B0" />
@@ -631,8 +756,8 @@ export default function SetupHubScreen() {
                     alertConfig.type === "success"
                       ? theme.buttonPrimary
                       : alertConfig.type === "warning"
-                      ? "#FFA500"
-                      : theme.buttonDangerText,
+                        ? "#FFA500"
+                        : theme.buttonDangerText,
                 },
               ]}
             >

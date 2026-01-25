@@ -17,18 +17,19 @@ import { useTheme } from "../../context/ThemeContext";
 export default function DisconnectedScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, fontScale } = useTheme();
+
+  const scaledSize = (size) => size * (fontScale || 1);
 
   const { hubName, lastSeen } = route.params || {};
 
   const pulseAnim = useRef(new Animated.Value(0)).current;
 
-  // --- 1. UPDATED COLORS TO NEUTRAL/GRAY ---
+  // --- COLORS ---
   const offlineColor = theme.textSecondary;
   const offlineBg = theme.buttonNeutral;
   const offlineBorder = theme.cardBorder;
 
-  // Safety Note remains Green to indicate "Protection Active"
   const safeColor = theme.buttonPrimary;
   const safeBg = isDarkMode
     ? "rgba(0, 255, 153, 0.05)"
@@ -36,7 +37,6 @@ export default function DisconnectedScreen() {
   const safeBorder = isDarkMode
     ? "rgba(0, 255, 153, 0.15)"
     : "rgba(0, 153, 94, 0.15)";
-  // ----------------------------------------
 
   useEffect(() => {
     Animated.loop(
@@ -52,7 +52,7 @@ export default function DisconnectedScreen() {
           duration: 0,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     ).start();
   }, [pulseAnim]);
 
@@ -63,7 +63,7 @@ export default function DisconnectedScreen() {
 
   const opacity = pulseAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.3, 0], // Reduced opacity for subtle gray pulse
+    outputRange: [0.3, 0],
   });
 
   return (
@@ -76,30 +76,29 @@ export default function DisconnectedScreen() {
         backgroundColor={theme.background}
       />
 
+      {/* --- HEADER (Copied & Adapted from MyHubsScreen) --- */}
       <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: theme.background,
-            borderBottomColor: theme.cardBorder,
-          },
-        ]}
+        className="flex-row items-center px-6 py-5 border-b"
+        style={{
+          backgroundColor: theme.background,
+          borderBottomColor: theme.cardBorder,
+        }}
       >
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons
             name="arrow-back"
-            size={18}
+            size={scaledSize(20)}
             color={theme.textSecondary}
           />
-          <Text style={[styles.backText, { color: theme.textSecondary }]}>
-            Back
-          </Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Status</Text>
-        <View style={styles.headerSpacer} />
+        <Text
+          className="flex-1 text-center font-bold"
+          style={{ color: theme.text, fontSize: scaledSize(18) }}
+        >
+          Status
+        </Text>
+        {/* Spacer to balance the Left Icon (20px) so Title is centered */}
+        <View style={{ width: scaledSize(20) }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -142,7 +141,7 @@ export default function DisconnectedScreen() {
             Last Connection: {lastSeen || "Unknown"}
           </Text>
 
-          {/* --- SAFETY NOTE (Kept Green) --- */}
+          {/* --- SAFETY NOTE --- */}
           <View
             style={[
               styles.safetyNote,
@@ -199,10 +198,7 @@ export default function DisconnectedScreen() {
           </View>
 
           <TouchableOpacity
-            style={[
-              styles.retryBtn,
-              { backgroundColor: theme.buttonPrimary }, // Use Primary color for main action
-            ]}
+            style={[styles.retryBtn, { backgroundColor: theme.buttonPrimary }]}
             activeOpacity={0.9}
             onPress={() => navigation.goBack()}
           >
@@ -234,30 +230,6 @@ function StepItem({ num, text, theme }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-  },
-  backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginLeft: 4,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  headerSpacer: {
-    width: 50,
   },
   scrollContent: {
     flexGrow: 1,
@@ -310,7 +282,6 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     marginBottom: 30,
   },
-
   troubleshootBox: {
     borderRadius: 16,
     padding: 20,
@@ -349,7 +320,6 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 18,
   },
-
   safetyNote: {
     borderWidth: 1,
     borderRadius: 16,

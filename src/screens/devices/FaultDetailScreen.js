@@ -57,15 +57,17 @@ export default function FaultDetailScreen() {
       flex: 1,
       backgroundColor: theme.background,
     },
-    backButton: {
+    // --- UPDATED HEADER OVERLAY (Matches DeviceControlScreen) ---
+    headerOverlay: {
       position: "absolute",
-      top: Platform.OS === "android" ? 60 : 60, // UPDATED: Lowered to 60
-      left: 24, // UPDATED: Matched standard padding
+      top: Platform.OS === "android" ? 60 : 60,
+      left: 24,
+      right: 24,
       zIndex: 10,
-      // Added background style directly to container or via style prop below
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
     },
-    // backText removed
-    // --- ADOPTED BOXING LAYOUT ---
     card: {
       backgroundColor: theme.card,
       borderColor: theme.cardBorder,
@@ -150,24 +152,38 @@ export default function FaultDetailScreen() {
         backgroundColor="transparent"
       />
 
-      {/* --- UPDATED BACK BUTTON --- */}
-      <TouchableOpacity
-        style={[
-          styles.backButton,
-          {
+      {/* --- HEADER OVERLAY --- */}
+      <View style={styles.headerOverlay}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{
             padding: 4,
             backgroundColor: "rgba(0,0,0,0.2)",
             borderRadius: 20,
-          },
-        ]}
-        onPress={() => navigation.goBack()}
-      >
-        <MaterialIcons name="arrow-back" size={scaledSize(24)} color="#fff" />
-      </TouchableOpacity>
+          }}
+        >
+          <MaterialIcons name="arrow-back" size={scaledSize(24)} color="#fff" />
+        </TouchableOpacity>
 
+        {/* Optional Right Icon (Settings) if needed, otherwise empty view or hidden */}
+        <TouchableOpacity
+          style={{
+            padding: 4,
+            backgroundColor: "rgba(0,0,0,0.2)",
+            borderRadius: 20,
+            opacity: 0, // Hidden but keeps spacing if needed, or remove completely
+          }}
+          disabled={true}
+        >
+          <MaterialIcons name="settings" size={scaledSize(24)} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      {/* --- HERO SECTION (Adjusted Spacing) --- */}
       <LinearGradient
         colors={["#ff4444", theme.background]}
-        style={{ paddingTop: 120, paddingBottom: 40, alignItems: "center" }}
+        // REDUCED PADDING TOP/BOTTOM HERE
+        style={{ paddingTop: 110, paddingBottom: 25, alignItems: "center" }}
       >
         <View
           style={{
@@ -179,7 +195,7 @@ export default function FaultDetailScreen() {
             justifyContent: "center",
             borderWidth: 2,
             borderColor: "rgba(255,255,255,0.2)",
-            marginBottom: 16,
+            marginBottom: 10, // Reduced from 16
           }}
         >
           <MaterialIcons name="flash-off" size={40} color="#fff" />
@@ -189,7 +205,7 @@ export default function FaultDetailScreen() {
             fontSize: scaledSize(24),
             fontWeight: "900",
             color: "#fff",
-            marginBottom: 6,
+            marginBottom: 2, // Reduced from 6
           }}
         >
           Power Cutoff Active
@@ -249,7 +265,7 @@ export default function FaultDetailScreen() {
           </View>
         </View>
 
-        {/* --- ADOPTED SMALLER BOXES --- */}
+        {/* --- SMALLER BOXES --- */}
         <View style={{ flexDirection: "row", gap: 12, marginBottom: 20 }}>
           <View
             style={[

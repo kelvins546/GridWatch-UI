@@ -40,7 +40,9 @@ import DeviceConfigScreen from "../screens/settings/DeviceConfigScreen";
 import HelpSupportScreen from "../screens/settings/HelpSupportScreen";
 import AboutUsScreen from "../screens/settings/AboutUsScreen";
 import NotificationsScreen from "../screens/settings/NotificationsScreen";
-import NotificationSettingsScreen from "../screens/settings/NotificationSettingsScreen";
+import NotificationSettingsScreen, {
+  NOTIF_SETTINGS_KEY,
+} from "../screens/settings/NotificationSettingsScreen"; // Updated Import
 import ProviderSetupScreen from "../screens/settings/ProviderSetupScreen";
 import DndCheckScreen from "../screens/settings/DndCheckScreen";
 import BudgetDeviceListScreen from "../screens/budgets/BudgetDeviceListScreen";
@@ -74,7 +76,6 @@ const getRefinedSecurityMessage = (title, body) => {
   const t = title ? title.toLowerCase() : "";
   const b = body ? body.toLowerCase() : "";
 
-  // 1. CONCURRENT LOGIN DETECTION
   if (t.includes("login successful")) {
     return {
       title: "Security Alert",
@@ -82,7 +83,6 @@ const getRefinedSecurityMessage = (title, body) => {
     };
   }
 
-  // 2. SECURITY ALERTS
   if (
     t.includes("other device") ||
     b.includes("other device") ||
@@ -97,12 +97,10 @@ const getRefinedSecurityMessage = (title, body) => {
     };
   }
 
-  // 3. INVITE ACCEPTED
   if (t.includes("accepted")) {
     return { title: "Invite Accepted ✅", body: body };
   }
 
-  // 4. INVITE DECLINED
   if (t.includes("declined")) {
     return { title: "Invite Declined ❌", body: body };
   }
@@ -189,6 +187,7 @@ const BounceTabButton = ({ children, onPress }) => {
   );
 };
 
+// ... Routes (HomeRoute, AnalyticsRoute, etc. kept same) ...
 const HomeRoute = () => {
   const { isAdvancedMode } = useTheme();
   return isAdvancedMode ? <HomeScreen /> : <SimpleHomeScreen />;
@@ -311,9 +310,6 @@ export default function AppNavigator() {
   const { isDarkMode, theme } = useTheme();
   const { user: authUser, isLoading } = useAuth();
   const notifiedIds = useRef(new Set());
-
-  // --- NEW: Track if we just logged in ---
-  // Initialized to true, but we MUST reset it when authUser changes (login)
   const isJustLoggedIn = useRef(true);
 
   useEffect(() => {
@@ -336,33 +332,92 @@ export default function AppNavigator() {
     };
     loadHistory();
 
-    // --- COOLDOWN TIMER ---
-    // 1. FORCE RESET flag to true whenever authUser appears (Login Event)
     if (authUser) {
       isJustLoggedIn.current = true;
-      console.log("LOGIN DETECTED: Suppressing self-alerts for 15s...");
     }
 
-    // 2. Start Timer to disable flag after 15 seconds
     const timer = setTimeout(() => {
       isJustLoggedIn.current = false;
-      console.log("COOLDOWN OVER: Security alerts enabled.");
-    }, 15000); // 15 seconds cooldown
+    }, 15000);
 
     return () => clearTimeout(timer);
-  }, [authUser]); // Dependencies: Runs whenever authUser changes
+  }, [authUser]);
 
-  // --- MODIFIED: Added `silent` parameter ---
+  // --- CHECK FILTER SETTINGS ---
+  const shouldSuppressNotification = async (title, body) => {
+    try {
+      const savedSettings = await AsyncStorage.getItem(NOTIF_SETTINGS_KEY);
+      if (!savedSettings) return false; // Default: show all if no settings
+
+      const settings = JSON.parse(savedSettings);
+
+      // 1. Master Switch
+      if (!settings.pushEnabled) return true;
+
+      // 2. Keyword Filtering
+      const text = (title + " " + body).toLowerCase();
+
+      // Budget Alerts
+      if (
+        (text.includes("budget") ||
+          text.includes("cost") ||
+          text.includes("limit") ||
+          text.includes("bill") ||
+          text.includes("exceeded")) &&
+        !settings.budgetAlerts
+      ) {
+        return true;
+      }
+
+      // Device Status
+      if (
+        (text.includes("offline") ||
+          text.includes("online") ||
+          text.includes("connected") ||
+          text.includes("hub") ||
+          text.includes("device")) &&
+        !settings.deviceStatus
+      ) {
+        return true;
+      }
+
+      // Tips & News
+      if (
+        (text.includes("tip") ||
+          text.includes("news") ||
+          text.includes("update") ||
+          text.includes("smart")) &&
+        !settings.tipsNews
+      ) {
+        return true;
+      }
+
+      return false; // Show it
+    } catch (e) {
+      return false; // Error loading settings? Show notification to be safe.
+    }
+  };
+
   const sendUniqueNotification = async (
     id,
     title,
     body,
     screen = "Notifications",
-    silent = false, // New param to suppress local display
+    silent = false,
   ) => {
     if (notifiedIds.current.has(id)) {
       return false;
     }
+
+    // --- CHECK USER SETTINGS BEFORE SHOWING ---
+    const suppressed = await shouldSuppressNotification(title, body);
+    if (suppressed && !silent) {
+      // We still mark it as "processed" in memory so we don't retry,
+      // but we treat it as silent.
+      silent = true;
+      console.log(`🔕 Suppressed notification by user settings: ${title}`);
+    }
+
     notifiedIds.current.add(id);
     try {
       await AsyncStorage.setItem(
@@ -373,9 +428,7 @@ export default function AppNavigator() {
       console.log("Failed to save history", e);
     }
 
-    // IF SILENT IS TRUE, WE DO NOT SHOW THE BANNER
     if (silent) {
-      console.log(`Silenced Notification: ${title}`);
       return true;
     }
 
@@ -400,7 +453,7 @@ export default function AppNavigator() {
     // --- CHECK DATABASE FOR MISSED ALERTS ---
     const checkDatabase = async () => {
       try {
-        // Check for PENDING INVITES
+        // PENDING INVITES (These bypass filters usually, or are strictly 'Account' related)
         const { data: invites } = await supabase
           .from("hub_invites")
           .select("id, email, status")
@@ -419,7 +472,7 @@ export default function AppNavigator() {
           });
         }
 
-        // Check for APP NOTIFICATIONS
+        // APP NOTIFICATIONS
         const { data: appNotifs } = await supabase
           .from("app_notifications")
           .select("*")
@@ -433,20 +486,16 @@ export default function AppNavigator() {
               notif.body,
             );
 
-            // --- FILTER: Is this a self-triggered login alert? ---
             const isSelfLogin =
               title === "Security Alert" && isJustLoggedIn.current;
 
-            const sent = await sendUniqueNotification(
+            await sendUniqueNotification(
               notif.id,
               title,
               body,
               "Notifications",
-              isSelfLogin, // Pass true to silence it
+              isSelfLogin,
             );
-            if (sent && !isSelfLogin) {
-              console.log("🔔 NEW NOTIFICATION SENT:", title);
-            }
           });
         }
       } catch (err) {
@@ -457,10 +506,8 @@ export default function AppNavigator() {
     checkDatabase();
     const intervalId = setInterval(checkDatabase, 15000);
 
-    // --- REALTIME LISTENERS ---
     const channel = supabase
       .channel("global_alerts")
-      // 1. LISTEN FOR INVITES
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "hub_invites" },
@@ -476,7 +523,6 @@ export default function AppNavigator() {
           }
         },
       )
-      // 2. LISTEN FOR APP NOTIFICATIONS
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "app_notifications" },
@@ -487,21 +533,15 @@ export default function AppNavigator() {
               payload.new.body,
             );
 
-            // --- FILTER: Is this a self-triggered login alert? ---
             const isSelfLogin =
               title === "Security Alert" && isJustLoggedIn.current;
-
-            console.log(
-              isSelfLogin ? "🔕 Self-Login Ignored" : "✅ REALTIME RECEIVED:",
-              title,
-            );
 
             await sendUniqueNotification(
               payload.new.id,
               title,
               body,
               "Notifications",
-              isSelfLogin, // Pass true to silence it
+              isSelfLogin,
             );
           }
         },
@@ -556,6 +596,7 @@ export default function AppNavigator() {
       {authUser ? (
         <Stack.Group>
           <Stack.Screen name="MainApp" component={BottomTabNavigator} />
+          {/* ... all other screens ... */}
           <Stack.Screen
             name="ProfileSettings"
             component={ProfileSettingsScreen}

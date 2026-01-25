@@ -238,7 +238,7 @@ export default function BudgetManagerScreen() {
       padding: 20,
       borderRadius: 16,
       width: "90%",
-      maxWidth: 400,
+      maxWidth: 300,
       alignItems: "center",
       backgroundColor: theme.card,
       borderColor: theme.cardBorder,

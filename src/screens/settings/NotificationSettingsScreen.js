@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage"; // Added
 import { useTheme } from "../../context/ThemeContext";
 
 if (
@@ -21,21 +22,54 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+// Key for storage
+export const NOTIF_SETTINGS_KEY = "gridwatch_notif_settings";
+
 export default function NotificationSettingsScreen() {
   const navigation = useNavigation();
-  const { theme, isDarkMode, fontScale, updateFontScale } = useTheme();
+  const { theme, fontScale, updateFontScale } = useTheme();
 
   const scaledSize = (size) => size * fontScale;
 
-  const [pushEnabled, setPushEnabled] = useState(true);
-  const [budgetAlerts, setBudgetAlerts] = useState(true);
-  const [deviceStatus, setDeviceStatus] = useState(true);
-  const [tipsNews, setTipsNews] = useState(false);
-  const [emailDigest, setEmailDigest] = useState(true);
+  // Unified State for easier saving
+  const [settings, setSettings] = useState({
+    pushEnabled: true,
+    budgetAlerts: true,
+    deviceStatus: true,
+    tipsNews: false,
+    emailDigest: true,
+  });
 
-  const handleToggle = (setter, value) => {
+  // --- LOAD SETTINGS ON MOUNT ---
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(NOTIF_SETTINGS_KEY);
+        if (saved) {
+          setSettings(JSON.parse(saved));
+        }
+      } catch (error) {
+        console.log("Error loading settings:", error);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  // --- HANDLE TOGGLE & SAVE ---
+  const handleToggle = async (key) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setter(!value);
+
+    const newSettings = { ...settings, [key]: !settings[key] };
+    setSettings(newSettings);
+
+    try {
+      await AsyncStorage.setItem(
+        NOTIF_SETTINGS_KEY,
+        JSON.stringify(newSettings),
+      );
+    } catch (error) {
+      console.log("Error saving settings:", error);
+    }
   };
 
   return (
@@ -49,7 +83,7 @@ export default function NotificationSettingsScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
+      {/* HEADER */}
       <View
         className="flex-row items-center px-6 py-5 border-b"
         style={{ borderBottomColor: theme.cardBorder }}
@@ -71,7 +105,7 @@ export default function NotificationSettingsScreen() {
       </View>
 
       <ScrollView className="flex-1 p-6">
-        {}
+        {/* TEXT SIZE SECTION */}
         <Text
           className="font-bold uppercase tracking-widest mb-3"
           style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -111,12 +145,11 @@ export default function NotificationSettingsScreen() {
               {fontScale === 0.85
                 ? "Small"
                 : fontScale === 1
-                ? "Standard"
-                : "Large"}
+                  ? "Standard"
+                  : "Large"}
             </Text>
           </View>
 
-          {}
           <View className="flex-row gap-3">
             {[
               { label: "Small", value: 0.85 },
@@ -153,7 +186,7 @@ export default function NotificationSettingsScreen() {
           </View>
         </View>
 
-        {}
+        {/* GENERAL */}
         <Text
           className="font-bold uppercase tracking-widest mb-3"
           style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -172,15 +205,15 @@ export default function NotificationSettingsScreen() {
             label="Push Notifications"
             desc="Enable or disable all app notifications."
             icon="notifications-active"
-            value={pushEnabled}
-            onToggle={() => handleToggle(setPushEnabled, pushEnabled)}
+            value={settings.pushEnabled}
+            onToggle={() => handleToggle("pushEnabled")}
             theme={theme}
             scaledSize={scaledSize}
             isLast={true}
           />
         </View>
 
-        {}
+        {/* ALERT TYPES */}
         <Text
           className="font-bold uppercase tracking-widest mb-3"
           style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -199,8 +232,8 @@ export default function NotificationSettingsScreen() {
             label="Budget & Cost Alerts"
             desc="Get notified when you reach limits."
             icon="attach-money"
-            value={budgetAlerts}
-            onToggle={() => handleToggle(setBudgetAlerts, budgetAlerts)}
+            value={settings.budgetAlerts}
+            onToggle={() => handleToggle("budgetAlerts")}
             theme={theme}
             scaledSize={scaledSize}
           />
@@ -208,8 +241,8 @@ export default function NotificationSettingsScreen() {
             label="Device Status"
             desc="Alerts when a hub goes offline."
             icon="router"
-            value={deviceStatus}
-            onToggle={() => handleToggle(setDeviceStatus, deviceStatus)}
+            value={settings.deviceStatus}
+            onToggle={() => handleToggle("deviceStatus")}
             theme={theme}
             scaledSize={scaledSize}
           />
@@ -217,15 +250,15 @@ export default function NotificationSettingsScreen() {
             label="Smart Tips & News"
             desc="Energy saving recommendations."
             icon="lightbulb"
-            value={tipsNews}
-            onToggle={() => handleToggle(setTipsNews, tipsNews)}
+            value={settings.tipsNews}
+            onToggle={() => handleToggle("tipsNews")}
             theme={theme}
             scaledSize={scaledSize}
             isLast={true}
           />
         </View>
 
-        {}
+        {/* OTHER */}
         <Text
           className="font-bold uppercase tracking-widest mb-3"
           style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -244,8 +277,8 @@ export default function NotificationSettingsScreen() {
             label="Monthly Email Digest"
             desc="Receive a summary via email."
             icon="email"
-            value={emailDigest}
-            onToggle={() => handleToggle(setEmailDigest, emailDigest)}
+            value={settings.emailDigest}
+            onToggle={() => handleToggle("emailDigest")}
             theme={theme}
             scaledSize={scaledSize}
             isLast={true}
@@ -330,7 +363,6 @@ function ToggleRow({
         </View>
       </View>
 
-      {}
       <CustomSwitch value={value} onToggle={onToggle} theme={theme} />
     </View>
   );

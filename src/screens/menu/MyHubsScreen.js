@@ -12,25 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
-
-const DEMO_HUBS = [
-  {
-    id: 1,
-    name: "Living Room Hub",
-    serial_number: "HUB-8821-X9",
-    wifi_ssid: "PLDT_Home_FIBR",
-    last_seen: new Date().toISOString(),
-    devices: [{ count: 4 }],
-  },
-  {
-    id: 2,
-    name: "Kitchen Hub",
-    serial_number: "HUB-4412-Z2",
-    wifi_ssid: "PLDT_Home_FIBR",
-    last_seen: "2024-01-01T10:00:00Z",
-    devices: [{ count: 2 }],
-  },
-];
+import { supabase } from "../../lib/supabase";
 
 export default function MyHubsScreen() {
   const navigation = useNavigation();
@@ -42,19 +24,68 @@ export default function MyHubsScreen() {
 
   const scaledSize = (baseSize) => baseSize * (fontScale || 1);
 
+  // --- 1. FETCH HUBS (Functional Logic) ---
   const fetchHubs = async () => {
-    setLoading(true);
-    setTimeout(() => {
-      setHubs(DEMO_HUBS);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("hubs")
+        .select(`*, devices(count)`)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+      setHubs(data || []);
+    } catch (error) {
+      console.error("Error fetching hubs:", error.message);
+    } finally {
       setLoading(false);
       setRefreshing(false);
-    }, 500);
+    }
   };
+
+  // --- 2. AUTO REFRESH INTERVAL (Functional Logic) ---
+  useEffect(() => {
+    const autoRefreshInterval = setInterval(() => {
+      fetchHubs();
+    }, 5000);
+
+    return () => clearInterval(autoRefreshInterval);
+  }, []);
+
+  // --- 3. REALTIME SUBSCRIPTION (Functional Logic) ---
+  useEffect(() => {
+    const channel = supabase
+      .channel("hubs_realtime_check")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "hubs",
+        },
+        (payload) => {
+          setHubs((current) =>
+            current.map((h) =>
+              h.id === payload.new.id ? { ...h, ...payload.new } : h,
+            ),
+          );
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       fetchHubs();
-    }, [])
+    }, []),
   );
 
   const onRefresh = () => {
@@ -73,6 +104,7 @@ export default function MyHubsScreen() {
         backgroundColor={theme.background}
       />
 
+      {/* --- HEADER (UI) --- */}
       <View
         className="flex-row items-center px-6 py-5 border-b"
         style={{
@@ -94,7 +126,11 @@ export default function MyHubsScreen() {
           My Hubs
         </Text>
         <TouchableOpacity onPress={() => navigation.navigate("SetupHub")}>
-          <MaterialIcons name="add" size={scaledSize(28)} color="#FFFFFF" />
+          <MaterialIcons
+            name="add"
+            size={scaledSize(28)}
+            color={theme.buttonPrimary}
+          />
         </TouchableOpacity>
       </View>
 
@@ -103,7 +139,7 @@ export default function MyHubsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={theme.primary}
+            tintColor="gray" // <--- UPDATED: Changed from theme.primary to gray
           />
         }
       >
@@ -111,7 +147,7 @@ export default function MyHubsScreen() {
           {loading ? (
             <ActivityIndicator
               size="large"
-              color={theme.primary}
+              color="gray" // <--- UPDATED: Changed from theme.primary to gray
               style={{ marginTop: 20 }}
             />
           ) : hubs.length === 0 ? (
@@ -119,7 +155,10 @@ export default function MyHubsScreen() {
               <MaterialIcons name="router" size={60} color={theme.cardBorder} />
               <Text
                 className="mt-4 text-center"
-                style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(14),
+                }}
               >
                 No hubs connected.
               </Text>
@@ -142,8 +181,49 @@ export default function MyHubsScreen() {
 }
 
 function HubCard({ hub, theme, scaledSize, navigation }) {
-  let isOnline = hub.id === 1;
+  // --- 4. TIME CALCULATION LOGIC (Functional Logic) ---
+  const [now, setNow] = useState(Date.now());
 
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  let isOnline = false;
+  let diffInSeconds = 0;
+  let timeAgoText = "";
+
+  if (hub.last_seen) {
+    let timeStr = hub.last_seen.replace(" ", "T");
+    if (!timeStr.endsWith("Z") && !timeStr.includes("+")) {
+      timeStr += "Z";
+    }
+
+    const lastSeenMs = new Date(timeStr).getTime();
+    if (!isNaN(lastSeenMs)) {
+      diffInSeconds = (now - lastSeenMs) / 1000;
+      // Online if seen in last 8 seconds
+      isOnline = diffInSeconds < 8 && diffInSeconds > -5;
+
+      if (!isOnline) {
+        let displayDiff = Math.max(1, diffInSeconds - 7);
+        if (displayDiff < 60) {
+          timeAgoText = `${Math.floor(displayDiff)}s ago`;
+        } else if (displayDiff < 3600) {
+          timeAgoText = `${Math.floor(displayDiff / 60)}m ago`;
+        } else if (displayDiff < 86400) {
+          timeAgoText = `${Math.floor(displayDiff / 3600)}h ago`;
+        } else {
+          timeAgoText = `${Math.floor(displayDiff / 86400)}d ago`;
+        }
+      }
+    }
+  }
+
+  // Count devices from joined table
+  const deviceCount = hub.devices?.[0]?.count || 0;
+
+  // --- 5. UI STYLING (UI Logic) ---
   const statusColor = isOnline ? theme.buttonPrimary : theme.textSecondary;
   const cardBgColor = isOnline ? `${theme.buttonPrimary}1A` : theme.card;
   const iconContainerBg = isOnline
@@ -201,9 +281,12 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
           {!isOnline && (
             <Text
               className="font-medium"
-              style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
+              style={{
+                color: theme.textSecondary,
+                fontSize: scaledSize(10),
+              }}
             >
-              Seen 2h ago
+              Seen {timeAgoText}
             </Text>
           )}
         </View>
@@ -248,7 +331,7 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
         />
         <StatCol
           label="Devices"
-          value={`${hub.devices?.[0]?.count || 0} Linked`}
+          value={`${deviceCount} Linked`}
           theme={theme}
           scaledSize={scaledSize}
         />

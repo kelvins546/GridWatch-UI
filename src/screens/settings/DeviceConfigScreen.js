@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -7,58 +7,48 @@ import {
   Modal,
   StatusBar,
   ActivityIndicator,
+  Animated,
+  Easing,
+  StyleSheet,
+  Platform,
+  AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
 
 export default function DeviceConfigScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { theme, isDarkMode, fontScale } = useTheme();
+  const appState = useRef(AppState.currentState);
 
   const scaledSize = (size) => size * fontScale;
 
-  const { hubName, hubId, status } = route.params || {};
+  const { hubName, hubId } = route.params || {};
 
-  const [isOnline, setIsOnline] = useState(status === "Offline" ? false : true);
+  // --- ANIMATION REFS ---
+  const pulseAnim = useRef(new Animated.Value(0)).current;
 
+  // --- STATE ---
   const [hubData, setHubData] = useState({
-    wifi_ssid: "PLDT_Home_FIBR",
-    ip_address: "192.168.1.45",
+    wifi_ssid: "Loading...",
+    ip_address: "---",
     model: "GW-ESP32-PRO",
-    serial_number: "HUB-8821-X9",
-    current_firmware: "1.2.4",
+    serial_number: "---",
+    last_seen: null,
+    current_firmware: "1.0.0",
   });
 
-  const [loading, setLoading] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  const [loading, setLoading] = useState(true);
   const [isRestarting, setIsRestarting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const toggleStatus = () => {
-    setIsOnline(!isOnline);
-  };
-
-  // --- STATUS LOGIC ---
-  let statusDetailText = "Offline • Check Connection";
-  let statusColor = theme.textSecondary;
-  let statusBg = theme.buttonNeutral;
-  let statusIcon = "wifi-off";
-
-  if (isOnline) {
-    statusDetailText = "Online • Stable";
-    statusColor = theme.buttonPrimary;
-    statusBg = isDarkMode ? "rgba(0, 255, 153, 0.1)" : "rgba(0, 166, 81, 0.1)";
-    statusIcon = "router";
-  }
-
-  if (isRestarting) {
-    statusDetailText = "System Rebooting...";
-    statusColor = "#FFC107"; // Amber
-    statusBg = "rgba(255, 193, 7, 0.15)";
-    statusIcon = "hourglass-top";
-  }
-
+  // --- MODAL STATE ---
   const [modalState, setModalState] = useState({
     visible: false,
     type: null,
@@ -67,26 +57,170 @@ export default function DeviceConfigScreen() {
     loading: false,
   });
 
+  // --- ANIMATION LOOP ---
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 2000,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulseAnim]);
+
+  const pulseScale = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.5],
+  });
+
+  const pulseOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0],
+  });
+
+  // --- FETCH FUNCTION ---
+  const fetchHubInfo = async (showLoader = false) => {
+    if (showLoader) setIsRefreshing(true);
+
+    const { data, error } = await supabase
+      .from("hubs")
+      .select("*")
+      .eq("id", hubId)
+      .single();
+
+    if (!error && data) {
+      setHubData(data);
+      setNow(Date.now());
+    }
+
+    if (showLoader) setIsRefreshing(false);
+    setLoading(false);
+  };
+
+  // --- SUPABASE DATA & APP STATE LISTENER ---
+  useEffect(() => {
+    let mounted = true;
+    fetchHubInfo();
+
+    const channel = supabase
+      .channel(`device_config_${hubId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "hubs",
+          filter: `id=eq.${hubId}`,
+        },
+        (payload) => {
+          if (mounted) {
+            setHubData((prev) => ({ ...prev, ...payload.new }));
+            setNow(Date.now());
+          }
+        },
+      )
+      .subscribe();
+
+    const timer = setInterval(() => {
+      if (mounted) setNow(Date.now());
+    }, 1000);
+
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === "active"
+      ) {
+        fetchHubInfo(true);
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, [hubId]);
+
+  // --- STATUS LOGIC ---
+  let isOnline = false;
+  let diffInSeconds = 0;
+
+  if (hubData.last_seen) {
+    let timeStr = hubData.last_seen.replace(" ", "T");
+    if (!timeStr.endsWith("Z") && !timeStr.includes("+")) timeStr += "Z";
+    const lastSeenMs = new Date(timeStr).getTime();
+    if (!isNaN(lastSeenMs)) {
+      diffInSeconds = (now - lastSeenMs) / 1000;
+      const threshold = isRefreshing ? 20 : 8;
+      isOnline = diffInSeconds < threshold && diffInSeconds > -5;
+    }
+  }
+
+  // --- UI VARIABLES ---
+  let statusDetailText = "Offline • Check Connection";
+  let statusIcon = "wifi-off";
+  const iconColor = "#fff";
+
+  if (!isOnline && !loading) {
+    let displayDiff = Math.max(1, diffInSeconds - 7);
+    let timeAgo = "";
+    if (displayDiff < 60) timeAgo = `${Math.floor(displayDiff)}s ago`;
+    else if (displayDiff < 3600)
+      timeAgo = `${Math.floor(displayDiff / 60)}m ago`;
+    else if (displayDiff < 86400)
+      timeAgo = `${Math.floor(displayDiff / 3600)}h ago`;
+    else timeAgo = `${Math.floor(displayDiff / 86400)}d ago`;
+    statusDetailText = `Offline • Seen ${timeAgo}`;
+  }
+
+  if (isRestarting) {
+    statusDetailText = "System Rebooting...";
+    statusIcon = "hourglass-top";
+  } else if (isOnline) {
+    statusDetailText = "Online • Stable";
+    statusIcon = "router";
+  }
+
+  // --- GRADIENT COLORS ---
+  const gradientColors =
+    isOnline && !isRestarting
+      ? [theme.buttonPrimary, theme.background] // Green
+      : isDarkMode
+        ? ["#2c3e50", theme.background] // Dark Blue-Grey
+        : ["#94a3b8", theme.background]; // Light Grey
+
+  // --- MODAL ACTIONS ---
   const openModal = (type) => {
     let config = { visible: true, type, loading: false };
-
     if (type === "wifi") {
       config = {
         ...config,
         title: "Wi-Fi Setup",
-        msg: "To change Wi-Fi, please connect to 'GridWatch-Setup' hotspot first.",
+        msg: "Connect to 'GridWatch-Setup' hotspot first.",
       };
     } else if (type === "restart") {
       config = {
         ...config,
         title: "Restart Hub?",
-        msg: "The device will go offline for approximately 10 seconds.",
+        msg: "Device will go offline for ~10 seconds.",
       };
     } else if (type === "unpair") {
       config = {
         ...config,
         title: "Reset & Unpair?",
-        msg: "This will remove this Hub from your account.",
+        msg: "This removes the Hub and all devices from your account.",
       };
     }
     setModalState(config);
@@ -98,26 +232,37 @@ export default function DeviceConfigScreen() {
     setModalState((prev) => ({
       ...prev,
       loading: true,
-      msg: "Unpairing Device...",
+      title: "Unpairing...",
+      msg: "Removing device...",
     }));
-
-    setTimeout(() => {
+    try {
+      await supabase.from("devices").delete().eq("hub_id", hubId);
+      const { error } = await supabase.from("hubs").delete().eq("id", hubId);
+      if (error) throw error;
       setModalState({
         visible: true,
         type: "success",
         title: "Unlinked",
-        msg: "Device removed successfully.",
+        msg: "Device removed.",
         loading: false,
       });
-
       setTimeout(() => {
         closeModal();
-        navigation.navigate("MainApp");
+        navigation.navigate("MainApp", { screen: "Home" });
       }, 1500);
-    }, 2000);
+    } catch (err) {
+      setModalState({
+        visible: true,
+        type: "error",
+        title: "Error",
+        msg: err.message,
+        loading: false,
+      });
+    }
   };
 
   const handleConfirm = async () => {
+    // --- RESTART LOGIC (NO SIMULATION) ---
     if (modalState.type === "restart") {
       setModalState((prev) => ({
         ...prev,
@@ -125,47 +270,58 @@ export default function DeviceConfigScreen() {
         msg: "Contacting Hub...",
       }));
 
-      setTimeout(() => {
-        if (!isOnline) {
-          setModalState({ ...modalState, visible: false });
-          navigation.navigate("Disconnected", {
-            hubName: hubName || "Living Room Hub",
-            lastSeen: "2h ago",
-          });
-          return;
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s Timeout
+
+        // Attempt to hit the reboot endpoint
+        const response = await fetch(`http://${hubData.ip_address}/reboot`, {
+          method: "POST",
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error("Failed to reach hub");
         }
 
-        setIsRestarting(true);
-        setIsOnline(false);
+        // --- SUCCESS: Hub received command ---
+        setIsRestarting(true); // Changes status text to "System Rebooting..." (Amber)
+        closeModal(); // Close modal immediately, no countdown
 
-        let countdown = 10;
-
-        setModalState((prev) => ({
-          ...prev,
+        // Reset restarting status after 15s (approx time for ESP32 to boot back up)
+        setTimeout(() => setIsRestarting(false), 15000);
+      } catch (e) {
+        // --- FAIL: Hub Unreachable -> Disconnected Screen ---
+        closeModal();
+        navigation.navigate("Disconnected", {
+          hubName: hubName || "Hub",
+          lastSeen: "Just now",
+        });
+      }
+    } else if (modalState.type === "unpair") {
+      setModalState((prev) => ({ ...prev, loading: true }));
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const response = await fetch(`http://${hubData.ip_address}/reset`, {
+          method: "POST",
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!response.ok) throw new Error("Connection Refused");
+        await deleteDeviceFromDB();
+      } catch (e) {
+        setModalState({
+          visible: true,
+          type: "force_unpair",
+          title: "Device Offline",
+          msg: "Hub is offline. Force remove from app?",
           loading: false,
-          title: "Restarting Device...",
-          msg: `Please wait while the system reboots.\n\nTime remaining: ${countdown}s`,
-        }));
-
-        const intervalId = setInterval(() => {
-          countdown -= 1;
-          if (countdown <= 0) {
-            clearInterval(intervalId);
-            setIsRestarting(false);
-            setIsOnline(true);
-            closeModal();
-          } else {
-            setModalState((prev) => ({
-              ...prev,
-              msg: `Please wait while the system reboots.\n\nTime remaining: ${countdown}s`,
-            }));
-          }
-        }, 1000);
-      }, 1500);
-    } else if (
-      modalState.type === "unpair" ||
-      modalState.type === "force_unpair"
-    ) {
+        });
+      }
+    } else if (modalState.type === "force_unpair") {
       await deleteDeviceFromDB();
     }
   };
@@ -178,6 +334,118 @@ export default function DeviceConfigScreen() {
     ? "rgba(255, 68, 68, 0.3)"
     : "rgba(198, 40, 40, 0.2)";
 
+  // --- STYLES ---
+  const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    headerOverlay: {
+      position: "absolute",
+      top: Platform.OS === "android" ? 60 : 60,
+      left: 24,
+      right: 24,
+      zIndex: 10,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    heroContainer: {
+      paddingTop: 110,
+      paddingBottom: 25,
+      alignItems: "center",
+    },
+    heroIconContainer: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: "rgba(0,0,0,0.2)",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.2)",
+      position: "relative",
+    },
+    heroTitle: {
+      fontSize: scaledSize(28),
+      fontWeight: "bold",
+      color: "#fff",
+      marginBottom: 2,
+    },
+    heroSubtitle: {
+      fontSize: scaledSize(14),
+      color: "rgba(255,255,255,0.9)",
+    },
+    sectionTitle: {
+      fontSize: scaledSize(11),
+      fontWeight: "bold",
+      color: theme.textSecondary,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      marginBottom: 12,
+    },
+    card: {
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+      borderWidth: 1,
+      borderRadius: 16,
+      overflow: "hidden",
+      marginBottom: 24,
+    },
+    actionBtn: {
+      width: "100%",
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingVertical: 16,
+      marginBottom: 12,
+      borderRadius: 16,
+      gap: 10,
+      borderWidth: 1,
+    },
+    // --- EXACT MODAL STYLES AS REQUESTED ---
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.8)", // bg-black/80
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContent: {
+      width: 288, // w-72 (72 * 4 = 288)
+      backgroundColor: theme.card,
+      borderRadius: 16, // rounded-2xl
+      padding: 20, // p-5
+      alignItems: "center",
+      borderWidth: 1, // border
+      borderColor: theme.cardBorder,
+    },
+    modalTitle: {
+      fontSize: 18, // fontSize: 18
+      fontWeight: "bold", // font-bold
+      color: theme.text,
+      marginBottom: 8, // mb-2
+      textAlign: "center", // text-center
+    },
+    modalMsg: {
+      fontSize: 12, // fontSize: 12
+      color: theme.textSecondary,
+      textAlign: "center", // text-center
+      marginBottom: 24, // mb-6
+      lineHeight: 20, // leading-5
+    },
+    modalBtnRow: {
+      flexDirection: "row", // flex-row
+      gap: 10, // gap-2.5
+      width: "100%", // w-full
+    },
+    modalBtn: {
+      flex: 1, // flex-1
+      height: 40, // h-10
+      borderRadius: 12, // rounded-xl
+      alignItems: "center",
+      justifyContent: "center", // justify-center
+      borderWidth: 1, // border
+    },
+  });
+
   if (loading) {
     return (
       <View
@@ -188,123 +456,65 @@ export default function DeviceConfigScreen() {
           backgroundColor: theme.background,
         }}
       >
-        <ActivityIndicator size="large" color={theme.buttonPrimary} />
+        <ActivityIndicator size="large" color="#B0B0B0" />
       </View>
     );
   }
 
   return (
-    <SafeAreaView
-      className="flex-1"
-      style={{ backgroundColor: theme.background }}
-      edges={["top", "left", "right"]}
-    >
+    <View style={styles.container}>
       <StatusBar
-        barStyle={theme.statusBarStyle}
-        backgroundColor={theme.background}
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent={true}
       />
 
-      {/* --- HEADER (Consistent with previous files) --- */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between", // Ensures items are spread out
-          paddingHorizontal: 24,
-          paddingVertical: 20,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.cardBorder,
-          backgroundColor: theme.background,
-        }}
-      >
-        {/* LEFT: Back Button */}
+      <View style={styles.headerOverlay}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <MaterialIcons
-            name="arrow-back"
-            size={scaledSize(24)}
-            color={theme.textSecondary}
-          />
-        </TouchableOpacity>
-
-        {/* CENTER: Title */}
-        <Text
           style={{
-            fontSize: scaledSize(18),
-            fontWeight: "700",
-            color: theme.text,
-            textAlign: "center",
+            padding: 4,
+            backgroundColor: "rgba(0,0,0,0.2)",
+            borderRadius: 20,
           }}
         >
-          Device Configuration
-        </Text>
-
-        {/* RIGHT: Invisible View to balance layout and force title center */}
-        <View style={{ width: scaledSize(24) }} />
+          <MaterialIcons name="arrow-back" size={scaledSize(24)} color="#fff" />
+        </TouchableOpacity>
+        <View style={{ width: 32 }} />
       </View>
 
-      <ScrollView>
-        <View className="p-6">
-          {/* STATUS CIRCLE */}
-          <View
-            className="items-center py-5 border-b mb-5"
-            style={{ borderBottomColor: theme.cardBorder }}
-          >
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={toggleStatus}
-              className="items-center"
-            >
-              <View
-                className="w-20 h-20 rounded-full border-2 justify-center items-center mb-4"
-                style={{
-                  borderColor: isOnline ? statusColor : theme.cardBorder,
-                  backgroundColor: statusBg,
-                }}
-              >
-                <MaterialIcons
-                  name={statusIcon}
-                  size={scaledSize(40)}
-                  color={statusColor}
-                />
-              </View>
-              <Text
-                className="font-bold mb-1.5"
-                style={{ color: theme.text, fontSize: scaledSize(18) }}
-              >
-                {hubName || "Living Room Hub"}
-              </Text>
-              <View className="flex-row items-center gap-1.5">
-                <View
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: statusColor }}
-                />
-                <Text
-                  className="font-semibold"
-                  style={{ color: statusColor, fontSize: scaledSize(12) }}
-                >
-                  {statusDetailText}
-                </Text>
-              </View>
-            </TouchableOpacity>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <LinearGradient colors={gradientColors} style={styles.heroContainer}>
+          <View style={styles.heroIconContainer}>
+            {/* --- UPDATED: REMOVED (!isOnline || isRestarting) CHECK --- */}
+            {/* The Animated View will now render always, giving the wave effect to Online too */}
+            <Animated.View
+              style={{
+                position: "absolute",
+                width: "100%",
+                height: "100%",
+                borderRadius: 9999,
+                borderWidth: 1,
+                borderColor: "rgba(255,255,255,0.5)",
+                transform: [{ scale: pulseScale }],
+                opacity: pulseOpacity,
+              }}
+            />
+            <MaterialIcons name={statusIcon} size={40} color={iconColor} />
           </View>
-
-          {/* SYSTEM INFO */}
-          <Text
-            className="font-bold uppercase tracking-widest mb-3"
-            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
-          >
-            System Information
+          <Text style={styles.heroTitle}>{hubName || "Hub"}</Text>
+          <Text style={styles.heroSubtitle}>
+            {isRefreshing ? "Checking Status..." : statusDetailText}
           </Text>
-          <View
-            className="rounded-2xl border overflow-hidden mb-5"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
-          >
+        </LinearGradient>
+
+        <View style={{ padding: 24 }}>
+          {/* SYSTEM INFO */}
+          <Text style={styles.sectionTitle}>System Information</Text>
+          <View style={styles.card}>
             <InfoItem
               label="Model"
               value={hubData.model}
@@ -318,27 +528,27 @@ export default function DeviceConfigScreen() {
               scaledSize={scaledSize}
             />
             <View
-              className="p-4 flex-row justify-between border-b"
-              style={{ borderBottomColor: theme.cardBorder }}
+              style={{
+                padding: 16,
+                flexDirection: "row",
+                justifyContent: "space-between",
+                borderBottomWidth: 0,
+              }}
             >
               <Text
-                className="font-medium"
                 style={{
                   color: theme.textSecondary,
                   fontSize: scaledSize(14),
+                  fontWeight: "500",
                 }}
               >
                 Firmware
               </Text>
-              <View className="items-end">
-                <Text
-                  className="font-mono"
-                  style={{ color: theme.text, fontSize: scaledSize(14) }}
-                >
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={{ color: theme.text, fontSize: scaledSize(14) }}>
                   v{hubData.current_firmware}
                 </Text>
                 <Text
-                  className=""
                   style={{
                     color: theme.textSecondary,
                     fontSize: scaledSize(10),
@@ -351,20 +561,21 @@ export default function DeviceConfigScreen() {
           </View>
 
           {/* NETWORK CONNECTION */}
-          <Text
-            className="font-bold uppercase tracking-widest mb-3"
-            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
-          >
-            Network Connection
-          </Text>
+          <Text style={styles.sectionTitle}>Network Connection</Text>
           <View
-            className="p-4 rounded-2xl border flex-row justify-between items-center mb-6"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
+            style={[
+              styles.card,
+              {
+                padding: 16,
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              },
+            ]}
           >
-            <View className="flex-row items-center gap-3">
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+            >
               <MaterialIcons
                 name="wifi"
                 size={scaledSize(24)}
@@ -372,16 +583,19 @@ export default function DeviceConfigScreen() {
               />
               <View>
                 <Text
-                  className="font-semibold"
-                  style={{ color: theme.text, fontSize: scaledSize(14) }}
+                  style={{
+                    color: theme.text,
+                    fontSize: scaledSize(14),
+                    fontWeight: "600",
+                  }}
                 >
                   {hubData.wifi_ssid}
                 </Text>
                 <Text
-                  className="mt-0.5"
                   style={{
                     color: theme.textSecondary,
                     fontSize: scaledSize(11),
+                    marginTop: 2,
                   }}
                 >
                   IP: {hubData.ip_address}
@@ -389,16 +603,24 @@ export default function DeviceConfigScreen() {
               </View>
             </View>
             <TouchableOpacity
-              className="px-3 py-1.5 rounded-lg border"
               style={{
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 8,
                 backgroundColor: isDarkMode ? "#333" : "#f0f0f0",
+                borderWidth: 1,
                 borderColor: theme.cardBorder,
+                opacity: isRestarting ? 0.5 : 1,
               }}
+              disabled={isRestarting}
               onPress={() => openModal("wifi")}
             >
               <Text
-                className="font-semibold"
-                style={{ color: theme.text, fontSize: scaledSize(11) }}
+                style={{
+                  color: theme.text,
+                  fontSize: scaledSize(11),
+                  fontWeight: "600",
+                }}
               >
                 Change
               </Text>
@@ -406,31 +628,39 @@ export default function DeviceConfigScreen() {
           </View>
 
           {/* OUTLET CONFIGURATION */}
-          <Text
-            className="font-bold uppercase tracking-widest mb-3"
-            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
-          >
-            Outlet Configuration
-          </Text>
+          <Text style={styles.sectionTitle}>Outlet Configuration</Text>
           <TouchableOpacity
-            className="flex-row items-center justify-between p-4 rounded-2xl border mb-6"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
+            style={[
+              styles.card,
+              {
+                padding: 16,
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                opacity: isRestarting ? 0.5 : 1,
+              },
+            ]}
+            disabled={isRestarting}
             onPress={() =>
               navigation.navigate("HubConfig", {
                 hubId: hubData.serial_number,
+                status: isOnline ? "Online" : "Offline",
               })
             }
           >
-            <View className="flex-row items-center gap-3">
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+            >
               <View
-                className="w-10 h-10 rounded-full justify-center items-center"
                 style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
                   backgroundColor: isDarkMode
-                    ? "rgba(255, 255, 255, 0.05)"
-                    : "rgba(0, 0, 0, 0.05)",
+                    ? "rgba(255,255,255,0.05)"
+                    : "rgba(0,0,0,0.05)",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 <MaterialIcons
@@ -441,19 +671,21 @@ export default function DeviceConfigScreen() {
               </View>
               <View>
                 <Text
-                  className="font-bold"
-                  style={{ color: theme.text, fontSize: scaledSize(14) }}
+                  style={{
+                    color: theme.text,
+                    fontSize: scaledSize(14),
+                    fontWeight: "bold",
+                  }}
                 >
                   Edit Outlet Devices
                 </Text>
                 <Text
-                  className=""
                   style={{
                     color: theme.textSecondary,
                     fontSize: scaledSize(11),
                   }}
                 >
-                  Rename appliances and change types
+                  Rename appliances & types
                 </Text>
               </View>
             </View>
@@ -465,36 +697,19 @@ export default function DeviceConfigScreen() {
           </TouchableOpacity>
 
           {/* ADVANCED ACTIONS */}
-          <Text
-            className="font-bold uppercase tracking-widest mb-3"
-            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
-          >
-            Advanced Actions
-          </Text>
-
-          {/* RESTART HUB BUTTON - Centered & Styled */}
+          <Text style={styles.sectionTitle}>Advanced Actions</Text>
           <TouchableOpacity
             activeOpacity={0.7}
+            disabled={isRestarting}
             onPress={() => openModal("restart")}
-            style={{
-              width: "100%",
-              flexDirection: "row",
-              justifyContent: "center", // Center Horizontally
-              alignItems: "center", // Center Vertically
-              paddingVertical: 16,
-              marginBottom: 16,
-              borderRadius: 16,
-              gap: 10,
-              backgroundColor: theme.card,
-              borderWidth: 1,
-              borderColor: theme.cardBorder,
-              // Adding shadows for a "good" look
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.05,
-              shadowRadius: 3,
-              elevation: 2,
-            }}
+            style={[
+              styles.actionBtn,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+                opacity: isRestarting ? 0.5 : 1,
+              },
+            ]}
           >
             <MaterialIcons
               name="restart-alt"
@@ -506,30 +721,24 @@ export default function DeviceConfigScreen() {
                 color: theme.text,
                 fontSize: scaledSize(15),
                 fontWeight: "600",
-                textAlign: "center",
               }}
             >
               Restart Hub
             </Text>
           </TouchableOpacity>
 
-          {/* UNPAIR BUTTON - Centered & Styled to match */}
           <TouchableOpacity
             activeOpacity={0.7}
+            disabled={isRestarting}
             onPress={() => openModal("unpair")}
-            style={{
-              width: "100%",
-              flexDirection: "row",
-              justifyContent: "center",
-              alignItems: "center",
-              paddingVertical: 16,
-              marginBottom: 12,
-              borderRadius: 16,
-              gap: 10,
-              backgroundColor: dangerBg,
-              borderWidth: 1,
-              borderColor: dangerBorder,
-            }}
+            style={[
+              styles.actionBtn,
+              {
+                backgroundColor: dangerBg,
+                borderColor: dangerBorder,
+                opacity: isRestarting ? 0.5 : 1,
+              },
+            ]}
           >
             <MaterialIcons
               name="link-off"
@@ -541,7 +750,6 @@ export default function DeviceConfigScreen() {
                 color: dangerColor,
                 fontSize: scaledSize(15),
                 fontWeight: "600",
-                textAlign: "center",
               }}
             >
               Unpair & Reset
@@ -550,106 +758,71 @@ export default function DeviceConfigScreen() {
         </View>
       </ScrollView>
 
-      {/* MODAL */}
+      {/* --- FIXED MODAL --- */}
       <Modal
         transparent
         visible={modalState.visible}
         animationType="fade"
         onRequestClose={closeModal}
       >
-        <View className="flex-1 bg-black/80 justify-center items-center p-6">
+        <View style={styles.modalOverlay}>
           {modalState.loading ? (
-            <View
-              style={{
-                width: "100%",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
+            <View style={styles.modalContent}>
               <ActivityIndicator size="large" color="#B0B0B0" />
               <Text
                 style={{
                   color: "#B0B0B0",
                   marginTop: 15,
-                  fontWeight: "500",
                   fontSize: 12,
-                  letterSpacing: 0.5,
+                  fontWeight: "500",
                   textAlign: "center",
-                  width: "100%",
                 }}
               >
                 {modalState.msg}
               </Text>
             </View>
           ) : (
-            <View
-              className="w-[85%] max-w-[320px] p-5 rounded-2xl border items-center"
-              style={{
-                backgroundColor: theme.card,
-                borderColor: theme.cardBorder,
-              }}
-            >
-              <Text
-                className="font-bold mb-2.5 text-center"
-                style={{ color: theme.text, fontSize: scaledSize(18) }}
-              >
-                {modalState.title}
-              </Text>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>{modalState.title}</Text>
+              <Text style={styles.modalMsg}>{modalState.msg}</Text>
 
-              <Text
-                style={{
-                  color: theme.textSecondary,
-                  fontSize: scaledSize(13),
-                  textAlign: "center",
-                  width: "100%",
-                  marginBottom: 24,
-                }}
-              >
-                {modalState.msg}
-              </Text>
-
-              <View className="flex-row gap-3 w-full">
+              <View style={styles.modalBtnRow}>
+                {/* Cancel Button */}
                 {(modalState.type === "restart" ||
                   modalState.type === "unpair" ||
                   modalState.type === "force_unpair" ||
                   modalState.type === "error") && (
                   <TouchableOpacity
-                    className="flex-1 py-3 rounded-xl border items-center"
-                    style={{ borderColor: theme.cardBorder }}
+                    style={[styles.modalBtn, { borderColor: theme.cardBorder }]}
                     onPress={closeModal}
                   >
-                    <Text
-                      className="font-bold"
-                      style={{
-                        color: theme.text,
-                        fontSize: scaledSize(13),
-                      }}
-                    >
+                    <Text style={{ color: theme.text, fontWeight: "bold" }}>
                       Cancel
                     </Text>
                   </TouchableOpacity>
                 )}
 
+                {/* Confirm Button */}
                 <TouchableOpacity
-                  className="flex-1 py-3 rounded-xl items-center"
-                  style={{
-                    backgroundColor:
-                      modalState.type === "unpair" ||
-                      modalState.type === "force_unpair" ||
-                      modalState.type === "error"
-                        ? theme.buttonDangerText
-                        : theme.buttonPrimary,
-                  }}
+                  style={[
+                    styles.modalBtn,
+                    {
+                      backgroundColor:
+                        modalState.type === "unpair" ||
+                        modalState.type === "force_unpair" ||
+                        modalState.type === "error"
+                          ? theme.buttonDangerText
+                          : theme.buttonPrimary,
+                      borderWidth: 0, // Remove border for solid button
+                    },
+                  ]}
                   onPress={
                     modalState.type === "wifi" || modalState.type === "success"
                       ? closeModal
                       : handleConfirm
                   }
                 >
-                  <Text
-                    className="font-bold"
-                    style={{ color: "#fff", fontSize: scaledSize(13) }}
-                  >
+                  <Text style={{ color: "#fff", fontWeight: "bold" }}>
                     {modalState.type === "wifi" || modalState.type === "success"
                       ? "Okay"
                       : modalState.type === "force_unpair"
@@ -662,25 +835,36 @@ export default function DeviceConfigScreen() {
           )}
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 function InfoItem({ label, value, theme, scaledSize }) {
   return (
     <View
-      className="p-4 flex-row justify-between border-b"
-      style={{ borderBottomColor: theme.cardBorder }}
+      style={{
+        padding: 16,
+        flexDirection: "row",
+        justifyContent: "space-between",
+        borderBottomWidth: 1,
+        borderBottomColor: theme.cardBorder,
+      }}
     >
       <Text
-        className="font-medium"
-        style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+        style={{
+          color: theme.textSecondary,
+          fontSize: scaledSize(14),
+          fontWeight: "500",
+        }}
       >
         {label}
       </Text>
       <Text
-        className="font-mono"
-        style={{ color: theme.text, fontSize: scaledSize(14) }}
+        style={{
+          color: theme.text,
+          fontSize: scaledSize(14),
+          fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+        }}
       >
         {value}
       </Text>

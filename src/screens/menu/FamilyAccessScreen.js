@@ -28,21 +28,16 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// --- 1. MOCK HUBS ---
-const MOCK_HUBS = [
-  { id: "00000000-0000-0000-0000-000000000001", name: "Living Room Hub" },
-  { id: "00000000-0000-0000-0000-000000000002", name: "Kitchen Hub" },
-  { id: "00000000-0000-0000-0000-000000000003", name: "Bedroom Hub" },
-  { id: "00000000-0000-0000-0000-000000000004", name: "Garage Hub" },
-];
-
 export default function FamilyAccessScreen() {
   const navigation = useNavigation();
   const { theme, fontScale } = useTheme();
   const scaledSize = (size) => size * fontScale;
 
   const [email, setEmail] = useState("");
-  const [myHubs, setMyHubs] = useState(MOCK_HUBS);
+
+  // --- UPDATED: Initial state is empty, no mocks ---
+  const [myHubs, setMyHubs] = useState([]);
+
   const [familyMembers, setFamilyMembers] = useState([]);
   const [pendingInvites, setPendingInvites] = useState([]);
 
@@ -62,7 +57,7 @@ export default function FamilyAccessScreen() {
   const [selectedHubs, setSelectedHubs] = useState([]);
   const [grantAllAccess, setGrantAllAccess] = useState(true);
 
-  // --- NEW: HUB DROPDOWN STATE ---
+  // --- HUB DROPDOWN STATE ---
   const [isHubDropdownOpen, setIsHubDropdownOpen] = useState(false);
 
   // Modals
@@ -87,7 +82,7 @@ export default function FamilyAccessScreen() {
     setAlertModalVisible(true);
   };
 
-  // --- FETCH DATA ---
+  // --- FETCH DATA (REAL IMPLEMENTATION) ---
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -96,9 +91,21 @@ export default function FamilyAccessScreen() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      setMyHubs(MOCK_HUBS);
+      // 1. FETCH REAL HUBS FIRST
+      const { data: realHubs, error: hubsError } = await supabase
+        .from("hubs")
+        .select("id, name")
+        .eq("user_id", user.id);
 
-      // Fetch Pending Invites
+      if (hubsError) throw hubsError;
+
+      const hubsList = realHubs || [];
+      setMyHubs(hubsList);
+
+      // We need these IDs for the next queries
+      const realHubIds = hubsList.map((h) => h.id);
+
+      // 2. Fetch Pending Invites
       const { data: invites, error: inviteError } = await supabase
         .from("hub_invites")
         .select("*")
@@ -110,7 +117,7 @@ export default function FamilyAccessScreen() {
 
       const formattedInvites = invites.map((invite) => {
         const hubCount = invite.hub_ids ? invite.hub_ids.length : 0;
-        const totalHubs = MOCK_HUBS.length;
+        const totalHubs = hubsList.length;
         const accessText =
           hubCount >= totalHubs ? "All Hubs" : `${hubCount} Hubs`;
 
@@ -124,46 +131,49 @@ export default function FamilyAccessScreen() {
       });
       setPendingInvites(formattedInvites);
 
-      // Fetch Members
-      const mockIds = MOCK_HUBS.map((h) => h.id);
-      const { data: accessRecords, error: accessError } = await supabase
-        .from("hub_access")
-        .select("user_id, hub_id, role, users(first_name, last_name, email)")
-        .in("hub_id", mockIds);
+      // 3. Fetch Members (Only if we have hubs)
+      if (realHubIds.length > 0) {
+        const { data: accessRecords, error: accessError } = await supabase
+          .from("hub_access")
+          .select("user_id, hub_id, role, users(first_name, last_name, email)")
+          .in("hub_id", realHubIds);
 
-      if (!accessError && accessRecords) {
-        const memberMap = {};
-        accessRecords.forEach((record) => {
-          if (!record.users) return;
-          const uid = record.user_id;
-          if (!memberMap[uid]) {
-            memberMap[uid] = {
-              id: uid,
-              name:
-                `${record.users.first_name} ${record.users.last_name}`.trim() ||
-                "Unknown",
-              email: record.users.email,
-              role: record.role,
-              hubIds: [],
-              initial: (
-                record.users.first_name?.[0] ||
-                record.users.email?.[0] ||
-                "?"
-              ).toUpperCase(),
-            };
-          }
-          memberMap[uid].hubIds.push(record.hub_id);
-        });
+        if (!accessError && accessRecords) {
+          const memberMap = {};
+          accessRecords.forEach((record) => {
+            if (!record.users) return;
+            const uid = record.user_id;
+            if (!memberMap[uid]) {
+              memberMap[uid] = {
+                id: uid,
+                name:
+                  `${record.users.first_name} ${record.users.last_name}`.trim() ||
+                  "Unknown",
+                email: record.users.email,
+                role: record.role,
+                hubIds: [],
+                initial: (
+                  record.users.first_name?.[0] ||
+                  record.users.email?.[0] ||
+                  "?"
+                ).toUpperCase(),
+              };
+            }
+            memberMap[uid].hubIds.push(record.hub_id);
+          });
 
-        const formattedMembers = Object.values(memberMap).map((m) => {
-          const hubCount = m.hubIds.length;
-          const accessStr =
-            hubCount >= MOCK_HUBS.length
-              ? "All Hubs"
-              : `${hubCount} Hubs Selected`;
-          return { ...m, access: accessStr };
-        });
-        setFamilyMembers(formattedMembers);
+          const formattedMembers = Object.values(memberMap).map((m) => {
+            const hubCount = m.hubIds.length;
+            const accessStr =
+              hubCount >= hubsList.length
+                ? "All Hubs"
+                : `${hubCount} Hubs Selected`;
+            return { ...m, access: accessStr };
+          });
+          setFamilyMembers(formattedMembers);
+        }
+      } else {
+        setFamilyMembers([]);
       }
     } catch (err) {
       console.log("Error fetching data:", err);
@@ -178,11 +188,10 @@ export default function FamilyAccessScreen() {
     }, []),
   );
 
-  // --- NEW: GMAIL STYLE SEARCH LOGIC ---
+  // --- GMAIL STYLE SEARCH LOGIC ---
   const handleTextChange = (text) => {
     setEmail(text);
 
-    // Clear previous timer to debounce
     if (searchTimer) clearTimeout(searchTimer);
 
     if (text.length < 2) {
@@ -191,14 +200,12 @@ export default function FamilyAccessScreen() {
       return;
     }
 
-    // Set new timer (Debounce 300ms)
     const timer = setTimeout(async () => {
       try {
-        // Search for users with email LIKE text
         const { data, error } = await supabase
           .from("users")
-          .select("id, email, first_name, last_name, avatar_url") // Ensure your DB has these fields
-          .ilike("email", `%${text}%`) // Case insensitive partial match
+          .select("id, email, first_name, last_name, avatar_url")
+          .ilike("email", `%${text}%`)
           .limit(5);
 
         if (!error && data.length > 0) {
@@ -232,6 +239,15 @@ export default function FamilyAccessScreen() {
         "error",
         "Invalid Email",
         "Please enter a valid email address.",
+      );
+      return;
+    }
+
+    if (myHubs.length === 0) {
+      showAlert(
+        "error",
+        "No Hubs",
+        "You need to add a Hub to your account before inviting others.",
       );
       return;
     }
@@ -270,8 +286,9 @@ export default function FamilyAccessScreen() {
       } = await supabase.auth.getUser();
 
       let hubIdsToGrant = selectedHubs;
+      // UPDATED: Use myHubs (state) instead of MOCK_HUBS
       if (grantAllAccess) {
-        hubIdsToGrant = MOCK_HUBS.map((h) => h.id);
+        hubIdsToGrant = myHubs.map((h) => h.id);
       }
 
       if (hubIdsToGrant.length === 0)
@@ -331,13 +348,14 @@ export default function FamilyAccessScreen() {
     if (!selectedMember) return;
     setProcessing(true);
     try {
-      const mockIds = MOCK_HUBS.map((h) => h.id);
+      // UPDATED: Use myHubs (state) instead of MOCK_HUBS
+      const realHubIds = myHubs.map((h) => h.id);
 
       const { error } = await supabase
         .from("hub_access")
         .delete()
         .eq("user_id", selectedMember.id)
-        .in("hub_id", mockIds);
+        .in("hub_id", realHubIds);
 
       if (error) throw error;
 
@@ -357,13 +375,12 @@ export default function FamilyAccessScreen() {
   const toggleHubSelection = (hubId) => {
     if (selectedHubs.includes(hubId)) {
       setSelectedHubs(selectedHubs.filter((id) => id !== hubId));
-      // Removing a hub means we no longer have full access
       setGrantAllAccess(false);
     } else {
       const newSelection = [...selectedHubs, hubId];
       setSelectedHubs(newSelection);
-      // Check if all hubs are now selected
-      if (newSelection.length === MOCK_HUBS.length) {
+      // UPDATED: Compare with myHubs.length
+      if (newSelection.length === myHubs.length) {
         setGrantAllAccess(true);
       }
     }
@@ -372,8 +389,8 @@ export default function FamilyAccessScreen() {
   const getAccessSummary = () => {
     if (grantAllAccess) return "Full Access (All Hubs)";
     if (selectedHubs.length === 0) return "No Access Selected";
-    if (selectedHubs.length === MOCK_HUBS.length)
-      return "Full Access (All Hubs)";
+    // UPDATED: Compare with myHubs.length
+    if (selectedHubs.length === myHubs.length) return "Full Access (All Hubs)";
     return `${selectedHubs.length} Hub(s) Selected`;
   };
 
@@ -386,7 +403,8 @@ export default function FamilyAccessScreen() {
     if (!selectedMember) return;
     const currentHubIds = selectedMember.hubIds || [];
     setSelectedHubs(currentHubIds);
-    setGrantAllAccess(currentHubIds.length === MOCK_HUBS.length);
+    // UPDATED: Compare with myHubs.length
+    setGrantAllAccess(currentHubIds.length === myHubs.length);
     setShowMemberOptions(false);
     setTimeout(() => setShowHubModal(true), 200);
   };
@@ -401,6 +419,9 @@ export default function FamilyAccessScreen() {
       setShowHubModal(false);
       return;
     }
+    // Note: To implement "Update Access Rights", you would need a new Supabase query here
+    // to delete old access and insert new access for this user.
+    // For now, this just closes the modal as per your original code structure.
     setShowHubModal(false);
   };
 
@@ -447,9 +468,9 @@ export default function FamilyAccessScreen() {
             Invite New User
           </Text>
 
-          {/* --- INVITE CONTAINER (Z-Index is important here for dropdown) --- */}
+          {/* --- INVITE CONTAINER --- */}
           <View
-            className="p-5 rounded-2xl border mb-8 z-50" // Added z-50
+            className="p-5 rounded-2xl border mb-8 z-50"
             style={{
               backgroundColor: theme.card,
               borderColor: theme.cardBorder,
@@ -483,7 +504,7 @@ export default function FamilyAccessScreen() {
                   placeholder="user@example.com"
                   placeholderTextColor={theme.textSecondary}
                   value={email}
-                  onChangeText={handleTextChange} // UPDATED FUNCTION
+                  onChangeText={handleTextChange}
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
@@ -501,7 +522,7 @@ export default function FamilyAccessScreen() {
                     shadowOpacity: 0.2,
                     shadowOffset: { width: 0, height: 2 },
                     shadowRadius: 4,
-                    zIndex: 100, // Ensure it floats on top
+                    zIndex: 100,
                   }}
                 >
                   {suggestions.map((user) => (
@@ -511,7 +532,6 @@ export default function FamilyAccessScreen() {
                       className="flex-row items-center p-3 border-b last:border-b-0"
                       style={{ borderBottomColor: theme.cardBorder }}
                     >
-                      {/* Avatar or Initial */}
                       {user.avatar_url ? (
                         <Image
                           source={{ uri: user.avatar_url }}
@@ -543,7 +563,6 @@ export default function FamilyAccessScreen() {
                       )}
 
                       <View>
-                        {/* Name (if exists) or Email Part */}
                         <Text
                           style={{
                             color: theme.text,
@@ -555,7 +574,6 @@ export default function FamilyAccessScreen() {
                             ? `${user.first_name} ${user.last_name}`
                             : user.email.split("@")[0]}
                         </Text>
-                        {/* Email */}
                         <Text
                           style={{
                             color: theme.textSecondary,
@@ -582,9 +600,9 @@ export default function FamilyAccessScreen() {
             <TouchableOpacity
               onPress={() => {
                 setGrantAllAccess(!grantAllAccess);
-                // Reset manual selection when toggling
                 if (!grantAllAccess) {
-                  setSelectedHubs(MOCK_HUBS.map((h) => h.id));
+                  // UPDATED: Use myHubs
+                  setSelectedHubs(myHubs.map((h) => h.id));
                 } else {
                   setSelectedHubs([]);
                 }
@@ -631,7 +649,7 @@ export default function FamilyAccessScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* --- NEW: HUB DROPDOWN SELECTOR --- */}
+            {/* --- HUB DROPDOWN SELECTOR --- */}
             <View>
               <TouchableOpacity
                 onPress={() => {
@@ -671,67 +689,70 @@ export default function FamilyAccessScreen() {
                 />
               </TouchableOpacity>
 
-              {/* Dropdown Content */}
+              {/* Dropdown Content - UPDATED to use myHubs */}
               {isHubDropdownOpen && (
                 <View className="mb-4 pl-2">
-                  {MOCK_HUBS.map((hub) => {
-                    const isSelected =
-                      selectedHubs.includes(hub.id) || grantAllAccess;
-                    return (
-                      <TouchableOpacity
-                        key={hub.id}
-                        onPress={() => {
-                          if (grantAllAccess) {
-                            // If full access was on, switch to manual mode with this item unchecked?
-                            // Usually better to just disable manual checks if Full Access is on, or auto-switch off full access.
-                            // Let's auto-switch off full access for granular control.
-                            setGrantAllAccess(false);
-                            const allIds = MOCK_HUBS.map((h) => h.id).filter(
-                              (id) => id !== hub.id,
-                            );
-                            setSelectedHubs(allIds);
-                          } else {
-                            toggleHubSelection(hub.id);
-                          }
-                        }}
-                        className="flex-row items-center py-2"
-                      >
-                        <View
-                          style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: 4,
-                            borderWidth: 1,
-                            borderColor: isSelected
-                              ? theme.buttonPrimary
-                              : theme.textSecondary,
-                            backgroundColor: isSelected
-                              ? theme.buttonPrimary
-                              : "transparent",
-                            justifyContent: "center",
-                            alignItems: "center",
-                            marginRight: 12,
+                  {myHubs.length === 0 ? (
+                    <Text style={{ color: theme.textSecondary, padding: 8 }}>
+                      No Hubs Found
+                    </Text>
+                  ) : (
+                    myHubs.map((hub) => {
+                      const isSelected =
+                        selectedHubs.includes(hub.id) || grantAllAccess;
+                      return (
+                        <TouchableOpacity
+                          key={hub.id}
+                          onPress={() => {
+                            if (grantAllAccess) {
+                              setGrantAllAccess(false);
+                              const allIds = myHubs
+                                .map((h) => h.id)
+                                .filter((id) => id !== hub.id);
+                              setSelectedHubs(allIds);
+                            } else {
+                              toggleHubSelection(hub.id);
+                            }
                           }}
+                          className="flex-row items-center py-2"
                         >
-                          {isSelected && (
-                            <MaterialIcons
-                              name="check"
-                              size={14}
-                              color="#fff"
-                            />
-                          )}
-                        </View>
-                        <Text
-                          style={{
-                            color: theme.text,
-                            fontSize: scaledSize(14),
-                          }}
-                        >
-                          {hub.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                          <View
+                            style={{
+                              width: 20,
+                              height: 20,
+                              borderRadius: 4,
+                              borderWidth: 1,
+                              borderColor: isSelected
+                                ? theme.buttonPrimary
+                                : theme.textSecondary,
+                              backgroundColor: isSelected
+                                ? theme.buttonPrimary
+                                : "transparent",
+                              justifyContent: "center",
+                              alignItems: "center",
+                              marginRight: 12,
+                            }}
+                          >
+                            {isSelected && (
+                              <MaterialIcons
+                                name="check"
+                                size={14}
+                                color="#fff"
+                              />
+                            )}
+                          </View>
+                          <Text
+                            style={{
+                              color: theme.text,
+                              fontSize: scaledSize(14),
+                            }}
+                          >
+                            {hub.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
                 </View>
               )}
             </View>
@@ -968,7 +989,7 @@ export default function FamilyAccessScreen() {
         </View>
       </ScrollView>
 
-      {/* Hub Selection Modal */}
+      {/* Hub Selection Modal - UPDATED to use myHubs */}
       <Modal visible={showHubModal} transparent animationType="slide">
         <View
           className="flex-1 justify-end"
@@ -1004,7 +1025,7 @@ export default function FamilyAccessScreen() {
               onPress={() => {
                 const newState = !grantAllAccess;
                 setGrantAllAccess(newState);
-                if (newState) setSelectedHubs(MOCK_HUBS.map((h) => h.id));
+                if (newState) setSelectedHubs(myHubs.map((h) => h.id));
                 else setSelectedHubs([]);
               }}
               className="flex-row items-center justify-between p-4 rounded-xl border mb-4"
@@ -1067,57 +1088,63 @@ export default function FamilyAccessScreen() {
                 >
                   Or select specific hubs:
                 </Text>
-                <FlatList
-                  data={MOCK_HUBS}
-                  keyExtractor={(item) => item.id}
-                  contentContainerStyle={{ paddingBottom: 20 }}
-                  renderItem={({ item }) => {
-                    const isSelected = selectedHubs.includes(item.id);
-                    return (
-                      <TouchableOpacity
-                        onPress={() => toggleHubSelection(item.id)}
-                        className="flex-row items-center justify-between p-4 rounded-xl border mb-3"
-                        style={{
-                          borderColor: isSelected
-                            ? theme.buttonPrimary
-                            : theme.cardBorder,
-                          backgroundColor: isSelected
-                            ? `${theme.buttonPrimary}10`
-                            : "transparent",
-                        }}
-                      >
-                        <Text
-                          className="font-medium"
-                          style={{
-                            color: theme.text,
-                            fontSize: scaledSize(14),
-                          }}
-                        >
-                          {item.name}
-                        </Text>
-                        <View
-                          className="w-5 h-5 rounded border justify-center items-center"
+                {myHubs.length === 0 ? (
+                  <Text style={{ color: theme.textSecondary }}>
+                    No Hubs Available
+                  </Text>
+                ) : (
+                  <FlatList
+                    data={myHubs}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={{ paddingBottom: 20 }}
+                    renderItem={({ item }) => {
+                      const isSelected = selectedHubs.includes(item.id);
+                      return (
+                        <TouchableOpacity
+                          onPress={() => toggleHubSelection(item.id)}
+                          className="flex-row items-center justify-between p-4 rounded-xl border mb-3"
                           style={{
                             borderColor: isSelected
                               ? theme.buttonPrimary
-                              : theme.textSecondary,
+                              : theme.cardBorder,
                             backgroundColor: isSelected
-                              ? theme.buttonPrimary
+                              ? `${theme.buttonPrimary}10`
                               : "transparent",
                           }}
                         >
-                          {isSelected && (
-                            <MaterialIcons
-                              name="check"
-                              size={scaledSize(14)}
-                              color="#fff"
-                            />
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  }}
-                />
+                          <Text
+                            className="font-medium"
+                            style={{
+                              color: theme.text,
+                              fontSize: scaledSize(14),
+                            }}
+                          >
+                            {item.name}
+                          </Text>
+                          <View
+                            className="w-5 h-5 rounded border justify-center items-center"
+                            style={{
+                              borderColor: isSelected
+                                ? theme.buttonPrimary
+                                : theme.textSecondary,
+                              backgroundColor: isSelected
+                                ? theme.buttonPrimary
+                                : "transparent",
+                            }}
+                          >
+                            {isSelected && (
+                              <MaterialIcons
+                                name="check"
+                                size={scaledSize(14)}
+                                color="#fff"
+                              />
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    }}
+                  />
+                )}
               </View>
             )}
 
@@ -1423,7 +1450,7 @@ export default function FamilyAccessScreen() {
         </View>
       </Modal>
 
-      {/* UNIFIED STATUS MODAL (REPLACES ALERT) */}
+      {/* UNIFIED STATUS MODAL */}
       <Modal visible={alertModalVisible} transparent animationType="fade">
         <View
           className="flex-1 justify-center items-center p-6"

@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
 
 const APPLIANCE_OPTIONS = [
   "Air Conditioner",
@@ -43,6 +44,8 @@ const HUB_LOCATIONS = [
   "Others",
 ];
 
+// Defined only for logic checks, not as a selectable option
+const INVALID_SELECTION = "Select Device";
 const PLACEHOLDER_HUB = "Select Location";
 
 export default function HubConfigScreen() {
@@ -52,15 +55,17 @@ export default function HubConfigScreen() {
 
   const scaledSize = (size) => size * fontScale;
 
-  const { hubId } = route.params || { hubId: "demo_hub_123" };
+  const { hubId } = route.params || { hubId: null };
 
   const [isLoading, setIsLoading] = useState(false);
 
+  // --- FORM STATE ---
   const [hubName, setHubName] = useState({
     selection: PLACEHOLDER_HUB,
     custom: "",
   });
 
+  // --- UPDATED: Default to "Unused" so user isn't forced to select ---
   const [outlet1, setOutlet1] = useState({
     selection: "Unused",
     custom: "",
@@ -78,6 +83,7 @@ export default function HubConfigScreen() {
     custom: "",
   });
 
+  // --- ALERT STATE ---
   const [alertConfig, setAlertConfig] = useState({
     visible: false,
     title: "",
@@ -96,41 +102,107 @@ export default function HubConfigScreen() {
     if (callback) callback();
   };
 
+  // --- HELPER FUNCTIONS ---
+  const getFinalName = (state) =>
+    state.selection === "Others" || state.selection === "Unused"
+      ? state.custom.trim() || state.selection
+      : state.selection;
+
   const isValid = (state, placeholder) => {
     if (placeholder && state.selection === placeholder) return false;
-
     if (state.selection === "Others" && !state.custom.trim()) return false;
     return true;
   };
 
+  // --- MAIN LOGIC ---
   const handleFinishSetup = async () => {
     if (!hubId) {
       return showAlert(
         "Error",
-        "No Hub Serial Number found. Please scan again."
+        "No Hub Serial Number found. Please scan again.",
       );
     }
 
     if (!isValid(hubName, PLACEHOLDER_HUB))
       return showAlert("Missing Info", "Please select or name your Hub.");
 
-    if (!isValid(outlet1))
+    // "Unused" is valid, so we check against INVALID_SELECTION ("Select Device")
+    // which effectively just checks custom name if "Others" is selected.
+    if (!isValid(outlet1, INVALID_SELECTION))
       return showAlert("Missing Info", "Please check Outlet 1 configuration.");
-    if (!isValid(outlet2))
+    if (!isValid(outlet2, INVALID_SELECTION))
       return showAlert("Missing Info", "Please check Outlet 2 configuration.");
-    if (!isValid(outlet3))
+    if (!isValid(outlet3, INVALID_SELECTION))
       return showAlert("Missing Info", "Please check Outlet 3 configuration.");
-    if (!isValid(outlet4))
+    if (!isValid(outlet4, INVALID_SELECTION))
       return showAlert("Missing Info", "Please check Outlet 4 configuration.");
 
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      // 1. Get Current User
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("No user logged in");
+
+      // 2. Create/Update Hub
+      const { data: hubData, error: hubError } = await supabase
+        .from("hubs")
+        .upsert(
+          {
+            user_id: user.id,
+            serial_number: hubId,
+            name: getFinalName(hubName),
+            status: "online",
+            model: "GridWatch-V1",
+            last_seen: new Date().toISOString(),
+          },
+          { onConflict: "serial_number" },
+        )
+        .select()
+        .single();
+
+      if (hubError) throw hubError;
+
+      const realHubUUID = hubData.id;
+
+      // 3. Prepare Outlets
+      const outlets = [
+        { data: outlet1, num: 1 },
+        { data: outlet2, num: 2 },
+        { data: outlet3, num: 3 },
+        { data: outlet4, num: 4 },
+      ];
+
+      // 4. Create/Update Devices
+      for (const outlet of outlets) {
+        const { error: deviceError } = await supabase.from("devices").upsert(
+          {
+            hub_id: realHubUUID,
+            user_id: user.id,
+            name: getFinalName(outlet.data),
+            type: outlet.data.selection,
+            outlet_number: outlet.num,
+            status: "off",
+            is_monitored: true,
+          },
+          { onConflict: "hub_id, outlet_number" },
+        );
+
+        if (deviceError) throw deviceError;
+      }
+
+      // 5. Success
       setIsLoading(false);
       showAlert("Setup Complete", "Hub & Outlets Synced!", "success", () =>
-        navigation.navigate("MainApp", { screen: "Home" })
+        navigation.navigate("MainApp", { screen: "Home" }),
       );
-    }, 2000);
+    } catch (error) {
+      console.error("Setup Error:", error);
+      setIsLoading(false);
+      showAlert("Error", "Could not save configuration: " + error.message);
+    }
   };
 
   return (
@@ -144,24 +216,22 @@ export default function HubConfigScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- FIXED: LOADING MODAL (COVERS FULL SCREEN) --- */}
+      {/* --- LOADING MODAL --- */}
       <Modal transparent visible={isLoading} animationType="fade">
         <View
           style={{
             flex: 1,
-            // Keeping subtle background dim
             backgroundColor: "rgba(0,0,0,0.7)",
             justifyContent: "center",
             alignItems: "center",
           }}
         >
-          {/* Color: #B0B0B0, Size: Large */}
           <ActivityIndicator size="large" color="#B0B0B0" />
           <Text
             style={{
-              color: "#B0B0B0", // Matching Text Color
+              color: "#B0B0B0",
               marginTop: 15,
-              fontWeight: "500", // Medium Weight
+              fontWeight: "500",
               fontSize: scaledSize(12),
               letterSpacing: 0.5,
             }}
@@ -171,7 +241,7 @@ export default function HubConfigScreen() {
         </View>
       </Modal>
 
-      {/* --- UPDATED HEADER (Balanced Layout & Correct Sizes) --- */}
+      {/* --- HEADER --- */}
       <View
         className="flex-row items-center justify-between px-6 py-5 border-b"
         style={{
@@ -194,7 +264,6 @@ export default function HubConfigScreen() {
           Configure Hub
         </Text>
 
-        {/* Placeholder View for alignment balance */}
         <View style={{ width: scaledSize(20) }} />
       </View>
 
@@ -275,6 +344,7 @@ export default function HubConfigScreen() {
               options={APPLIANCE_OPTIONS}
               state={outlet1}
               setState={setOutlet1}
+              placeholder={INVALID_SELECTION}
               theme={theme}
               scaledSize={scaledSize}
             />
@@ -283,6 +353,7 @@ export default function HubConfigScreen() {
               options={APPLIANCE_OPTIONS}
               state={outlet2}
               setState={setOutlet2}
+              placeholder={INVALID_SELECTION}
               theme={theme}
               scaledSize={scaledSize}
             />
@@ -291,6 +362,7 @@ export default function HubConfigScreen() {
               options={APPLIANCE_OPTIONS}
               state={outlet3}
               setState={setOutlet3}
+              placeholder={INVALID_SELECTION}
               theme={theme}
               scaledSize={scaledSize}
             />
@@ -299,6 +371,7 @@ export default function HubConfigScreen() {
               options={APPLIANCE_OPTIONS}
               state={outlet4}
               setState={setOutlet4}
+              placeholder={INVALID_SELECTION}
               theme={theme}
               scaledSize={scaledSize}
             />
@@ -324,7 +397,7 @@ export default function HubConfigScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* ALERT MODAL */}
+      {/* --- ALERT MODAL --- */}
       <Modal transparent visible={alertConfig.visible} animationType="fade">
         <View className="flex-1 bg-black/60 justify-center items-center p-6">
           <View
@@ -352,7 +425,10 @@ export default function HubConfigScreen() {
               <View
                 className="py-3 rounded-xl w-full items-center"
                 style={{
-                  backgroundColor: theme.buttonPrimary,
+                  backgroundColor:
+                    alertConfig.type === "success"
+                      ? theme.buttonPrimary
+                      : theme.buttonDangerText,
                 }}
               >
                 <Text
@@ -373,6 +449,7 @@ export default function HubConfigScreen() {
   );
 }
 
+// --- HELPER COMPONENT (DROPDOWN) ---
 function ConfigDropdown({
   label,
   options,
@@ -388,14 +465,12 @@ function ConfigDropdown({
     setState((prev) => ({
       ...prev,
       selection: option,
-
       custom: option === "Others" ? prev.custom : "",
     }));
     setModalVisible(false);
   };
 
   const isCustom = state.selection === "Others";
-
   const displayColor =
     state.selection === placeholder ? theme.textSecondary : theme.text;
 

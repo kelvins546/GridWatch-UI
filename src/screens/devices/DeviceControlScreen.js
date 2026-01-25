@@ -80,8 +80,8 @@ export default function DeviceControlScreen() {
   const gradientColors = isPowered
     ? [theme.buttonPrimary, theme.background]
     : isDarkMode
-    ? ["#2c3e50", theme.background]
-    : ["#94a3b8", theme.background];
+      ? ["#2c3e50", theme.background]
+      : ["#94a3b8", theme.background];
 
   const activeColor = theme.buttonPrimary;
 
@@ -122,7 +122,7 @@ export default function DeviceControlScreen() {
 
   const toggleScheduleActive = (id) => {
     setSchedules((current) =>
-      current.map((s) => (s.id === id ? { ...s, active: !s.active } : s))
+      current.map((s) => (s.id === id ? { ...s, active: !s.active } : s)),
     );
   };
 
@@ -282,10 +282,11 @@ export default function DeviceControlScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* --- HERO SECTION --- */}
+      {/* --- HERO SECTION (Adjusted Spacing) --- */}
       <LinearGradient
         colors={gradientColors}
-        style={{ paddingTop: 140, paddingBottom: 40, alignItems: "center" }}
+        // REDUCED PADDING TOP AND BOTTOM HERE
+        style={{ paddingTop: 110, paddingBottom: 25, alignItems: "center" }}
       >
         <View
           style={{
@@ -295,7 +296,7 @@ export default function DeviceControlScreen() {
             backgroundColor: "rgba(0,0,0,0.2)",
             alignItems: "center",
             justifyContent: "center",
-            marginBottom: 16,
+            marginBottom: 10, // Reduced from 16
             borderWidth: 1,
             borderColor: "rgba(255,255,255,0.2)",
           }}
@@ -311,7 +312,7 @@ export default function DeviceControlScreen() {
             fontSize: scaledSize(28),
             fontWeight: "bold",
             color: isDarkMode ? "#fff" : isPowered ? "#fff" : theme.text,
-            marginBottom: 4,
+            marginBottom: 2, // Reduced from 4
           }}
         >
           {isPowered ? "Power ON" : "Standby"}
@@ -322,8 +323,8 @@ export default function DeviceControlScreen() {
             color: isDarkMode
               ? "rgba(255,255,255,0.7)"
               : isPowered
-              ? "rgba(255,255,255,0.9)"
-              : theme.textSecondary,
+                ? "rgba(255,255,255,0.9)"
+                : theme.textSecondary,
           }}
         >
           {deviceName} is {isPowered ? "running" : "idle"}
@@ -605,7 +606,11 @@ export default function DeviceControlScreen() {
             <Text style={styles.modalTitle}>Set Schedule</Text>
 
             <View
-              style={{ marginBottom: 20, width: "100%", alignItems: "center" }}
+              style={{
+                marginBottom: 20,
+                width: "100%",
+                alignItems: "center",
+              }}
             >
               <TextInput
                 style={{
