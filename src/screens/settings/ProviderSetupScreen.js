@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -15,733 +15,278 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
+
+// --- STATIC IMAGE MAPPING ---
+// Map the "DB Name" (lowercase) to your local assets
+const PROVIDER_LOGOS = {
+  meralco: require("../../../assets/meralco.png"),
+  veco: require("../../../assets/visayan.png"),
+  "visayan electric (veco)": require("../../../assets/visayan.png"),
+  davao: require("../../../assets/davao.png"),
+  "davao light (dlpc)": require("../../../assets/davao.png"),
+  abreco: require("../../../assets/abreco.png"),
+  aec: require("../../../assets/aec.png"),
+  akelco: require("../../../assets/akelco.png"),
+  aleco: require("../../../assets/aleco.png"),
+  aneco: require("../../../assets/aneco.png"),
+  anteco: require("../../../assets/anteco.png"),
+  aselco: require("../../../assets/aselco.png"),
+  aurelco: require("../../../assets/aurelco.png"),
+  balamban: require("../../../assets/balamban.png"),
+  banelco: require("../../../assets/banelco.png"),
+  baselco: require("../../../assets/baselco.png"),
+  batanelco: require("../../../assets/batanelco.png"),
+  "batelec i": require("../../../assets/bateleci.png"),
+  "batelec ii": require("../../../assets/batelecii.png"),
+  beneco: require("../../../assets/beneco.png"),
+  bileco: require("../../../assets/bileco.png"),
+  biselco: require("../../../assets/biselco.png"),
+  "boheco i": require("../../../assets/bohecoi.png"),
+  "boheco ii": require("../../../assets/bohecoii.png"),
+  buseco: require("../../../assets/buseco.png"),
+  "cagelco i": require("../../../assets/cagelcoi.png"),
+  "cagelco ii": require("../../../assets/cagelcoii.png"),
+  camelco: require("../../../assets/camelco.png"),
+  canoreco: require("../../../assets/canoreco.png"),
+  capelco: require("../../../assets/capelco.png"),
+  "casureco i": require("../../../assets/casurecoi.png"),
+  "casureco ii": require("../../../assets/casurecoii.png"),
+  "casureco iii": require("../../../assets/casurecoiii.png"),
+  "casureco iv": require("../../../assets/casurecoiv.png"),
+  "cebeco i": require("../../../assets/cebecoi.png"),
+  "cebeco ii": require("../../../assets/cebecoii.png"),
+  "cebeco iii": require("../../../assets/cebecoiii.png"),
+  celcor: require("../../../assets/celcor.png"),
+  cenpelco: require("../../../assets/cenpelco.png"),
+  cepalco: require("../../../assets/cepalco.png"),
+  clpc: require("../../../assets/clpc.png"),
+  cotelco: require("../../../assets/cotelco.png"),
+  dasureco: require("../../../assets/dasureco.png"),
+  decorp: require("../../../assets/decorp.png"),
+  dielco: require("../../../assets/dielco.png"),
+  dorelco: require("../../../assets/dorelco.png"),
+  esamelco: require("../../../assets/esamelco.png"),
+  fleco: require("../../../assets/fleco.png"),
+  guimelco: require("../../../assets/guimelco.png"),
+  ifelco: require("../../../assets/ifelco.png"),
+  "ileco i": require("../../../assets/ilecoi.png"),
+  "ileco ii": require("../../../assets/ilecoii.png"),
+  "ileco iii": require("../../../assets/ilecoiii.png"),
+  ilpi: require("../../../assets/ilpi.png"),
+  inec: require("../../../assets/inec.png"),
+  iseco: require("../../../assets/iseco.png"),
+  "iselco i": require("../../../assets/iselcoi.png"),
+  "iselco ii": require("../../../assets/iselcoii.png"),
+  kaelco: require("../../../assets/kaelco.png"),
+  laneco: require("../../../assets/laneco.png"),
+  "leyeco ii": require("../../../assets/leyecoii.png"),
+  "leyeco iii": require("../../../assets/leyecoiii.png"),
+  "leyeco iv": require("../../../assets/leyecoiv.png"),
+  "leyeco v": require("../../../assets/leyecov.png"),
+  luelco: require("../../../assets/luelco.png"),
+  magelco: require("../../../assets/magelco.png"),
+  marelco: require("../../../assets/marelco.png"),
+  meco: require("../../../assets/meco.png"),
+  mopreco: require("../../../assets/mopreco.png"),
+  "moresco i": require("../../../assets/moresco i.png"),
+  "moresco ii": require("../../../assets/moresco ii.png"),
+  "neeco i": require("../../../assets/neeco i.png"),
+  "neeco ii": require("../../../assets/neeco ii.png"),
+  noceco: require("../../../assets/noceco.png"),
+  noneco: require("../../../assets/noneco.png"),
+  "noreco i": require("../../../assets/noreco i.png"),
+  "noreco ii": require("../../../assets/noreco ii.png"),
+  norsamelco: require("../../../assets/norsamelco.png"),
+  nuvelco: require("../../../assets/nuvelco.png"),
+  omeco: require("../../../assets/omeco.png"),
+  ormeco: require("../../../assets/ormeco.png"),
+  paleco: require("../../../assets/paleco.png"),
+  "panelco i": require("../../../assets/panelco i.png"),
+  "panelco iii": require("../../../assets/panelco iii.png"),
+  "pelco i": require("../../../assets/pelco i.png"),
+  "pelco ii": require("../../../assets/pelco ii.png"),
+  "pelco iii": require("../../../assets/pelco iii.png"),
+  penelco: require("../../../assets/penelco.png"),
+  "quezelco i": require("../../../assets/quezelco i.png"),
+  "quezelco ii": require("../../../assets/quezelco ii.png"),
+  quirelco: require("../../../assets/quirelco.png"),
+  romelco: require("../../../assets/romelco.png"),
+  "samelco i": require("../../../assets/samelco i.png"),
+  "samelco ii": require("../../../assets/samelco ii.png"),
+  "socoteco i": require("../../../assets/socoteco i.png"),
+  "socoteco ii": require("../../../assets/socoteco ii.png"),
+  soleco: require("../../../assets/soleco.png"),
+  sukelco: require("../../../assets/sukelco.png"),
+  surneco: require("../../../assets/surneco.png"),
+  surseco: require("../../../assets/surseco.png"),
+  "tarelco i": require("../../../assets/tarelco i.png"),
+  "tarelco ii": require("../../../assets/tarelco ii.png"),
+  tawelco: require("../../../assets/tawelco.png"),
+  zamcelco: require("../../../assets/zamcelco.png"),
+  "zameco i": require("../../../assets/zameco i.png"),
+  "zameco ii": require("../../../assets/zameco ii.png"),
+  zamsureco: require("../../../assets/zamsureco.png"),
+  zaneco: require("../../../assets/zaneco.png"),
+};
+
+const RATE_TYPES = ["Residential", "Commercial", "Industrial"];
 
 export default function ProviderSetupScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { theme, isDarkMode, fontScale } = useTheme();
+  const scaledSize = (size) => size * fontScale;
 
-  // Helper for font scaling
-  const scaledSize = (size) => size * (fontScale || 1);
+  // Colors
+  const activeColor = theme.buttonPrimary;
+  const dangerColor = isDarkMode ? "#ff4444" : "#c62828";
 
-  const [selectedId, setSelectedId] = useState("meralco");
+  // State
+  const [loading, setLoading] = useState(true);
+  const [providers, setProviders] = useState([]);
+  const [selectedId, setSelectedId] = useState(null); // DB ID
+  const [selectedRateType, setSelectedRateType] = useState("Residential");
+
+  // Manual State
   const [customRate, setCustomRate] = useState("");
-  const [showAll, setShowAll] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-
   const [realtimeError, setRealtimeError] = useState(null);
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Theme-based colors
-  const activeColor = theme.buttonPrimary; // Green
-  const dangerColor = isDarkMode ? "#ff4444" : "#c62828";
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
-  // --- FULL PROVIDER LIST ---
-  const providers = [
-    {
-      id: "meralco",
-      name: "Meralco",
-      rate: "11.91",
-      image: require("../../../assets/meralco.png"),
-    },
-    {
-      id: "veco",
-      name: "Visayan Electric (VECO)",
-      rate: "11.28",
-      image: require("../../../assets/visayan.png"),
-    },
-    {
-      id: "davao",
-      name: "Davao Light (DLPC)",
-      rate: "10.24",
-      image: require("../../../assets/davao.png"),
-    },
-    {
-      id: "abreco",
-      name: "ABRECO",
-      rate: "11.50",
-      image: require("../../../assets/abreco.png"),
-    },
-    {
-      id: "aec",
-      name: "AEC (Albay)",
-      rate: "12.10",
-      image: require("../../../assets/aec.png"),
-    },
-    {
-      id: "akelco",
-      name: "AKELCO",
-      rate: "13.20",
-      image: require("../../../assets/akelco.png"),
-    },
-    {
-      id: "aleco",
-      name: "ALECO",
-      rate: "11.80",
-      image: require("../../../assets/aleco.png"),
-    },
-    {
-      id: "aneco",
-      name: "ANECO",
-      rate: "10.90",
-      image: require("../../../assets/aneco.png"),
-    },
-    {
-      id: "anteco",
-      name: "ANTECO",
-      rate: "12.05",
-      image: require("../../../assets/anteco.png"),
-    },
-    {
-      id: "aselco",
-      name: "ASELCO",
-      rate: "10.45",
-      image: require("../../../assets/aselco.png"),
-    },
-    {
-      id: "aurelco",
-      name: "AURELCO",
-      rate: "11.20",
-      image: require("../../../assets/aurelco.png"),
-    },
-    {
-      id: "balamban",
-      name: "BALAMBAN",
-      rate: "10.80",
-      image: require("../../../assets/balamban.png"),
-    },
-    {
-      id: "banelco",
-      name: "BANELCO",
-      rate: "12.50",
-      image: require("../../../assets/banelco.png"),
-    },
-    {
-      id: "baselco",
-      name: "BASELCO",
-      rate: "11.10",
-      image: require("../../../assets/baselco.png"),
-    },
-    {
-      id: "batanelco",
-      name: "BATANELCO",
-      rate: "11.75",
-      image: require("../../../assets/batanelco.png"),
-    },
-    {
-      id: "bateleci",
-      name: "BATELEC I",
-      rate: "11.56",
-      image: require("../../../assets/bateleci.png"),
-    },
-    {
-      id: "batelecii",
-      name: "BATELEC II",
-      rate: "12.10",
-      image: require("../../../assets/batelecii.png"),
-    },
-    {
-      id: "beneco",
-      name: "BENECO",
-      rate: "9.85",
-      image: require("../../../assets/beneco.png"),
-    },
-    {
-      id: "bileco",
-      name: "BILECO",
-      rate: "10.60",
-      image: require("../../../assets/bileco.png"),
-    },
-    {
-      id: "biselco",
-      name: "BISELCO",
-      rate: "11.30",
-      image: require("../../../assets/biselco.png"),
-    },
-    {
-      id: "bohecoi",
-      name: "BOHECO I",
-      rate: "10.95",
-      image: require("../../../assets/bohecoi.png"),
-    },
-    {
-      id: "bohecoii",
-      name: "BOHECO II",
-      rate: "11.05",
-      image: require("../../../assets/bohecoii.png"),
-    },
-    {
-      id: "buseco",
-      name: "BUSECO",
-      rate: "10.70",
-      image: require("../../../assets/buseco.png"),
-    },
-    {
-      id: "cagelcoi",
-      name: "CAGELCO I",
-      rate: "11.40",
-      image: require("../../../assets/cagelcoi.png"),
-    },
-    {
-      id: "cagelcoii",
-      name: "CAGELCO II",
-      rate: "11.55",
-      image: require("../../../assets/cagelcoii.png"),
-    },
-    {
-      id: "camelco",
-      name: "CAMELCO",
-      rate: "12.30",
-      image: require("../../../assets/camelco.png"),
-    },
-    {
-      id: "canoreco",
-      name: "CANORECO",
-      rate: "11.90",
-      image: require("../../../assets/canoreco.png"),
-    },
-    {
-      id: "capelco",
-      name: "CAPELCO",
-      rate: "11.15",
-      image: require("../../../assets/capelco.png"),
-    },
-    {
-      id: "casurecoi",
-      name: "CASURECO I",
-      rate: "11.85",
-      image: require("../../../assets/casurecoi.png"),
-    },
-    {
-      id: "casurecoii",
-      name: "CASURECO II",
-      rate: "11.95",
-      image: require("../../../assets/casurecoii.png"),
-    },
-    {
-      id: "casurecoiii",
-      name: "CASURECO III",
-      rate: "12.05",
-      image: require("../../../assets/casurecoiii.png"),
-    },
-    {
-      id: "casurecoiv",
-      name: "CASURECO IV",
-      rate: "12.15",
-      image: require("../../../assets/casurecoiv.png"),
-    },
-    {
-      id: "cebecoi",
-      name: "CEBECO I",
-      rate: "10.50",
-      image: require("../../../assets/cebecoi.png"),
-    },
-    {
-      id: "cebecoii",
-      name: "CEBECO II",
-      rate: "10.78",
-      image: require("../../../assets/cebecoii.png"),
-    },
-    {
-      id: "cebecoiii",
-      name: "CEBECO III",
-      rate: "10.90",
-      image: require("../../../assets/cebecoiii.png"),
-    },
-    {
-      id: "celcor",
-      name: "CELCOR",
-      rate: "9.90",
-      image: require("../../../assets/celcor.png"),
-    },
-    {
-      id: "cenpelco",
-      name: "CENPELCO",
-      rate: "10.95",
-      image: require("../../../assets/cenpelco.png"),
-    },
-    {
-      id: "cepalco",
-      name: "CEPALCO",
-      rate: "11.25",
-      image: require("../../../assets/cepalco.png"),
-    },
-    {
-      id: "clpc",
-      name: "CLPC (Calamba)",
-      rate: "11.45",
-      image: require("../../../assets/clpc.png"),
-    },
-    {
-      id: "cotelco",
-      name: "COTELCO",
-      rate: "10.35",
-      image: require("../../../assets/cotelco.png"),
-    },
-    {
-      id: "dasureco",
-      name: "DASURECO",
-      rate: "10.65",
-      image: require("../../../assets/dasureco.png"),
-    },
-    {
-      id: "decorp",
-      name: "DECORP",
-      rate: "11.10",
-      image: require("../../../assets/decorp.png"),
-    },
-    {
-      id: "dielco",
-      name: "DIELCO",
-      rate: "11.70",
-      image: require("../../../assets/dielco.png"),
-    },
-    {
-      id: "dorelco",
-      name: "DORELCO",
-      rate: "10.85",
-      image: require("../../../assets/dorelco.png"),
-    },
-    {
-      id: "esamelco",
-      name: "ESAMELCO",
-      rate: "11.50",
-      image: require("../../../assets/esamelco.png"),
-    },
-    {
-      id: "fleco",
-      name: "FLECO",
-      rate: "12.20",
-      image: require("../../../assets/fleco.png"),
-    },
-    {
-      id: "guimelco",
-      name: "GUIMELCO",
-      rate: "11.60",
-      image: require("../../../assets/guimelco.png"),
-    },
-    {
-      id: "ifelco",
-      name: "IFELCO",
-      rate: "10.40",
-      image: require("../../../assets/ifelco.png"),
-    },
-    {
-      id: "ilecoi",
-      name: "ILECO I",
-      rate: "11.00",
-      image: require("../../../assets/ilecoi.png"),
-    },
-    {
-      id: "ilecoii",
-      name: "ILECO II",
-      rate: "11.10",
-      image: require("../../../assets/ilecoii.png"),
-    },
-    {
-      id: "ilecoiii",
-      name: "ILECO III",
-      rate: "11.20",
-      image: require("../../../assets/ilecoiii.png"),
-    },
-    {
-      id: "ilpi",
-      name: "ILPI (Iligan)",
-      rate: "9.75",
-      image: require("../../../assets/ilpi.png"),
-    },
-    {
-      id: "inec",
-      name: "INEC",
-      rate: "10.45",
-      image: require("../../../assets/inec.png"),
-    },
-    {
-      id: "iseco",
-      name: "ISECO",
-      rate: "10.85",
-      image: require("../../../assets/iseco.png"),
-    },
-    {
-      id: "iselcoi",
-      name: "ISELCO I",
-      rate: "11.30",
-      image: require("../../../assets/iselcoi.png"),
-    },
-    {
-      id: "iselcoii",
-      name: "ISELCO II",
-      rate: "11.40",
-      image: require("../../../assets/iselcoii.png"),
-    },
-    {
-      id: "kaelco",
-      name: "KAELCO",
-      rate: "10.90",
-      image: require("../../../assets/kaelco.png"),
-    },
-    {
-      id: "laneco",
-      name: "LANECO",
-      rate: "10.55",
-      image: require("../../../assets/laneco.png"),
-    },
-    {
-      id: "leyecoii",
-      name: "LEYECO II",
-      rate: "10.20",
-      image: require("../../../assets/leyecoii.png"),
-    },
-    {
-      id: "leyecoiii",
-      name: "LEYECO III",
-      rate: "10.30",
-      image: require("../../../assets/leyecoiii.png"),
-    },
-    {
-      id: "leyecoiv",
-      name: "LEYECO IV",
-      rate: "10.40",
-      image: require("../../../assets/leyecoiv.png"),
-    },
-    {
-      id: "leyecov",
-      name: "LEYECO V",
-      rate: "10.50",
-      image: require("../../../assets/leyecov.png"),
-    },
-    {
-      id: "luelco",
-      name: "LUELCO",
-      rate: "11.10",
-      image: require("../../../assets/luelco.png"),
-    },
-    {
-      id: "magelco",
-      name: "MAGELCO",
-      rate: "12.40",
-      image: require("../../../assets/magelco.png"),
-    },
-    {
-      id: "marelco",
-      name: "MARELCO",
-      rate: "13.50",
-      image: require("../../../assets/marelco.png"),
-    },
-    {
-      id: "meco",
-      name: "MECO (Mactan)",
-      rate: "11.35",
-      image: require("../../../assets/meco.png"),
-    },
-    {
-      id: "mopreco",
-      name: "MOPRECO",
-      rate: "11.95",
-      image: require("../../../assets/mopreco.png"),
-    },
-    {
-      id: "morescoi",
-      name: "MORESCO I",
-      rate: "11.50",
-      image: require("../../../assets/moresco i.png"),
-    },
-    {
-      id: "morescoii",
-      name: "MORESCO II",
-      rate: "11.60",
-      image: require("../../../assets/moresco ii.png"),
-    },
-    {
-      id: "neecoi",
-      name: "NEECO I",
-      rate: "12.10",
-      image: require("../../../assets/neeco i.png"),
-    },
-    {
-      id: "neecoii",
-      name: "NEECO II",
-      rate: "12.20",
-      image: require("../../../assets/neeco ii.png"),
-    },
-    {
-      id: "noceco",
-      name: "NOCECO",
-      rate: "11.40",
-      image: require("../../../assets/noceco.png"),
-    },
-    {
-      id: "noneco",
-      name: "NONECO",
-      rate: "11.30",
-      image: require("../../../assets/noneco.png"),
-    },
-    {
-      id: "norecoi",
-      name: "NORECO I",
-      rate: "12.50",
-      image: require("../../../assets/noreco i.png"),
-    },
-    {
-      id: "norecoii",
-      name: "NORECO II",
-      rate: "12.60",
-      image: require("../../../assets/noreco ii.png"),
-    },
-    {
-      id: "norsamelco",
-      name: "NORSAMELCO",
-      rate: "11.75",
-      image: require("../../../assets/norsamelco.png"),
-    },
-    {
-      id: "nuvelco",
-      name: "NUVELCO",
-      rate: "10.80",
-      image: require("../../../assets/nuvelco.png"),
-    },
-    {
-      id: "omeco",
-      name: "OMECO",
-      rate: "13.00",
-      image: require("../../../assets/omeco.png"),
-    },
-    {
-      id: "ormeco",
-      name: "ORMECO",
-      rate: "11.90",
-      image: require("../../../assets/ormeco.png"),
-    },
-    {
-      id: "paleco",
-      name: "PALECO",
-      rate: "12.45",
-      image: require("../../../assets/paleco.png"),
-    },
-    {
-      id: "panelcoi",
-      name: "PANELCO I",
-      rate: "11.15",
-      image: require("../../../assets/panelco i.png"),
-    },
-    {
-      id: "panelcoiii",
-      name: "PANELCO III",
-      rate: "11.25",
-      image: require("../../../assets/panelco iii.png"),
-    },
-    {
-      id: "pelcoi",
-      name: "PELCO I",
-      rate: "11.80",
-      image: require("../../../assets/pelco i.png"),
-    },
-    {
-      id: "pelcoii",
-      name: "PELCO II",
-      rate: "11.90",
-      image: require("../../../assets/pelco ii.png"),
-    },
-    {
-      id: "pelcoiii",
-      name: "PELCO III",
-      rate: "12.00",
-      image: require("../../../assets/pelco iii.png"),
-    },
-    {
-      id: "penelco",
-      name: "PENELCO",
-      rate: "10.50",
-      image: require("../../../assets/penelco.png"),
-    },
-    {
-      id: "quezelcoi",
-      name: "QUEZELCO I",
-      rate: "12.80",
-      image: require("../../../assets/quezelco i.png"),
-    },
-    {
-      id: "quezelcoii",
-      name: "QUEZELCO II",
-      rate: "12.90",
-      image: require("../../../assets/quezelco ii.png"),
-    },
-    {
-      id: "quirelco",
-      name: "QUIRELCO",
-      rate: "11.70",
-      image: require("../../../assets/quirelco.png"),
-    },
-    {
-      id: "romelco",
-      name: "ROMELCO",
-      rate: "14.50",
-      image: require("../../../assets/romelco.png"),
-    },
-    {
-      id: "samelcoi",
-      name: "SAMELCO I",
-      rate: "11.65",
-      image: require("../../../assets/samelco i.png"),
-    },
-    {
-      id: "samelcoii",
-      name: "SAMELCO II",
-      rate: "11.75",
-      image: require("../../../assets/samelco ii.png"),
-    },
-    {
-      id: "socotecoi",
-      name: "SOCOTECO I",
-      rate: "10.95",
-      image: require("../../../assets/socoteco i.png"),
-    },
-    {
-      id: "socotecoii",
-      name: "SOCOTECO II",
-      rate: "11.05",
-      image: require("../../../assets/socoteco ii.png"),
-    },
-    {
-      id: "soleco",
-      name: "SOLECO",
-      rate: "10.60",
-      image: require("../../../assets/soleco.png"),
-    },
-    {
-      id: "sukelco",
-      name: "SUKELCO",
-      rate: "10.85",
-      image: require("../../../assets/sukelco.png"),
-    },
-    {
-      id: "surneco",
-      name: "SURNECO",
-      rate: "12.30",
-      image: require("../../../assets/surneco.png"),
-    },
-    {
-      id: "surseco",
-      name: "SURSECO",
-      rate: "12.40",
-      image: require("../../../assets/surseco.png"),
-    },
-    {
-      id: "tarelcoi",
-      name: "TARELCO I",
-      rate: "11.30",
-      image: require("../../../assets/tarelco i.png"),
-    },
-    {
-      id: "tarelcoii",
-      name: "TARELCO II",
-      rate: "11.40",
-      image: require("../../../assets/tarelco ii.png"),
-    },
-    {
-      id: "tawelco",
-      name: "TAWELCO",
-      rate: "13.10",
-      image: require("../../../assets/tawelco.png"),
-    },
-    {
-      id: "zamcelco",
-      name: "ZAMCELCO",
-      rate: "11.55",
-      image: require("../../../assets/zamcelco.png"),
-    },
-    {
-      id: "zamecoi",
-      name: "ZAMECO I",
-      rate: "10.70",
-      image: require("../../../assets/zameco i.png"),
-    },
-    {
-      id: "zamecoii",
-      name: "ZAMECO II",
-      rate: "10.80",
-      image: require("../../../assets/zameco ii.png"),
-    },
-    {
-      id: "zamsureco",
-      name: "ZAMSURECO",
-      rate: "11.20",
-      image: require("../../../assets/zamsureco.png"),
-    },
-    {
-      id: "zaneco",
-      name: "ZANECO",
-      rate: "10.90",
-      image: require("../../../assets/zaneco.png"),
-    },
-  ];
+  // --- 1. FETCH RATES FROM DB ---
+  useEffect(() => {
+    fetchRates();
+  }, []);
 
-  const handleSelect = (id) => setSelectedId(id);
+  const fetchRates = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("utility_rates")
+        .select("*")
+        .eq("status", "active")
+        .order("provider_name", { ascending: true });
 
-  const toggleShowAll = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setShowAll(!showAll);
+      if (error) throw error;
+      setProviders(data || []);
+    } catch (err) {
+      console.log("Fetch Error:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRateChange = (text) => {
+  // --- 2. FILTER LOGIC ---
+  const filteredProviders = useMemo(() => {
+    return providers.filter((p) => {
+      const matchesSearch = p.provider_name
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      const matchesType = p.rate_type === selectedRateType;
+      return matchesSearch && matchesType;
+    });
+  }, [providers, searchQuery, selectedRateType]);
+
+  // --- HANDLERS ---
+  const handleSelect = (id) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSelectedId(id);
+  };
+
+  const handleRateTypeChange = (type) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSelectedRateType(type);
+    setSelectedId(null); // Reset selection when type changes
+  };
+
+  const handleManualRateChange = (text) => {
     const cleaned = text.replace(/[^0-9.]/g, "");
     if ((cleaned.match(/\./g) || []).length > 1) return;
     setCustomRate(cleaned);
-    const val = parseFloat(cleaned);
 
+    const val = parseFloat(cleaned);
     if (cleaned !== "" && !isNaN(val)) {
-      if (val > 50) {
-        setRealtimeError("Rate exceeds limit (Max: ₱50.00)");
-      } else {
-        setRealtimeError(null);
-      }
+      if (val > 50) setRealtimeError("Max rate is ₱50.00");
+      else setRealtimeError(null);
     } else {
       setRealtimeError(null);
     }
   };
 
-  const handleConfirm = () => {
-    let finalProviderName = "";
-    let finalRate = "";
+  const handleConfirm = async () => {
+    let finalProviderId = null;
+    let finalCustomRate = null;
 
+    // VALIDATION
     if (selectedId === "manual") {
       const rateValue = parseFloat(customRate);
-
       if (!customRate || isNaN(rateValue) || rateValue <= 0 || rateValue > 50) {
         setErrorMessage(
-          "Please enter a valid rate between ₱ 0.01 and ₱ 50.00."
+          "Please enter a valid rate between ₱ 0.01 and ₱ 50.00.",
         );
         setErrorModalVisible(true);
         return;
       }
-
-      finalProviderName = "Manual Config";
-      finalRate = customRate;
+      finalCustomRate = rateValue;
+    } else if (selectedId) {
+      finalProviderId = selectedId;
     } else {
-      const selectedProvider = providers.find((p) => p.id === selectedId);
-      finalProviderName = selectedProvider?.name || "Unknown";
-      finalRate = selectedProvider?.rate || "0.00";
+      return;
     }
 
-    navigation.navigate("MainApp", {
-      screen: "Settings",
-      params: { providerName: finalProviderName, rate: finalRate },
-    });
+    setIsSaving(true);
+
+    try {
+      // 1. Get User
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not logged in");
+
+      // 2. Update User Profile in DB
+      const updatePayload = {
+        provider_id: finalProviderId,
+        custom_rate: finalCustomRate,
+        ...(finalProviderId ? { custom_rate: null } : { provider_id: null }),
+      };
+
+      const { error } = await supabase
+        .from("users")
+        .update(updatePayload)
+        .eq("id", user.id);
+
+      if (error) throw error;
+
+      // 3. Navigation (Onboarding Flow Logic)
+      if (route.params?.fromOnboarding) {
+        navigation.navigate("MainApp", {
+          screen: "Budgets",
+          params: { showSetupModal: true },
+        });
+      } else {
+        navigation.navigate("MainApp", {
+          screen: "Settings",
+        });
+      }
+    } catch (err) {
+      console.log("Save Error:", err);
+      setErrorMessage("Failed to save selection. Please try again.");
+      setErrorModalVisible(true);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const filteredProviders = providers.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const isSearching = searchQuery.length > 0;
-  const recommendedProviders = providers.slice(0, 3);
-  const restOfProviders = providers.slice(3);
-  const visibleRest = showAll ? restOfProviders : restOfProviders.slice(0, 3);
-
   const isButtonDisabled =
-    selectedId === "manual" && (!!realtimeError || !customRate);
+    (!selectedId && !customRate) ||
+    (selectedId === "manual" && (!!realtimeError || !customRate)) ||
+    isSaving;
 
   return (
     <SafeAreaView
@@ -754,13 +299,8 @@ export default function ProviderSetupScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* ERROR MODAL (No Gradient) */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={errorModalVisible}
-        onRequestClose={() => setErrorModalVisible(false)}
-      >
+      {/* ERROR MODAL */}
+      <Modal transparent visible={errorModalVisible} animationType="fade">
         <View className="flex-1 justify-center items-center bg-black/80">
           <View
             className="w-[70%] max-w-[280px] p-5 rounded-2xl items-center border"
@@ -778,13 +318,13 @@ export default function ProviderSetupScreen() {
             </View>
             <Text
               className="text-lg font-bold mb-2 text-center"
-              style={{ color: theme.text, fontSize: scaledSize(18) }}
+              style={{ color: theme.text }}
             >
-              Invalid Rate
+              Error
             </Text>
             <Text
               className="text-xs text-center mb-5 leading-4"
-              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+              style={{ color: theme.textSecondary }}
             >
               {errorMessage}
             </Text>
@@ -796,10 +336,7 @@ export default function ProviderSetupScreen() {
                 className="p-3 rounded-xl items-center"
                 style={{ backgroundColor: dangerColor }}
               >
-                <Text
-                  className="font-bold text-xs text-white uppercase tracking-wider"
-                  style={{ fontSize: scaledSize(12) }}
-                >
+                <Text className="font-bold text-xs text-white uppercase tracking-wider">
                   OKAY
                 </Text>
               </View>
@@ -814,7 +351,6 @@ export default function ProviderSetupScreen() {
         style={{ borderBottomColor: theme.cardBorder }}
       >
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          {/* --- CHANGED ICON TO ARROW-BACK --- */}
           <MaterialIcons
             name="arrow-back"
             size={scaledSize(24)}
@@ -823,7 +359,7 @@ export default function ProviderSetupScreen() {
         </TouchableOpacity>
         <Text
           className="flex-1 text-center text-base font-bold"
-          style={{ color: theme.text, fontSize: scaledSize(16) }}
+          style={{ color: theme.text }}
         >
           Utility Provider
         </Text>
@@ -834,7 +370,8 @@ export default function ProviderSetupScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        <View className="px-6 py-4">
+        <View className="px-6 py-4 space-y-4">
+          {/* SEARCH BAR */}
           <View
             className="flex-row items-center px-4 h-12 rounded-xl border"
             style={{
@@ -867,6 +404,39 @@ export default function ProviderSetupScreen() {
               </TouchableOpacity>
             )}
           </View>
+
+          {/* RATE TYPE SELECTOR */}
+          <View className="flex-row gap-2">
+            {RATE_TYPES.map((type) => {
+              const isActive = selectedRateType === type;
+              return (
+                <TouchableOpacity
+                  key={type}
+                  onPress={() => handleRateTypeChange(type)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    backgroundColor: isActive
+                      ? activeColor
+                      : theme.buttonNeutral,
+                    borderRadius: 10,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: isActive ? "#fff" : theme.textSecondary,
+                      fontWeight: "bold",
+                      fontSize: scaledSize(10),
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
         <ScrollView
@@ -875,45 +445,25 @@ export default function ProviderSetupScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View className="px-6">
-            {!isSearching && (
-              <Text
-                className="text-center text-xs mb-6 leading-5 px-2.5"
-                style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
-              >
-                Choose your local electricity distributor to sync rates
-                automatically.
-              </Text>
-            )}
-
-            {isSearching ? (
-              <View>
-                {filteredProviders.map((item) => (
-                  <ProviderCard
-                    key={`search-${item.id}`}
-                    item={item}
-                    isSelected={selectedId === item.id}
-                    onPress={() => handleSelect(item.id)}
-                    theme={theme}
-                    isDarkMode={isDarkMode}
-                    activeColor={activeColor}
-                    scaledSize={scaledSize}
-                  />
-                ))}
-              </View>
+            {/* LOADING STATE */}
+            {loading ? (
+              <ActivityIndicator
+                size="large"
+                color={activeColor}
+                style={{ marginTop: 40 }}
+              />
             ) : (
-              <View>
+              <>
                 <Text
                   className="text-xs font-bold uppercase tracking-widest mb-3 mt-2.5"
-                  style={{
-                    color: theme.textSecondary,
-                    fontSize: scaledSize(10),
-                  }}
+                  style={{ color: theme.textSecondary }}
                 >
-                  Major Providers
+                  {filteredProviders.length} Found for {selectedRateType}
                 </Text>
-                {recommendedProviders.map((item) => (
+
+                {filteredProviders.map((item) => (
                   <ProviderCard
-                    key={`major-${item.id}`}
+                    key={item.id}
                     item={item}
                     isSelected={selectedId === item.id}
                     onPress={() => handleSelect(item.id)}
@@ -924,48 +474,18 @@ export default function ProviderSetupScreen() {
                   />
                 ))}
 
-                <Text
-                  className="text-xs font-bold uppercase tracking-widest mb-3 mt-5"
-                  style={{
-                    color: theme.textSecondary,
-                    fontSize: scaledSize(10),
-                  }}
-                >
-                  Cooperatives
-                </Text>
-                {visibleRest.map((item) => (
-                  <ProviderCard
-                    key={`rest-${item.id}-${showAll}`}
-                    item={item}
-                    isSelected={selectedId === item.id}
-                    onPress={() => handleSelect(item.id)}
-                    theme={theme}
-                    isDarkMode={isDarkMode}
-                    activeColor={activeColor}
-                    scaledSize={scaledSize}
-                  />
-                ))}
-
-                <TouchableOpacity
-                  onPress={toggleShowAll}
-                  className="py-3 items-center"
-                >
-                  {/* --- CHANGED COLOR TO theme.text (White/Black) --- */}
-                  <Text
-                    className="text-xs font-bold"
-                    style={{ color: theme.text, fontSize: scaledSize(12) }}
-                  >
-                    {showAll
-                      ? "Show Less"
-                      : `Show All (${restOfProviders.length} items)`}
+                {filteredProviders.length === 0 && (
+                  <Text className="text-center text-gray-500 py-8 italic">
+                    No providers found for this category.
                   </Text>
-                </TouchableOpacity>
-              </View>
+                )}
+              </>
             )}
 
+            {/* MANUAL CONFIG */}
             <Text
               className="text-xs font-bold uppercase tracking-widest mb-3 mt-8"
-              style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
+              style={{ color: theme.textSecondary }}
             >
               Manual Configuration
             </Text>
@@ -991,16 +511,13 @@ export default function ProviderSetupScreen() {
                 <View className="flex-1">
                   <Text
                     className="text-sm font-bold mb-0.5"
-                    style={{ color: theme.text, fontSize: scaledSize(14) }}
+                    style={{ color: theme.text }}
                   >
                     Set Custom Rate
                   </Text>
                   <Text
                     className="text-xs"
-                    style={{
-                      color: theme.textSecondary,
-                      fontSize: scaledSize(12),
-                    }}
+                    style={{ color: theme.textSecondary }}
                   >
                     Enter your own value
                   </Text>
@@ -1025,7 +542,7 @@ export default function ProviderSetupScreen() {
                 >
                   <Text
                     className="text-xs font-semibold mb-2"
-                    style={{ color: theme.text, fontSize: scaledSize(12) }}
+                    style={{ color: theme.text }}
                   >
                     ₱ per kWh
                   </Text>
@@ -1040,27 +557,24 @@ export default function ProviderSetupScreen() {
                   >
                     <Text
                       className="text-lg font-bold mr-2"
-                      style={{
-                        color: theme.text,
-                        fontSize: scaledSize(18),
-                      }}
+                      style={{ color: theme.text }}
                     >
                       ₱
                     </Text>
                     <TextInput
                       className="flex-1 text-lg font-bold"
-                      style={{ color: theme.text, fontSize: scaledSize(18) }}
+                      style={{ color: theme.text }}
                       placeholder="0.00"
                       placeholderTextColor={theme.textSecondary}
                       keyboardType="decimal-pad"
                       value={customRate}
-                      onChangeText={handleRateChange}
+                      onChangeText={handleManualRateChange}
                     />
                   </View>
                   {realtimeError && (
                     <Text
                       className="text-xs mt-2 font-medium ml-1"
-                      style={{ color: dangerColor, fontSize: scaledSize(10) }}
+                      style={{ color: dangerColor }}
                     >
                       {realtimeError}
                     </Text>
@@ -1075,17 +589,17 @@ export default function ProviderSetupScreen() {
               disabled={isButtonDisabled}
               style={{ opacity: isButtonDisabled ? 0.5 : 1 }}
             >
-              {/* SOLID COLOR BUTTON (No Gradient) */}
               <View
                 className="flex-1 justify-center items-center"
                 style={{ backgroundColor: activeColor }}
               >
-                <Text
-                  className="text-white font-bold text-sm uppercase tracking-wider"
-                  style={{ fontSize: scaledSize(12) }}
-                >
-                  Confirm Selection
-                </Text>
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text className="text-white font-bold text-sm uppercase tracking-wider">
+                    Confirm Selection
+                  </Text>
+                )}
               </View>
             </TouchableOpacity>
           </View>
@@ -1095,6 +609,7 @@ export default function ProviderSetupScreen() {
   );
 }
 
+// --- HELPER COMPONENT ---
 function ProviderCard({
   item,
   isSelected,
@@ -1104,7 +619,17 @@ function ProviderCard({
   activeColor,
   scaledSize,
 }) {
-  const [status, setStatus] = useState("loading");
+  // Attempt to match provider name to local image
+  // It handles "Meralco" -> "meralco" and "Visayan Electric (VECO)" -> "visayan" (via split)
+  const normalizedName = item.provider_name.toLowerCase();
+
+  // Try full name key first, then first word key
+  let localImage = PROVIDER_LOGOS[normalizedName];
+  if (!localImage) {
+    // Split by space or '(' to get the first significant word (e.g. "Visayan" from "Visayan Electric")
+    const firstWord = normalizedName.split(/[\s(]/)[0];
+    localImage = PROVIDER_LOGOS[firstWord];
+  }
 
   return (
     <TouchableOpacity
@@ -1115,7 +640,7 @@ function ProviderCard({
         borderWidth: isSelected ? 2 : 1,
         ...(isSelected && {
           backgroundColor: isDarkMode
-            ? "rgba(0, 255, 153, 0.1)" // Subtle Green tint
+            ? "rgba(0, 255, 153, 0.1)"
             : "rgba(0, 166, 81, 0.05)",
         }),
       }}
@@ -1123,57 +648,25 @@ function ProviderCard({
       activeOpacity={0.7}
     >
       <View className="w-12 h-12 rounded-xl justify-center items-center mr-4 bg-white overflow-hidden p-1 border border-gray-100">
-        {status === "loading" && (
-          <ActivityIndicator
-            size="small"
-            color={activeColor}
-            style={{ position: "absolute" }}
+        {localImage ? (
+          <Image
+            source={localImage}
+            style={{ width: "100%", height: "100%" }}
+            resizeMode="contain"
           />
-        )}
-
-        <Image
-          source={item.image}
-          style={{
-            width: "100%",
-            height: "100%",
-            opacity: status === "loaded" ? 1 : 0,
-          }}
-          resizeMode="contain"
-          fadeDuration={300}
-          onLoad={() => setStatus("loaded")}
-          onError={(e) => {
-            console.log(`Error loading: ${item.id}`, e.nativeEvent.error);
-            setStatus("error");
-          }}
-        />
-
-        {status === "error" && (
-          <MaterialIcons
-            name="bolt"
-            size={scaledSize(24)}
-            color="#ccc"
-            style={{ position: "absolute" }}
-          />
+        ) : (
+          <MaterialIcons name="business" size={24} color="#888" />
         )}
       </View>
 
       <View className="flex-1">
-        <Text
-          className="text-sm font-bold mb-1"
-          style={{ color: theme.text, fontSize: scaledSize(14) }}
-        >
-          {item.name}
+        <Text className="text-sm font-bold mb-1" style={{ color: theme.text }}>
+          {item.provider_name}
         </Text>
-        <Text
-          className="text-xs"
-          style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
-        >
-          Rate: {/* --- RATE COLOR SET TO GREEN (activeColor) --- */}
-          <Text
-            className="font-semibold"
-            style={{ color: activeColor, fontSize: scaledSize(12) }}
-          >
-            ₱ {item.rate} / kWh
+        <Text className="text-xs" style={{ color: theme.textSecondary }}>
+          Rate:{" "}
+          <Text className="font-semibold" style={{ color: activeColor }}>
+            ₱ {item.rate_per_kwh} / kWh
           </Text>
         </Text>
       </View>
@@ -1183,7 +676,7 @@ function ProviderCard({
           className="w-6 h-6 rounded-full justify-center items-center ml-2"
           style={{ backgroundColor: activeColor }}
         >
-          <MaterialIcons name="check" size={scaledSize(16)} color="#000" />
+          <MaterialIcons name="check" size={16} color="#000" />
         </View>
       )}
     </TouchableOpacity>

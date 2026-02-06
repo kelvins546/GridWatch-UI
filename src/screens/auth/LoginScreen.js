@@ -19,11 +19,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
-// 1. Import Supabase & createClient
 import { supabase } from "../../lib/supabase";
 import { createClient } from "@supabase/supabase-js";
 
-// --- NEW: Notification Imports ---
+// --- CUSTOM LOCAL COMPONENT ---
+import FirebaseRecaptcha from "../../components/FirebaseRecaptcha";
+
+// --- FIREBASE IMPORTS ---
+import { PhoneAuthProvider, signInWithCredential } from "firebase/auth";
+import { auth, firebaseConfig } from "../../lib/firebaseConfig";
+
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
@@ -36,29 +41,24 @@ import {
 const ALLOWED_EMAIL_REGEX =
   /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
 
-// --- NEW: Push Token Helper Function ---
+// EmailJS Config
+const EMAILJS_SERVICE_ID = "service_ah3k0xc";
+const EMAILJS_TEMPLATE_ID = "template_xz7agxi";
+const EMAILJS_PUBLIC_KEY = "pdso3GRtCqLn7fVTs";
+
 async function registerForPushNotificationsAsync() {
   if (!Device.isDevice) return null;
-
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
-
   if (existingStatus !== "granted") {
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
   }
-
-  if (finalStatus !== "granted") {
-    return null;
-  }
-
+  if (finalStatus !== "granted") return null;
   const projectId = Constants.expoConfig?.extra?.eas?.projectId;
   if (!projectId) return null;
-
   try {
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId,
-    });
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     return tokenData.data;
   } catch (error) {
     console.log("Error getting push token:", error);
@@ -70,6 +70,8 @@ export default function LoginScreen() {
   const navigation = useNavigation();
   const { theme, isDarkMode, fontScale } = useTheme();
   const scaledSize = (size) => size * fontScale;
+
+  const recaptchaVerifier = useRef(null);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -93,6 +95,17 @@ export default function LoginScreen() {
   // Reactivation Modal
   const [reactivateModalVisible, setReactivateModalVisible] = useState(false);
   const [pendingReactivation, setPendingReactivation] = useState(null);
+
+  // --- RE-VERIFICATION STATE ---
+  const [reverifyPhoneVisible, setReverifyPhoneVisible] = useState(false);
+  const [reverifyEmailVisible, setReverifyEmailVisible] = useState(false);
+  const [reverifySuccessVisible, setReverifySuccessVisible] = useState(false);
+  const [verificationId, setVerificationId] = useState(null);
+  const [phoneOtp, setPhoneOtp] = useState(["", "", "", "", "", ""]);
+  const [emailOtp, setEmailOtp] = useState(["", "", "", "", "", ""]);
+  const [generatedEmailOtp, setGeneratedEmailOtp] = useState(null);
+  const phoneInputRefs = useRef([]);
+  const emailInputRefs = useRef([]);
 
   const floatAnim = useRef(new Animated.Value(0)).current;
 
@@ -180,7 +193,7 @@ export default function LoginScreen() {
     }
   };
 
-  // --- 2. HANDLE EMAIL LOGIN (SHADOW CLIENT) ---
+  // --- 2. HANDLE EMAIL LOGIN ---
   const handleLogin = async () => {
     const formValues = { email, password };
     let isValid = true;
@@ -224,18 +237,22 @@ export default function LoginScreen() {
         return;
       }
 
-      // --- CHECK ARCHIVED STATUS ---
+      // CHECK ARCHIVED
       const { data: profile } = await tempClient
         .from("users")
-        .select("status")
+        .select("status, phone_number")
         .eq("id", tempData.user.id)
         .single();
 
       if (profile && profile.status === "archived") {
-        setPendingReactivation({ type: "email" });
+        setPendingReactivation({
+          type: "email",
+          userId: tempData.user.id,
+          phone: profile.phone_number,
+        });
         setIsLoading(false);
         setReactivateModalVisible(true);
-        return; // HALT FLOW
+        return;
       }
 
       // Check 2FA
@@ -243,7 +260,6 @@ export default function LoginScreen() {
       const totpFactor = factors?.totp?.find((f) => f.status === "verified");
 
       if (totpFactor) {
-        console.log("2FA Detected (Email). Prompting...");
         setMfaFactorId(totpFactor.id);
         setIsLoading(false);
         setMfaVisible(true);
@@ -251,14 +267,12 @@ export default function LoginScreen() {
         await performRealEmailLogin();
       }
     } catch (e) {
-      console.log("Shadow Login Error", e);
       setIsLoading(false);
       setErrorMessage("An unexpected error occurred.");
       setErrorModalVisible(true);
     }
   };
 
-  // --- MODIFIED: REAL EMAIL LOGIN WITH TOKEN ---
   const performRealEmailLogin = async () => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email,
@@ -266,7 +280,6 @@ export default function LoginScreen() {
     });
 
     if (!error) {
-      // 1. GET & SAVE PUSH TOKEN
       const pushToken = await registerForPushNotificationsAsync();
       if (pushToken && data?.user?.id) {
         await supabase
@@ -274,15 +287,13 @@ export default function LoginScreen() {
           .update({ expo_push_token: pushToken })
           .eq("id", data.user.id);
       }
-
-      // 2. LOG & NAVIGATE
       await logLoginSuccess(data.user.id, "Email");
       navigation.reset({ index: 0, routes: [{ name: "MainApp" }] });
     }
     setIsLoading(false);
   };
 
-  // --- 3. HANDLE GOOGLE LOGIN (SHADOW CLIENT) ---
+  // --- 3. HANDLE GOOGLE LOGIN ---
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setRedirectOnClose(false);
@@ -308,7 +319,6 @@ export default function LoginScreen() {
     }
   };
 
-  // Split Google Auth Logic for reuse after reactivation
   const processGoogleAuth = async (idToken) => {
     try {
       const tempClient = createClient(
@@ -346,38 +356,39 @@ export default function LoginScreen() {
         return;
       }
 
-      // --- CHECK ARCHIVED STATUS ---
+      // CHECK ARCHIVED & FETCH PHONE
       const { data: profile } = await tempClient
         .from("users")
-        .select("status")
+        .select("status, phone_number")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (profile && profile.status === "archived") {
-        setPendingReactivation({ type: "google", idToken: idToken });
+      if (!profile || profile.status === "archived") {
+        setPendingReactivation({
+          type: "google",
+          idToken: idToken,
+          userId: user.id,
+          phone: profile?.phone_number || "",
+        });
         setIsLoading(false);
         setReactivateModalVisible(true);
-        return; // HALT FLOW
+        return;
       }
 
-      // 2FA Check
       const { data: factors } = await tempClient.auth.mfa.listFactors();
       const totpFactor = factors?.totp?.find((f) => f.status === "verified");
 
       if (totpFactor) {
-        console.log("2FA Detected (Google). Prompting...");
         setMfaFactorId(totpFactor.id);
         setGoogleIdToken(idToken);
         setIsLoading(false);
         setMfaVisible(true);
       } else {
-        // --- MODIFIED: REAL GOOGLE LOGIN WITH TOKEN ---
         const { data: realData } = await supabase.auth.signInWithIdToken({
           provider: "google",
           token: idToken,
         });
 
-        // 1. GET & SAVE PUSH TOKEN
         const pushToken = await registerForPushNotificationsAsync();
         if (pushToken && realData?.user?.id) {
           await supabase
@@ -386,7 +397,6 @@ export default function LoginScreen() {
             .eq("id", realData.user.id);
         }
 
-        // 2. LOG & NAVIGATE
         await logLoginSuccess(realData.user.id, "Google");
         setIsLoading(false);
         navigation.reset({ index: 0, routes: [{ name: "MainApp" }] });
@@ -398,14 +408,13 @@ export default function LoginScreen() {
     }
   };
 
-  // --- 4. REACTIVATE ACCOUNT ---
+  // --- 4. CONFIRM REACTIVATION ---
   const handleConfirmReactivation = async () => {
     if (!pendingReactivation) return;
     setIsLoading(true);
     setReactivateModalVisible(false);
 
     try {
-      // 1. Create a fresh temp client to update the user
       const tempClient = createClient(
         supabase.supabaseUrl,
         supabase.supabaseKey,
@@ -418,7 +427,7 @@ export default function LoginScreen() {
         },
       );
 
-      // 2. Sign in to temp client to get permission to update
+      // 1. Sign in temp to get permission
       let signInError;
       if (pendingReactivation.type === "email") {
         const res = await tempClient.auth.signInWithPassword({
@@ -440,7 +449,7 @@ export default function LoginScreen() {
         data: { user },
       } = await tempClient.auth.getUser();
 
-      // 3. Update Status to Active
+      // 2. Update Status to Active
       const { error: updateError } = await tempClient
         .from("users")
         .update({ status: "active", archived_at: null })
@@ -448,11 +457,17 @@ export default function LoginScreen() {
 
       if (updateError) throw updateError;
 
-      // 4. Resume Login Flow
-      if (pendingReactivation.type === "email") {
-        handleLogin(); // Will now pass status check
+      // 3. DECIDE NEXT STEP
+      if (pendingReactivation.type === "google") {
+        // --- GOOGLE USERS: SKIP OTPs ---
+        setReverifySuccessVisible(true);
       } else {
-        processGoogleAuth(pendingReactivation.idToken); // Will now pass status check
+        // --- EMAIL USERS: FORCE OTPs ---
+        if (pendingReactivation.phone) {
+          startPhoneVerification(pendingReactivation.phone);
+        } else {
+          startEmailVerification();
+        }
       }
     } catch (error) {
       setIsLoading(false);
@@ -461,7 +476,103 @@ export default function LoginScreen() {
     }
   };
 
-  // --- 5. VERIFY 2FA CODE & RE-LOGIN ---
+  // --- 5. RE-VERIFICATION LOGIC ---
+  const startPhoneVerification = async (phone) => {
+    try {
+      if (!phone) throw new Error("Phone number required for verification.");
+      const phoneProvider = new PhoneAuthProvider(auth);
+      const vid = await phoneProvider.verifyPhoneNumber(
+        phone,
+        recaptchaVerifier.current,
+      );
+      setVerificationId(vid);
+      setIsLoading(false);
+      setReverifyPhoneVisible(true);
+    } catch (err) {
+      setIsLoading(false);
+      console.log(err);
+      if (!err.message.includes("cancelled")) {
+        setErrorMessage("SMS Failed: " + err.message);
+        setErrorModalVisible(true);
+      }
+    }
+  };
+
+  const verifyPhoneOtp = async () => {
+    const code = phoneOtp.join("");
+    if (code.length !== 6) return;
+    setIsLoading(true);
+    try {
+      const credential = PhoneAuthProvider.credential(verificationId, code);
+      await signInWithCredential(auth, credential);
+      setReverifyPhoneVisible(false);
+      startEmailVerification();
+    } catch (e) {
+      setIsLoading(false);
+      setErrorMessage("Invalid SMS Code");
+      setErrorModalVisible(true);
+    }
+  };
+
+  const startEmailVerification = async () => {
+    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedEmailOtp(newOtp);
+
+    const data = {
+      service_id: EMAILJS_SERVICE_ID,
+      template_id: EMAILJS_TEMPLATE_ID,
+      user_id: EMAILJS_PUBLIC_KEY,
+      template_params: {
+        to_email: email || "User",
+        to_name: "Reactivating User",
+        d1: newOtp[0],
+        d2: newOtp[1],
+        d3: newOtp[2],
+        d4: newOtp[3],
+        d5: newOtp[4],
+        d6: newOtp[5],
+      },
+    };
+
+    await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    setIsLoading(false);
+    setReverifyEmailVisible(true);
+  };
+
+  const verifyEmailOtp = async () => {
+    if (emailOtp.join("") !== generatedEmailOtp) {
+      setErrorMessage("Invalid Email Code");
+      setErrorModalVisible(true);
+      return;
+    }
+    setReverifyEmailVisible(false);
+    setReverifySuccessVisible(true);
+  };
+
+  const finishReactivation = () => {
+    setReverifySuccessVisible(false);
+    // Finalize Login
+    if (pendingReactivation.type === "email") {
+      performRealEmailLogin();
+    } else {
+      processGoogleAuth(pendingReactivation.idToken);
+    }
+  };
+
+  const handleOtpChange = (text, index, setFn, state, refs) => {
+    const newOtp = [...state];
+    newOtp[index] = text;
+    setFn(newOtp);
+    if (text.length === 1 && index < 5) refs.current[index + 1]?.focus();
+    if (text.length === 0 && index > 0) refs.current[index - 1]?.focus();
+  };
+
+  // --- 6. EXISTING 2FA LOGIC ---
   const verifyMfaAndLogin = async () => {
     if (mfaCode.length !== 6) {
       setErrorMessage("Please enter a valid 6-digit code.");
@@ -471,7 +582,6 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
-      // Shadow Verification Pattern
       const tempClient = createClient(
         supabase.supabaseUrl,
         supabase.supabaseKey,
@@ -513,7 +623,6 @@ export default function LoginScreen() {
       });
       if (verify.error) throw verify.error;
 
-      // Success! Transfer session
       const {
         data: { session },
       } = await tempClient.auth.getSession();
@@ -524,7 +633,6 @@ export default function LoginScreen() {
           refresh_token: session.refresh_token,
         });
 
-        // --- MODIFIED: SAVE PUSH TOKEN AFTER 2FA ---
         const pushToken = await registerForPushNotificationsAsync();
         if (pushToken && session?.user?.id) {
           await supabase
@@ -608,6 +716,17 @@ export default function LoginScreen() {
       textTransform: "uppercase",
       letterSpacing: 1,
     },
+    otpInput: {
+      width: 40,
+      height: 50,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.cardBorder,
+      backgroundColor: theme.buttonNeutral,
+      textAlign: "center",
+      fontSize: 20,
+      color: theme.text,
+    },
   });
 
   return (
@@ -618,6 +737,12 @@ export default function LoginScreen() {
       <StatusBar
         barStyle={theme.statusBarStyle}
         backgroundColor={theme.background}
+      />
+
+      {/* RECAPTCHA */}
+      <FirebaseRecaptcha
+        ref={recaptchaVerifier}
+        firebaseConfig={firebaseConfig}
       />
 
       {isLoading && (
@@ -932,6 +1057,113 @@ export default function LoginScreen() {
                 </View>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- RE-VERIFY PHONE MODAL --- */}
+      <Modal transparent visible={reverifyPhoneVisible} animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Re-Verify Phone</Text>
+            <Text style={styles.modalBody}>
+              Enter the 6-digit code sent to {pendingReactivation?.phone}.
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 4,
+                justifyContent: "center",
+                marginBottom: 20,
+              }}
+            >
+              {phoneOtp.map((d, i) => (
+                <TextInput
+                  key={i}
+                  style={styles.otpInput}
+                  value={d}
+                  maxLength={1}
+                  keyboardType="number-pad"
+                  ref={(ref) => (phoneInputRefs.current[i] = ref)}
+                  onChangeText={(t) =>
+                    handleOtpChange(t, i, setPhoneOtp, phoneOtp, phoneInputRefs)
+                  }
+                />
+              ))}
+            </View>
+            <TouchableOpacity
+              onPress={verifyPhoneOtp}
+              style={[
+                styles.modalButton,
+                { backgroundColor: theme.buttonPrimary },
+              ]}
+            >
+              <Text style={styles.modalButtonText}>VERIFY</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- RE-VERIFY EMAIL MODAL --- */}
+      <Modal transparent visible={reverifyEmailVisible} animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Re-Verify Email</Text>
+            <Text style={styles.modalBody}>
+              Enter the code sent to {email || "your email"}.
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 4,
+                justifyContent: "center",
+                marginBottom: 20,
+              }}
+            >
+              {emailOtp.map((d, i) => (
+                <TextInput
+                  key={i}
+                  style={styles.otpInput}
+                  value={d}
+                  maxLength={1}
+                  keyboardType="number-pad"
+                  ref={(ref) => (emailInputRefs.current[i] = ref)}
+                  onChangeText={(t) =>
+                    handleOtpChange(t, i, setEmailOtp, emailOtp, emailInputRefs)
+                  }
+                />
+              ))}
+            </View>
+            <TouchableOpacity
+              onPress={verifyEmailOtp}
+              style={[
+                styles.modalButton,
+                { backgroundColor: theme.buttonPrimary },
+              ]}
+            >
+              <Text style={styles.modalButtonText}>VERIFY EMAIL</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- SUCCESS MODAL --- */}
+      <Modal transparent visible={reverifySuccessVisible} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Welcome Back!</Text>
+            <Text style={styles.modalBody}>
+              Your account has been fully reactivated.
+            </Text>
+            <TouchableOpacity
+              onPress={finishReactivation}
+              style={[
+                styles.modalButton,
+                { backgroundColor: theme.buttonPrimary },
+              ]}
+            >
+              <Text style={styles.modalButtonText}>ENTER APP</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

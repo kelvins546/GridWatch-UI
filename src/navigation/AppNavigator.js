@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Text,
   StatusBar,
-  Alert,
 } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -42,7 +41,7 @@ import AboutUsScreen from "../screens/settings/AboutUsScreen";
 import NotificationsScreen from "../screens/settings/NotificationsScreen";
 import NotificationSettingsScreen, {
   NOTIF_SETTINGS_KEY,
-} from "../screens/settings/NotificationSettingsScreen"; // Updated Import
+} from "../screens/settings/NotificationSettingsScreen";
 import ProviderSetupScreen from "../screens/settings/ProviderSetupScreen";
 import DndCheckScreen from "../screens/settings/DndCheckScreen";
 import BudgetDeviceListScreen from "../screens/budgets/BudgetDeviceListScreen";
@@ -312,6 +311,42 @@ export default function AppNavigator() {
   const notifiedIds = useRef(new Set());
   const isJustLoggedIn = useRef(true);
 
+  // --- CHANGED: START AS NULL TO PREVENT ANY RENDER UNTIL DECIDED ---
+  const [initialRoute, setInitialRoute] = useState(null);
+
+  // --- LOGIC: CHECK HUBS BEFORE RENDERING ---
+  useEffect(() => {
+    const determineInitialRoute = async () => {
+      // 1. If not logged in, we are done checking.
+      if (!authUser) {
+        setInitialRoute(null); // Ensure reset
+        return;
+      }
+
+      try {
+        // 2. Logged in? Check DB for Hubs
+        const { count, error } = await supabase
+          .from("hubs")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", authUser.id);
+
+        if (!error && count === 0) {
+          console.log("No hubs found -> Starting at SetupHub");
+          setInitialRoute("SetupHub");
+        } else {
+          setInitialRoute("MainApp");
+        }
+      } catch (e) {
+        console.log("Error checking hubs, defaulting to MainApp", e);
+        setInitialRoute("MainApp");
+      }
+    };
+
+    if (!isLoading) {
+      determineInitialRoute();
+    }
+  }, [authUser, isLoading]);
+
   useEffect(() => {
     registerForPushNotificationsAsync().then(async (token) => {
       if (token && authUser) {
@@ -347,17 +382,13 @@ export default function AppNavigator() {
   const shouldSuppressNotification = async (title, body) => {
     try {
       const savedSettings = await AsyncStorage.getItem(NOTIF_SETTINGS_KEY);
-      if (!savedSettings) return false; // Default: show all if no settings
+      if (!savedSettings) return false;
 
       const settings = JSON.parse(savedSettings);
-
-      // 1. Master Switch
       if (!settings.pushEnabled) return true;
 
-      // 2. Keyword Filtering
       const text = (title + " " + body).toLowerCase();
 
-      // Budget Alerts
       if (
         (text.includes("budget") ||
           text.includes("cost") ||
@@ -369,7 +400,6 @@ export default function AppNavigator() {
         return true;
       }
 
-      // Device Status
       if (
         (text.includes("offline") ||
           text.includes("online") ||
@@ -381,7 +411,6 @@ export default function AppNavigator() {
         return true;
       }
 
-      // Tips & News
       if (
         (text.includes("tip") ||
           text.includes("news") ||
@@ -392,9 +421,9 @@ export default function AppNavigator() {
         return true;
       }
 
-      return false; // Show it
+      return false;
     } catch (e) {
-      return false; // Error loading settings? Show notification to be safe.
+      return false;
     }
   };
 
@@ -409,11 +438,8 @@ export default function AppNavigator() {
       return false;
     }
 
-    // --- CHECK USER SETTINGS BEFORE SHOWING ---
     const suppressed = await shouldSuppressNotification(title, body);
     if (suppressed && !silent) {
-      // We still mark it as "processed" in memory so we don't retry,
-      // but we treat it as silent.
       silent = true;
       console.log(`🔕 Suppressed notification by user settings: ${title}`);
     }
@@ -450,10 +476,8 @@ export default function AppNavigator() {
     const myEmail = authUser.email.trim().toLowerCase();
     const myId = authUser.id;
 
-    // --- CHECK DATABASE FOR MISSED ALERTS ---
     const checkDatabase = async () => {
       try {
-        // PENDING INVITES (These bypass filters usually, or are strictly 'Account' related)
         const { data: invites } = await supabase
           .from("hub_invites")
           .select("id, email, status")
@@ -472,7 +496,6 @@ export default function AppNavigator() {
           });
         }
 
-        // APP NOTIFICATIONS
         const { data: appNotifs } = await supabase
           .from("app_notifications")
           .select("*")
@@ -554,7 +577,9 @@ export default function AppNavigator() {
     };
   }, [authUser]);
 
-  if (isLoading) {
+  // --- UNIFIED LOADING STATE ---
+  // If we are loading auth OR (we are logged in AND haven't decided route yet)
+  if (isLoading || (authUser && initialRoute === null)) {
     return (
       <View
         style={{
@@ -588,6 +613,8 @@ export default function AppNavigator() {
 
   return (
     <Stack.Navigator
+      // This works now because we DO NOT RENDER until initialRoute is set
+      initialRouteName={initialRoute || "Landing"}
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: isDarkMode ? "#0f0f0f" : "#ffffff" },
@@ -595,7 +622,23 @@ export default function AppNavigator() {
     >
       {authUser ? (
         <Stack.Group>
-          <Stack.Screen name="MainApp" component={BottomTabNavigator} />
+          {/* CRITICAL: 
+             If initialRoute is 'SetupHub', we MUST list SetupHub first.
+             If 'MainApp', list MainApp first.
+             This guarantees correct loading order.
+          */}
+          {initialRoute === "SetupHub" ? (
+            <>
+              <Stack.Screen name="SetupHub" component={SetupHubScreen} />
+              <Stack.Screen name="MainApp" component={BottomTabNavigator} />
+            </>
+          ) : (
+            <>
+              <Stack.Screen name="MainApp" component={BottomTabNavigator} />
+              <Stack.Screen name="SetupHub" component={SetupHubScreen} />
+            </>
+          )}
+
           {/* ... all other screens ... */}
           <Stack.Screen
             name="ProfileSettings"
@@ -624,7 +667,6 @@ export default function AppNavigator() {
           <Stack.Screen name="LimitDetail" component={LimitDetailScreen} />
 
           <Stack.Screen name="MyHubs" component={MyHubsScreen} />
-          <Stack.Screen name="SetupHub" component={SetupHubScreen} />
           <Stack.Screen name="HubConfig" component={HubConfigScreen} />
           <Stack.Screen name="FamilyAccess" component={FamilyAccessScreen} />
           <Stack.Screen name="Invitations" component={InvitationsScreen} />

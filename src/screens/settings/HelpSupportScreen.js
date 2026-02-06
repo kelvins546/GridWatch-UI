@@ -28,7 +28,7 @@ import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system/legacy";
 
 // --- CONFIGURATION ---
-const GEMINI_API_KEY = "AIzaSyDTsX7kwwnX7RMrzTB7kaZklAOpuiAKI7c";
+const GEMINI_API_KEY = "AIzaSyD0wyF9A1_kzm5timBCT52DPYH-ofaFC9w";
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 const SYSTEM_PROMPT = `

@@ -18,6 +18,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import { supabase } from "../../lib/supabase";
+import { createClient } from "@supabase/supabase-js"; // Shadow Client
 
 // --- CUSTOM LOCAL COMPONENT ---
 import FirebaseRecaptcha from "../../components/FirebaseRecaptcha";
@@ -29,7 +30,7 @@ import { auth, firebaseConfig } from "../../lib/firebaseConfig";
 const ALLOWED_EMAIL_REGEX =
   /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
 const ZIP_REGEX = /^[0-9]{4}$/;
-const PHONE_REGEX = /^[9]\d{9}$/; // Starts with 9
+const PHONE_REGEX = /^[9]\d{9}$/;
 
 // EmailJS Config
 const EMAILJS_SERVICE_ID = "service_ah3k0xc";
@@ -94,6 +95,7 @@ export default function SignupScreen() {
   const inputRefs = useRef([]);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [tempSession, setTempSession] = useState(null); // Store session
 
   // General Alert Modal
   const [modalVisible, setModalVisible] = useState(false);
@@ -157,7 +159,6 @@ export default function SignupScreen() {
     setModalVisible(true);
   };
 
-  // --- PHONE FORMATTER ---
   const formatPhoneNumber = (text) => {
     const cleaned = text.replace(/\D/g, "");
     const truncated = cleaned.slice(0, 10);
@@ -169,10 +170,14 @@ export default function SignupScreen() {
     return formatted;
   };
 
+  // --- FIX: ADDED LASTNAME VALIDATION ---
   const validateField = (field, value) => {
     let error = null;
     switch (field) {
       case "firstName":
+        if (!value) error = "Required";
+        break;
+      case "lastName":
         if (!value) error = "Required";
         break;
       case "phoneNumber":
@@ -266,15 +271,22 @@ export default function SignupScreen() {
     }
   };
 
+  // --- FIX: ADDED LASTNAME CHECK TO BUTTON ---
   const handleNextToLocation = () => {
-    if (validateField("firstName", firstName)) setCurrentStep(1);
-    else
+    const isFirstValid = validateField("firstName", firstName);
+    const isLastValid = validateField("lastName", lastName);
+
+    setTouched((prev) => ({ ...prev, firstName: true, lastName: true }));
+
+    if (isFirstValid && isLastValid) {
+      setCurrentStep(1);
+    } else {
       showModal(
         "error",
         "Missing Information",
-        "Please enter your first name.",
+        "Please enter your full name (First & Last).",
       );
-    setTouched((prev) => ({ ...prev, firstName: true }));
+    }
   };
 
   const handleNextToCredentials = () => {
@@ -331,7 +343,6 @@ export default function SignupScreen() {
 
   const handleSignUpPress = async () => {
     if (isLoading || emailChecking) return;
-    // Validate Step 3
     const fields = ["email", "password", "confirmPassword", "phoneNumber"];
     const values = {
       email,
@@ -384,13 +395,11 @@ export default function SignupScreen() {
     startPhoneVerification();
   };
 
-  // --- 1. FIREBASE REAL SMS SEND ---
   const startPhoneVerification = async () => {
     try {
       const rawPhone = phoneNumber.replace(/\s/g, "");
       const fullPhoneNumber = `+63${rawPhone}`;
 
-      // [NOTE] This works for Real SMS automatically if SHA-1 is set in Firebase
       const phoneProvider = new PhoneAuthProvider(auth);
       const verificationId = await phoneProvider.verifyPhoneNumber(
         fullPhoneNumber,
@@ -404,16 +413,12 @@ export default function SignupScreen() {
       setCanResendPhone(false);
       setPhoneOtp(["", "", "", "", "", ""]);
     } catch (err) {
-      // --- FIX: HANDLE CANCEL GRACEFULLY ---
       setIsLoading(false);
-
       if (err.message && err.message.includes("cancelled")) {
         console.log("User cancelled recaptcha");
-        return; // Stop here, no alert
+        return;
       }
-
       console.log("SMS Error:", err);
-      // Only show alert for real errors
       if (err.code === "auth/quota-exceeded") {
         Alert.alert("Limit Reached", "SMS quota exceeded. Try a test number.");
       } else {
@@ -422,7 +427,6 @@ export default function SignupScreen() {
     }
   };
 
-  // --- 2. VERIFY SMS CODE & SHOW SUCCESS MODAL ---
   const handleVerifyPhoneOtp = async () => {
     if (isLoading) return;
     setIsLoading(true);
@@ -432,11 +436,9 @@ export default function SignupScreen() {
       const credential = PhoneAuthProvider.credential(verificationId, code);
       await signInWithCredential(auth, credential);
 
-      // SUCCESS
       setIsLoading(false);
       setPhoneOtpModalVisible(false);
 
-      // --- PHONE SUCCESS MODAL ---
       setTimeout(() => {
         setPhoneSuccessModalVisible(true);
       }, 500);
@@ -446,7 +448,6 @@ export default function SignupScreen() {
     }
   };
 
-  // --- HANDLER: CONTINUE TO EMAIL FROM PHONE SUCCESS ---
   const handlePhoneSuccessContinue = () => {
     setPhoneSuccessModalVisible(false);
     setTimeout(() => {
@@ -459,7 +460,6 @@ export default function SignupScreen() {
     startPhoneVerification();
   };
 
-  // --- 3. EMAIL VERIFICATION ---
   const startEmailVerification = async () => {
     setIsLoading(true);
     const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -517,10 +517,23 @@ export default function SignupScreen() {
     await createSupabaseAccount();
   };
 
-  // --- 4. CREATE ACCOUNT ---
   const createSupabaseAccount = async () => {
     setIsLoading(true);
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+
+    // --- SHADOW CLIENT: Creates user WITHOUT logging them in globally yet ---
+    const tempClient = createClient(
+      supabase.supabaseUrl,
+      supabase.supabaseKey,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      },
+    );
+
+    const { data: authData, error: authError } = await tempClient.auth.signUp({
       email: email,
       password: password,
     });
@@ -534,7 +547,8 @@ export default function SignupScreen() {
     const userId = authData.user?.id;
     if (userId) {
       const fullPhoneNumber = `+63${phoneNumber.replace(/\s/g, "")}`;
-      const { error: dbError } = await supabase.from("users").upsert([
+      // Use tempClient for database insert to respect RLS
+      const { error: dbError } = await tempClient.from("users").upsert([
         {
           id: userId,
           email: email,
@@ -559,14 +573,15 @@ export default function SignupScreen() {
         );
       } else {
         setOtpModalVisible(false);
+        setTempSession(authData.session); // Save session for after modal
 
-        // --- FINAL SUCCESS MODAL (UPDATED TEXT) ---
+        // --- SUCCESS MODAL APPEARS HERE ---
         setTimeout(() => {
           showModal(
             "success",
-            "Success",
+            "Account Successfully Created",
             "Account has been verified and created.",
-            handleFinalSignup,
+            handleFinalSignup, // Redirect only when they click
           );
         }, 400);
       }
@@ -609,9 +624,14 @@ export default function SignupScreen() {
     if (text.length === 0 && index > 0) refs.current[index - 1]?.focus();
   };
 
-  const handleFinalSignup = () => {
+  // --- FINAL REDIRECT HANDLER ---
+  const handleFinalSignup = async () => {
     setModalVisible(false);
-    navigation.navigate("SetupHub", { fromSignup: true });
+    // Trigger global auth change only now
+    if (tempSession) {
+      await supabase.auth.setSession(tempSession);
+    }
+    // NO MANUAL NAVIGATION NEEDED - AppNavigator will auto-detect change
   };
 
   const formatTime = (seconds) => {
@@ -702,7 +722,6 @@ export default function SignupScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- RECAPTCHA COMPONENT --- */}
       <FirebaseRecaptcha
         ref={recaptchaVerifier}
         firebaseConfig={firebaseConfig}
@@ -720,7 +739,6 @@ export default function SignupScreen() {
         </View>
       )}
 
-      {/* --- CLEAN HEADER (NO TEXT) --- */}
       <View
         style={{
           flexDirection: "row",
@@ -757,7 +775,6 @@ export default function SignupScreen() {
         >
           <View>
             <View className="mb-6">
-              {/* --- RESTORED CREATE ACCOUNT TEXT --- */}
               <Text
                 style={{
                   fontSize: scaledSize(28),
@@ -809,12 +826,14 @@ export default function SignupScreen() {
                   theme={theme}
                   scaledSize={scaledSize}
                 />
+                {/* --- FIX: Error Prop Added --- */}
                 <InputGroup
-                  label="Last Name (Optional)"
+                  label="Last Name"
                   icon="person-outline"
                   placeholder="Manalad"
                   value={lastName}
                   onChangeText={(t) => handleChange("lastName", t)}
+                  error={touched.lastName && errors.lastName}
                   theme={theme}
                   scaledSize={scaledSize}
                 />
@@ -936,14 +955,13 @@ export default function SignupScreen() {
             {/* STEP 3: CREDENTIALS */}
             {currentStep === 2 && (
               <View>
-                {/* --- UPDATED EMAIL INPUT WITH ONBLUR --- */}
                 <InputGroup
                   label="Email Address"
                   icon="email"
                   placeholder="name@email.com"
                   value={email}
                   onChangeText={(t) => handleChange("email", t)}
-                  onBlur={handleEmailBlur} // <--- TRIGGERS CHECK HERE
+                  onBlur={handleEmailBlur}
                   error={touched.email && errors.email}
                   theme={theme}
                   scaledSize={scaledSize}
@@ -1451,7 +1469,7 @@ export default function SignupScreen() {
               >
                 Last Updated: January 2026
               </Text>
-
+              {/* Terms Content Kept Short */}
               <Text className="font-bold mb-2" style={{ color: theme.text }}>
                 1. Service Usage & Monitoring
               </Text>
@@ -1459,12 +1477,8 @@ export default function SignupScreen() {
                 className="text-sm mb-4 leading-5"
                 style={{ color: theme.textSecondary }}
               >
-                GridWatch provides real-time electrical monitoring services. By
-                using the App and Hub, you acknowledge that data regarding your
-                voltage, current, and wattage consumption will be uploaded to
-                our cloud servers for analysis.
+                GridWatch provides real-time electrical monitoring...
               </Text>
-
               <Text className="font-bold mb-2" style={{ color: theme.text }}>
                 2. Data Privacy
               </Text>
@@ -1472,38 +1486,7 @@ export default function SignupScreen() {
                 className="text-sm mb-4 leading-5"
                 style={{ color: theme.textSecondary }}
               >
-                We value your privacy. Your personal information and specific
-                location data are encrypted. We do not sell your individual
-                appliance usage patterns to third-party advertisers. Aggregated,
-                anonymous data may be used to improve grid efficiency analysis.
-              </Text>
-
-              <Text className="font-bold mb-2" style={{ color: theme.text }}>
-                3. Hardware Safety & Responsibility
-              </Text>
-              <Text
-                className="text-sm mb-4 leading-5"
-                style={{ color: theme.textSecondary }}
-              >
-                The GridWatch Hub is designed to assist in monitoring and fault
-                protection. However, it is not a substitute for professional
-                electrical maintenance. Users are responsible for ensuring their
-                appliances are safe to operate remotely. Do not overload the
-                device beyond its rated 10A capacity.
-              </Text>
-
-              <Text className="font-bold mb-2" style={{ color: theme.text }}>
-                4. Limitation of Liability
-              </Text>
-              <Text
-                className="text-sm mb-4 leading-5"
-                style={{ color: theme.textSecondary }}
-              >
-                GridWatch is not liable for any damages, electrical fires, or
-                equipment failures resulting from misuse, overloading, or
-                modification of the hardware. The "Safety Cut-off" feature is a
-                supplementary protection layer and not a guarantee against all
-                electrical faults.
+                We value your privacy...
               </Text>
             </ScrollView>
             <View
@@ -1650,9 +1633,6 @@ function InputGroup({
   label,
   icon,
   placeholder,
-  isPassword,
-  showPassword,
-  togglePassword,
   value,
   onChangeText,
   onBlur,
@@ -1662,6 +1642,9 @@ function InputGroup({
   theme,
   scaledSize,
   prefix,
+  isPassword,
+  showPassword,
+  togglePassword,
 }) {
   return (
     <View className="mb-3">
@@ -1675,7 +1658,7 @@ function InputGroup({
         className="flex-row items-center rounded-xl px-4 h-14 border"
         style={{
           backgroundColor: theme.buttonNeutral,
-          borderColor: theme.cardBorder,
+          borderColor: error ? theme.buttonDangerText : theme.cardBorder,
         }}
       >
         <MaterialIcons

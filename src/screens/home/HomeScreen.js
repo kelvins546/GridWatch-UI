@@ -101,6 +101,9 @@ export default function HomeScreen() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [personalHubs, setPersonalHubs] = useState([]); // Real Hubs Data
 
+  // --- NEW REF: PREVENT INFINITE REDIRECT LOOP ---
+  const hasRedirected = useRef(false);
+
   // --- REFS ---
   const menuRef = useRef(null);
   const notifRef = useRef(null);
@@ -114,7 +117,6 @@ export default function HomeScreen() {
 
   // --- 1. FETCH REAL HUBS & DEVICES ---
   const fetchHubs = async () => {
-    // This log confirms the function is triggered
     console.log("--- HOME SCREEN FETCHING ---");
 
     try {
@@ -136,11 +138,25 @@ export default function HomeScreen() {
 
       if (error) throw error;
 
+      // ============================================================
+      // --- LOGIC: REDIRECT ONLY ONCE PER SESSION ---
+      // ============================================================
+      if (!data || data.length === 0) {
+        setIsLoading(false);
+
+        if (!hasRedirected.current) {
+          console.log("First load with 0 hubs. Redirecting to SetupHub...");
+          hasRedirected.current = true;
+          navigation.navigate("SetupHub");
+          return;
+        }
+      }
+      // ============================================================
+
       // Transform Data
       const formattedHubs = (data || []).map((hub) => {
         const deviceList = hub.devices || [];
 
-        // --- FIX: Case Insensitive Check ---
         const activeCount = deviceList.filter(
           (d) => d.status && d.status.toLowerCase() === "on",
         ).length;
@@ -152,11 +168,9 @@ export default function HomeScreen() {
           total: deviceList.length,
           active: activeCount,
           icon: hub.icon || "router",
-          totalSpending: 0, // Placeholder
-          budgetLimit: 0, // Placeholder
-          // Map Device Data to UI format
+          totalSpending: 0,
+          budgetLimit: 0,
           devices: deviceList.map((d) => {
-            // --- FIX: Case Insensitive Status ---
             const isOn = d.status && d.status.toLowerCase() === "on";
 
             return {
@@ -167,7 +181,7 @@ export default function HomeScreen() {
                 ? `${d.current_power_watts} W`
                 : "0 W",
               icon: d.icon || "power",
-              type: isOn ? "normal" : "off", // This controls the green/gray color
+              type: isOn ? "normal" : "off",
               tag: d.outlet_number ? `Outlet ${d.outlet_number}` : "DEVICE",
               status: d.status,
             };
@@ -190,20 +204,19 @@ export default function HomeScreen() {
     }
   }, [isFocused]);
 
-  // --- FIX: Realtime Subscription Listening to BOTH Hubs AND Devices ---
-  // Realtime Subscription (UPDATED)
+  // Realtime Subscription
   useEffect(() => {
     const channel = supabase
       .channel("home_combined_realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "hubs" },
-        () => fetchHubs(), // Refresh if Hub goes offline
+        () => fetchHubs(),
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "devices" }, // <--- THIS IS CRITICAL
-        () => fetchHubs(), // Refresh if Watts change
+        { event: "*", schema: "public", table: "devices" },
+        () => fetchHubs(),
       )
       .subscribe();
 
@@ -255,7 +268,6 @@ export default function HomeScreen() {
     };
   }, [isFocused]);
 
-  // ... (Rest of logic: Filter, Budget Data, Tour, etc. remains same) ...
   // --- FILTER LOGIC ---
   useEffect(() => {
     setActiveHubFilter("all");
@@ -369,16 +381,7 @@ export default function HomeScreen() {
     setActiveHubFilter("all");
   };
 
-  if (isLoading) {
-    return (
-      <View
-        className="flex-1 justify-center items-center"
-        style={{ backgroundColor: theme.background }}
-      >
-        <ActivityIndicator size="large" color="#B0B0B0" />
-      </View>
-    );
-  }
+  // --- FULL SCREEN LOADER REMOVED FOR "INSTANT FEEL" ---
 
   // --- RENDER HELPERS ---
   const renderHubSummary = (hub) => (
@@ -469,7 +472,7 @@ export default function HomeScreen() {
                 navigation.navigate("DeviceControl", {
                   deviceName: device.name,
                   status: device.status,
-                  deviceId: device.id, // Ensure ID is passed
+                  deviceId: device.id,
                 });
               }}
             />
@@ -490,7 +493,7 @@ export default function HomeScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- HEADER --- */}
+      {/* --- HEADER (ALWAYS VISIBLE) --- */}
       <View
         className="flex-row justify-between items-center px-6 py-5"
         style={{ backgroundColor: theme.background }}
@@ -848,47 +851,70 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
 
-        {/* --- LIST CONTENT --- */}
+        {/* --- 4. CONTENT LIST (WITH LOADING SPINNER INSIDE) --- */}
         <View className="px-6 pb-6">
-          {activeTab === "personal" && activeHubFilter === "all" ? (
-            <View>
+          {/* LOADING STATE - Only affects the list part */}
+          {isLoading ? (
+            <View className="py-12 items-center">
+              <ActivityIndicator size="small" color={theme.textSecondary} />
               <Text
-                className="font-bold uppercase tracking-widest mb-4"
                 style={{
                   color: theme.textSecondary,
-                  fontSize: theme.font.sm,
+                  marginTop: 12,
+                  fontSize: 12,
                 }}
               >
-                Your Hubs
+                Syncing Hubs...
               </Text>
-              {displayData.length === 0 ? (
-                <View className="items-center py-4">
-                  <MaterialIcons
-                    name="router"
-                    size={40}
-                    color={theme.cardBorder}
-                  />
-                  <Text style={{ color: theme.textSecondary, marginTop: 8 }}>
-                    No hubs connected.
-                  </Text>
-                </View>
-              ) : (
-                displayData.map((hub) => renderHubSummary(hub))
-              )}
             </View>
           ) : (
-            // Detail View (Devices)
-            <View>
-              {displayData.length > 0 ? (
-                displayData.map((hub) => renderHubDetail(hub))
+            <>
+              {activeTab === "personal" && activeHubFilter === "all" ? (
+                <View>
+                  <Text
+                    className="font-bold uppercase tracking-widest mb-4"
+                    style={{
+                      color: theme.textSecondary,
+                      fontSize: theme.font.sm,
+                    }}
+                  >
+                    Your Hubs
+                  </Text>
+                  {displayData.length === 0 ? (
+                    <View className="items-center py-4">
+                      <MaterialIcons
+                        name="router"
+                        size={40}
+                        color={theme.cardBorder}
+                      />
+                      <Text
+                        style={{ color: theme.textSecondary, marginTop: 8 }}
+                      >
+                        No hubs connected.
+                      </Text>
+                    </View>
+                  ) : (
+                    displayData.map((hub) => renderHubSummary(hub))
+                  )}
+                </View>
               ) : (
-                <Text
-                  style={{ color: theme.textSecondary, textAlign: "center" }}
-                >
-                  Select a hub to view devices.
-                </Text>
+                // Detail View (Devices)
+                <View>
+                  {displayData.length > 0 ? (
+                    displayData.map((hub) => renderHubDetail(hub))
+                  ) : (
+                    <Text
+                      style={{
+                        color: theme.textSecondary,
+                        textAlign: "center",
+                      }}
+                    >
+                      Select a hub to view devices.
+                    </Text>
+                  )}
+                </View>
               )}
-            </View>
+            </>
           )}
         </View>
 

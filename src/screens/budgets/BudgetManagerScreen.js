@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from "react";
+import React, { useRef, useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -19,7 +19,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native"; // Added useRoute
 import { useTheme } from "../../context/ThemeContext";
 
 if (
@@ -31,6 +31,7 @@ if (
 
 export default function BudgetManagerScreen() {
   const navigation = useNavigation();
+  const route = useRoute(); // Added route hook to read params
   const { theme, isDarkMode, fontScale } = useTheme();
   const scaledSize = (size) => size * fontScale;
 
@@ -50,6 +51,17 @@ export default function BudgetManagerScreen() {
   // --- BUDGET DATA ---
   const [monthlyBudget, setMonthlyBudget] = useState(2800);
   const [billingDate, setBillingDate] = useState("15");
+
+  // --- NEW LOGIC: AUTO-SHOW MODAL ON ONBOARDING ---
+  useEffect(() => {
+    if (route.params?.showSetupModal) {
+      // Small delay to ensure screen transition finishes before modal pops up
+      const timer = setTimeout(() => {
+        setShowBudgetModal(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [route.params]);
 
   // --- HELPER: ORDINAL SUFFIX (st, nd, rd, th) ---
   const getOrdinalSuffix = (day) => {
@@ -195,6 +207,7 @@ export default function BudgetManagerScreen() {
   const handleSaveBudget = () => {
     setShowBudgetModal(false);
     setIsResetting(true);
+    // In a real app, you would save 'monthlyBudget' to Supabase here
     setTimeout(() => setIsResetting(false), 1000);
   };
 
@@ -814,7 +827,8 @@ export default function BudgetManagerScreen() {
                 style={styles.modalCancelBtn}
               >
                 <Text style={[styles.modalButtonText, { color: theme.text }]}>
-                  Cancel
+                  {/* --- CHANGED: Dynamic Button Text --- */}
+                  {route.params?.showSetupModal ? "Not Now" : "Cancel"}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity

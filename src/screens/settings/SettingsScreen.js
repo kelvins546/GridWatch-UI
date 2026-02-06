@@ -34,6 +34,19 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+// Map the DB names (lowercase keys) to local assets
+const PROVIDER_LOGOS = {
+  meralco: require("../../../assets/meralco.png"),
+  veco: require("../../../assets/visayan.png"),
+  "visayan electric (veco)": require("../../../assets/visayan.png"),
+  davao: require("../../../assets/davao.png"),
+  "davao light (dlpc)": require("../../../assets/davao.png"),
+  abreco: require("../../../assets/abreco.png"),
+  beneco: require("../../../assets/beneco.png"),
+  akelco: require("../../../assets/akelco.png"),
+  // Add more as needed...
+};
+
 export default function SettingsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
@@ -55,11 +68,19 @@ export default function SettingsScreen() {
     useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  // User Profile State
   const [userData, setUserData] = useState({
     fullName: "Guest User",
     unitLocation: "Not Logged In",
     initial: "G",
     avatarUrl: null,
+  });
+
+  // Utility Provider State
+  const [utilityData, setUtilityData] = useState({
+    providerName: "Not Set",
+    rate: "0.00",
+    hasProvider: false,
   });
 
   const [widgetsEnabled, setWidgetsEnabled] = useState(false);
@@ -92,9 +113,12 @@ export default function SettingsScreen() {
       if (authError) throw authError;
 
       if (user) {
+        // 1. Fetch User Profile (including provider_id)
         const { data: profile } = await supabase
           .from("users")
-          .select("first_name, last_name, avatar_url, city, region")
+          .select(
+            "first_name, last_name, avatar_url, city, region, provider_id, custom_rate",
+          )
           .eq("id", user.id)
           .single();
 
@@ -102,6 +126,7 @@ export default function SettingsScreen() {
         let avatarUrl = user.user_metadata?.avatar_url;
         let location = user.email;
 
+        // Profile Data Logic
         if (profile) {
           const first = profile.first_name || "";
           const last = profile.last_name || "";
@@ -123,6 +148,35 @@ export default function SettingsScreen() {
           initial: initial,
           avatarUrl: avatarUrl,
         });
+
+        // 2. Fetch Utility Provider Data
+        if (profile?.provider_id) {
+          const { data: provider } = await supabase
+            .from("utility_rates")
+            .select("provider_name, rate_per_kwh")
+            .eq("id", profile.provider_id)
+            .single();
+
+          if (provider) {
+            setUtilityData({
+              providerName: provider.provider_name,
+              rate: provider.rate_per_kwh.toFixed(2),
+              hasProvider: true,
+            });
+          }
+        } else if (profile?.custom_rate) {
+          setUtilityData({
+            providerName: "Manual Config",
+            rate: Number(profile.custom_rate).toFixed(2),
+            hasProvider: true,
+          });
+        } else {
+          setUtilityData({
+            providerName: "Not Set",
+            rate: "0.00",
+            hasProvider: false,
+          });
+        }
       }
     } catch (error) {
       console.log("Error fetching profile:", error);
@@ -137,18 +191,13 @@ export default function SettingsScreen() {
     }, []),
   );
 
-  const { providerName, rate } = route.params || {};
-  const displayProvider = providerName || "Meralco";
-  const displayRate = rate || "12.50";
-
-  const providerLogos = {
-    Meralco: require("../../../assets/meralco.png"),
-    "Visayan Electric": require("../../../assets/visayan.png"),
-    "Davao Light": require("../../../assets/davao.png"),
-    BENECO: require("../../../assets/beneco.png"),
-    AKELCO: require("../../../assets/akelco.png"),
-  };
-  const logoSource = providerLogos[displayProvider];
+  // --- LOGO RESOLUTION LOGIC ---
+  const normalizedName = utilityData.providerName.toLowerCase();
+  let logoSource = PROVIDER_LOGOS[normalizedName];
+  if (!logoSource) {
+    const firstWord = normalizedName.split(/[\s(]/)[0];
+    logoSource = PROVIDER_LOGOS[firstWord];
+  }
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -404,7 +453,6 @@ export default function SettingsScreen() {
             />
           </TouchableOpacity>
 
-          {/* --- ADDED SECURITY LABEL HERE --- */}
           <Text
             className="font-bold uppercase tracking-widest mb-3 mt-4"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -412,7 +460,6 @@ export default function SettingsScreen() {
             Security
           </Text>
 
-          {/* ACCOUNT SETTINGS BUTTON */}
           <SettingsRow
             icon="admin-panel-settings"
             title="Account Settings"
@@ -432,26 +479,29 @@ export default function SettingsScreen() {
 
           <SettingsRow
             icon="business"
-            title={displayProvider}
-            subtitle="Current Provider"
+            title={utilityData.providerName}
+            subtitle={
+              utilityData.hasProvider
+                ? "Current Provider"
+                : "Tap to set provider"
+            }
             onPress={() => navigation.navigate("ProviderSetup")}
             theme={theme}
             scaledSize={scaledSize}
             customIcon={
               <View className="w-9 h-9 bg-white rounded-lg justify-center items-center overflow-hidden border border-gray-200">
-                {logoSource ? (
+                {utilityData.hasProvider && logoSource ? (
                   <Image
                     source={logoSource}
                     style={{ width: "80%", height: "80%" }}
                     resizeMode="contain"
                   />
                 ) : (
-                  <Text
-                    className="font-black"
-                    style={{ color: "#000", fontSize: scaledSize(14) }}
-                  >
-                    {displayProvider.charAt(0)}
-                  </Text>
+                  <MaterialIcons
+                    name="business"
+                    size={scaledSize(20)}
+                    color="#888"
+                  />
                 )}
               </View>
             }
@@ -481,10 +531,12 @@ export default function SettingsScreen() {
                   className="mt-0.5 ml-3"
                   style={{
                     color: theme.textSecondary,
-                    fontSize: scaledSize(12),
+                    fontSize: scaledSize(11),
                   }}
                 >
-                  Last updated: Today, 8:00 AM
+                  {utilityData.hasProvider
+                    ? "Auto-synced from database"
+                    : "Default Rate Applied"}
                 </Text>
               </View>
             </View>
@@ -493,16 +545,18 @@ export default function SettingsScreen() {
                 className="font-bold"
                 style={{ color: theme.text, fontSize: scaledSize(14) }}
               >
-                ₱ {displayRate}
+                ₱ {utilityData.rate}
               </Text>
               <Text
                 className="font-semibold"
                 style={{
-                  color: theme.buttonPrimary,
-                  fontSize: scaledSize(12),
+                  color: utilityData.hasProvider
+                    ? theme.buttonPrimary
+                    : theme.textSecondary,
+                  fontSize: scaledSize(10),
                 }}
               >
-                Auto-Sync ON
+                {utilityData.hasProvider ? "ACTIVE" : "NOT SET"}
               </Text>
             </View>
           </View>
