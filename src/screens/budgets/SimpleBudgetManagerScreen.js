@@ -8,19 +8,21 @@ import {
   Animated,
   Modal,
   ActivityIndicator,
-  FlatList,
+  FlatList, // <--- ADDED THIS IMPORT
   TextInput,
   StyleSheet,
   Dimensions,
   Platform,
   LayoutAnimation,
   UIManager,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
 
 if (
   Platform.OS === "android" &&
@@ -42,15 +44,94 @@ export default function SimpleBudgetManagerScreen() {
 
   // --- STATE ---
   const [activeHubFilter, setActiveHubFilter] = useState("all");
+  const [isLoading, setIsLoading] = useState(true);
 
   const [isResetting, setIsResetting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
 
-  // --- BUDGET DATA ---
-  const [monthlyBudget, setMonthlyBudget] = useState(1900);
-  const [billingDate, setBillingDate] = useState("15");
+  // --- REAL DATA STATE ---
+  const [hubs, setHubs] = useState([]);
+  const [monthlyBudget, setMonthlyBudget] = useState(2000);
+  const [billingDate, setBillingDate] = useState("1");
+
+  // --- FETCH DATA ---
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // 1. Get User Settings
+      const { data: userData } = await supabase
+        .from("users")
+        .select("monthly_budget, bill_cycle_day")
+        .eq("id", user.id)
+        .single();
+
+      if (userData) {
+        setMonthlyBudget(userData.monthly_budget || 2000);
+        setBillingDate(String(userData.bill_cycle_day || 1));
+      }
+
+      // 2. Calculate Date Range for Current Month
+      const now = new Date();
+      const startOfMonth = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1,
+      ).toISOString();
+
+      // 3. Fetch Hubs & Usage
+      const { data: hubsData } = await supabase
+        .from("hubs")
+        .select("id, name, status, devices(id)");
+
+      if (hubsData) {
+        // Fetch usage for all devices in bulk
+        const allDeviceIds = hubsData.flatMap((h) =>
+          h.devices.map((d) => d.id),
+        );
+
+        const { data: usageLogs } = await supabase
+          .from("usage_analytics")
+          .select("device_id, cost_incurred")
+          .in("device_id", allDeviceIds)
+          .gte("date", startOfMonth);
+
+        // Map usage back to hubs
+        const processedHubs = hubsData.map((hub) => {
+          const hubDeviceIds = hub.devices.map((d) => d.id);
+          const totalSpent = (usageLogs || [])
+            .filter((log) => hubDeviceIds.includes(log.device_id))
+            .reduce((sum, log) => sum + (log.cost_incurred || 0), 0);
+
+          return {
+            id: hub.id,
+            name: hub.name,
+            status: hub.status === "online" ? "Online" : "Offline",
+            devices: hub.devices.length,
+            icon: "router",
+            totalSpending: totalSpent,
+            limit: hub.budget_limit || 0,
+          };
+        });
+
+        setHubs(processedHubs);
+      }
+    } catch (error) {
+      console.error("Budget load error:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   // --- HELPER: ORDINAL SUFFIX ---
   const getOrdinalSuffix = (day) => {
@@ -76,7 +157,6 @@ export default function SimpleBudgetManagerScreen() {
   const daysInMonth = new Date(currentYear, today.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentYear, today.getMonth(), 1).getDay();
 
-  // Generate calendar grid
   const calendarData = [
     ...Array(firstDayOfMonth).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
@@ -84,57 +164,34 @@ export default function SimpleBudgetManagerScreen() {
 
   const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-  // --- DATA SOURCES (ONLY PERSONAL HUBS) ---
-  const HUBS = [
-    {
-      id: "living",
-      name: "Living Room",
-      status: "Online",
-      devices: 4,
-      icon: "weekend",
-      totalSpending: 850.5,
-      limit: 1200,
-    },
-    {
-      id: "kitchen",
-      name: "Kitchen",
-      status: "Online",
-      devices: 2,
-      icon: "kitchen",
-      totalSpending: 600.25,
-      limit: 800,
-    },
-  ];
-
   // --- FILTER LOGIC ---
   const displayList =
     activeHubFilter === "all"
-      ? HUBS
-      : HUBS.filter((h) => h.id === activeHubFilter);
+      ? hubs
+      : hubs.filter((h) => h.id === activeHubFilter);
 
   const budgetStats = useMemo(() => {
     let current = 0;
     let hardLimitTotal = 0;
 
     if (activeHubFilter === "all") {
-      current = HUBS.reduce((acc, hub) => acc + (hub.totalSpending || 0), 0);
-      hardLimitTotal = HUBS.reduce((acc, hub) => acc + (hub.limit || 0), 0);
+      current = hubs.reduce((acc, hub) => acc + (hub.totalSpending || 0), 0);
+      hardLimitTotal = monthlyBudget;
     } else {
-      const hub = HUBS.find((h) => h.id === activeHubFilter);
+      const hub = hubs.find((h) => h.id === activeHubFilter);
       if (hub) {
         current = hub.totalSpending || 0;
-        hardLimitTotal = hub.limit || 0;
+        hardLimitTotal = hub.limit || monthlyBudget;
       }
     }
     return { current, hardLimitTotal };
-  }, [activeHubFilter, HUBS]);
+  }, [activeHubFilter, hubs, monthlyBudget]);
 
   const currentSpending = budgetStats.current;
-  const activeLimit =
-    activeHubFilter === "all" ? monthlyBudget : budgetStats.hardLimitTotal;
-  const isOverAllocated = budgetStats.hardLimitTotal > monthlyBudget;
+  const activeLimit = budgetStats.hardLimitTotal;
 
-  const percentage = Math.min((currentSpending / activeLimit) * 100, 100);
+  const percentage =
+    activeLimit > 0 ? Math.min((currentSpending / activeLimit) * 100, 100) : 0;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   // --- ACTIONS ---
@@ -158,16 +215,57 @@ export default function SimpleBudgetManagerScreen() {
     setTimeout(() => setIsResetting(false), 2000);
   };
 
-  const handleSaveBudget = () => {
+  const handleSaveBudget = async () => {
+    // 1. VALIDATION
+    const totalHubLimits = hubs.reduce((acc, h) => acc + (h.limit || 0), 0);
+
+    if (totalHubLimits > 0 && monthlyBudget < totalHubLimits) {
+      Alert.alert(
+        "Allocation Conflict",
+        `Your Total Budget (₱${monthlyBudget}) is lower than the sum of your specific Hub/Outlet limits (₱${totalHubLimits}).\n\nPlease increase the total budget or lower individual hub limits.`,
+      );
+      return;
+    }
+
+    // 2. PROCEED SAVE
     setShowBudgetModal(false);
     setIsResetting(true);
-    setTimeout(() => setIsResetting(false), 1000);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const { error } = await supabase
+        .from("users")
+        .update({ monthly_budget: monthlyBudget })
+        .eq("id", user.id);
+
+      if (error) throw error;
+
+      await loadData();
+    } catch (e) {
+      console.log("Error saving budget", e);
+      Alert.alert("Error", "Failed to save budget.");
+    } finally {
+      setIsResetting(false);
+    }
   };
 
-  const handleDateSelect = (day) => {
+  const handleDateSelect = async (day) => {
     if (day) {
       setBillingDate(day.toString());
       setShowDatePicker(false);
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        await supabase
+          .from("users")
+          .update({ bill_cycle_day: day })
+          .eq("id", user.id);
+      } catch (e) {
+        console.log("Error saving date", e);
+      }
     }
   };
 
@@ -276,6 +374,21 @@ export default function SimpleBudgetManagerScreen() {
     },
   });
 
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: theme.background,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <ActivityIndicator size="large" color="#B0B0B0" />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar
@@ -283,7 +396,7 @@ export default function SimpleBudgetManagerScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* Header (UNCHANGED) */}
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.navigate("Menu")}
@@ -309,25 +422,6 @@ export default function SimpleBudgetManagerScreen() {
             size={scaledSize(28)}
             color={theme.text}
           />
-          <View
-            style={{
-              position: "absolute",
-              top: 4,
-              right: 4,
-              backgroundColor: "#ff4d4d",
-              width: 14,
-              height: 14,
-              borderRadius: 7,
-              justifyContent: "center",
-              alignItems: "center",
-              borderWidth: 2,
-              borderColor: theme.background,
-            }}
-          >
-            <Text style={{ color: "white", fontSize: 8, fontWeight: "bold" }}>
-              2
-            </Text>
-          </View>
         </TouchableOpacity>
       </View>
 
@@ -466,53 +560,6 @@ export default function SimpleBudgetManagerScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* --- BUDGET HEALTH WARNING (If Hub Limits > Goal) --- */}
-        {activeHubFilter === "all" && isOverAllocated && (
-          <View style={{ paddingHorizontal: 24 }}>
-            <View
-              style={[
-                styles.warningCard,
-                {
-                  backgroundColor: isDarkMode
-                    ? "rgba(255,68,68,0.1)"
-                    : "rgba(255,200,200,0.3)",
-                  borderColor: dangerColor,
-                },
-              ]}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: 8,
-                }}
-              >
-                <MaterialIcons name="warning" size={20} color={dangerColor} />
-                <Text
-                  style={{
-                    fontWeight: "bold",
-                    marginLeft: 8,
-                    color: dangerColor,
-                    fontSize: scaledSize(14),
-                  }}
-                >
-                  Conflict Detected
-                </Text>
-              </View>
-              <Text
-                style={{
-                  color: theme.text,
-                  fontSize: scaledSize(13),
-                  marginBottom: 8,
-                  lineHeight: 20,
-                }}
-              >
-                {`Your combined hub limits (₱${budgetStats.hardLimitTotal.toLocaleString()}) exceed your monthly goal.`}
-              </Text>
-            </View>
-          </View>
-        )}
-
         {/* --- HUB FILTER CHIPS --- */}
         <View style={{ paddingLeft: 24, marginBottom: 20 }}>
           <Text
@@ -555,7 +602,7 @@ export default function SimpleBudgetManagerScreen() {
               </Text>
             </TouchableOpacity>
 
-            {HUBS.map((hub) => (
+            {hubs.map((hub) => (
               <TouchableOpacity
                 key={hub.id}
                 onPress={() => handleFilterChange(hub.id)}
@@ -722,7 +769,10 @@ export default function SimpleBudgetManagerScreen() {
                 primaryColor={primaryColor}
                 scaledSize={scaledSize}
                 onPress={() =>
-                  navigation.navigate("BudgetDeviceList", { hubName: hub.name })
+                  navigation.navigate("BudgetDeviceList", {
+                    hubName: hub.name,
+                    hubId: hub.id,
+                  })
                 }
               />
             ))
@@ -1014,7 +1064,8 @@ function StatItem({ label, value, icon, theme, scaledSize }) {
 }
 
 function HubListItem({ data, theme, primaryColor, scaledSize, onPress }) {
-  const usagePercent = Math.min((data.totalSpending / data.limit) * 100, 100);
+  const usagePercent =
+    data.limit > 0 ? Math.min((data.totalSpending / data.limit) * 100, 100) : 0;
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -1066,7 +1117,7 @@ function HubListItem({ data, theme, primaryColor, scaledSize, onPress }) {
               fontSize: scaledSize(14),
             }}
           >
-            ₱{data.totalSpending}
+            ₱{data.totalSpending.toFixed(2)}
           </Text>
         </View>
         <View
@@ -1095,7 +1146,7 @@ function HubListItem({ data, theme, primaryColor, scaledSize, onPress }) {
           <Text
             style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
           >
-            Limit: ₱{data.limit}
+            Limit: ₱{data.limit || "Unset"}
           </Text>
           <Text
             style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}

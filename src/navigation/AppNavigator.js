@@ -665,7 +665,10 @@ export default function AppNavigator() {
           <Stack.Screen name="BudgetDetail" component={BudgetDetailScreen} />
           <Stack.Screen name="MonthlyBudget" component={MonthlyBudgetScreen} />
           <Stack.Screen name="LimitDetail" component={LimitDetailScreen} />
-
+          <Stack.Screen
+            name="SimpleBudgetManager"
+            component={SimpleBudgetManagerScreen}
+          />
           <Stack.Screen name="MyHubs" component={MyHubsScreen} />
           <Stack.Screen name="HubConfig" component={HubConfigScreen} />
           <Stack.Screen name="FamilyAccess" component={FamilyAccessScreen} />

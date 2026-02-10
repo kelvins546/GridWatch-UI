@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,11 +12,18 @@ import {
   UIManager,
   LayoutAnimation,
   ActivityIndicator,
+  Animated,
+  Easing,
+  RefreshControl,
+  Image,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import {
+  useNavigation,
+  useRoute,
+  useFocusEffect,
+} from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import { supabase } from "../../lib/supabase";
 
@@ -26,6 +33,128 @@ if (
 ) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+// --- STATIC IMAGE MAPPING ---
+const PROVIDER_LOGOS = {
+  meralco: require("../../../assets/meralco.png"),
+  veco: require("../../../assets/visayan.png"),
+  "visayan electric (veco)": require("../../../assets/visayan.png"),
+  davao: require("../../../assets/davao.png"),
+  "davao light (dlpc)": require("../../../assets/davao.png"),
+  abreco: require("../../../assets/abreco.png"),
+  aec: require("../../../assets/aec.png"),
+  akelco: require("../../../assets/akelco.png"),
+  aleco: require("../../../assets/aleco.png"),
+  aneco: require("../../../assets/aneco.png"),
+  anteco: require("../../../assets/anteco.png"),
+  aselco: require("../../../assets/aselco.png"),
+  aurelco: require("../../../assets/aurelco.png"),
+  balamban: require("../../../assets/balamban.png"),
+  banelco: require("../../../assets/banelco.png"),
+  baselco: require("../../../assets/baselco.png"),
+  batanelco: require("../../../assets/batanelco.png"),
+  "batelec i": require("../../../assets/bateleci.png"),
+  "batelec ii": require("../../../assets/batelecii.png"),
+  beneco: require("../../../assets/beneco.png"),
+  bileco: require("../../../assets/bileco.png"),
+  biselco: require("../../../assets/biselco.png"),
+  "boheco i": require("../../../assets/bohecoi.png"),
+  "boheco ii": require("../../../assets/bohecoii.png"),
+  buseco: require("../../../assets/buseco.png"),
+  "cagelco i": require("../../../assets/cagelcoi.png"),
+  "cagelco ii": require("../../../assets/cagelcoii.png"),
+  camelco: require("../../../assets/camelco.png"),
+  canoreco: require("../../../assets/canoreco.png"),
+  capelco: require("../../../assets/capelco.png"),
+  "casureco i": require("../../../assets/casurecoi.png"),
+  "casureco ii": require("../../../assets/casurecoii.png"),
+  "casureco iii": require("../../../assets/casurecoiii.png"),
+  "casureco iv": require("../../../assets/casurecoiv.png"),
+  "cebeco i": require("../../../assets/cebecoi.png"),
+  "cebeco ii": require("../../../assets/cebecoii.png"),
+  "cebeco iii": require("../../../assets/cebecoiii.png"),
+  celcor: require("../../../assets/celcor.png"),
+  cenpelco: require("../../../assets/cenpelco.png"),
+  cepalco: require("../../../assets/cepalco.png"),
+  clpc: require("../../../assets/clpc.png"),
+  cotelco: require("../../../assets/cotelco.png"),
+  dasureco: require("../../../assets/dasureco.png"),
+  decorp: require("../../../assets/decorp.png"),
+  dielco: require("../../../assets/dielco.png"),
+  dorelco: require("../../../assets/dorelco.png"),
+  esamelco: require("../../../assets/esamelco.png"),
+  fleco: require("../../../assets/fleco.png"),
+  guimelco: require("../../../assets/guimelco.png"),
+  ifelco: require("../../../assets/ifelco.png"),
+  "ileco i": require("../../../assets/ilecoi.png"),
+  "ileco ii": require("../../../assets/ilecoii.png"),
+  "ileco iii": require("../../../assets/ilecoiii.png"),
+  ilpi: require("../../../assets/ilpi.png"),
+  inec: require("../../../assets/inec.png"),
+  iseco: require("../../../assets/iseco.png"),
+  "iselco i": require("../../../assets/iselcoi.png"),
+  "iselco ii": require("../../../assets/iselcoii.png"),
+  kaelco: require("../../../assets/kaelco.png"),
+  laneco: require("../../../assets/laneco.png"),
+  "leyeco ii": require("../../../assets/leyecoii.png"),
+  "leyeco iii": require("../../../assets/leyecoiii.png"),
+  "leyeco iv": require("../../../assets/leyecoiv.png"),
+  "leyeco v": require("../../../assets/leyecov.png"),
+  luelco: require("../../../assets/luelco.png"),
+  magelco: require("../../../assets/magelco.png"),
+  marelco: require("../../../assets/marelco.png"),
+  meco: require("../../../assets/meco.png"),
+  mopreco: require("../../../assets/mopreco.png"),
+  "moresco i": require("../../../assets/moresco i.png"),
+  "moresco ii": require("../../../assets/moresco ii.png"),
+  "neeco i": require("../../../assets/neeco i.png"),
+  "neeco ii": require("../../../assets/neeco ii.png"),
+  noceco: require("../../../assets/noceco.png"),
+  noneco: require("../../../assets/noneco.png"),
+  "noreco i": require("../../../assets/noreco i.png"),
+  "noreco ii": require("../../../assets/noreco ii.png"),
+  norsamelco: require("../../../assets/norsamelco.png"),
+  nuvelco: require("../../../assets/nuvelco.png"),
+  omeco: require("../../../assets/omeco.png"),
+  ormeco: require("../../../assets/ormeco.png"),
+  paleco: require("../../../assets/paleco.png"),
+  "panelco i": require("../../../assets/panelco i.png"),
+  "panelco iii": require("../../../assets/panelco iii.png"),
+  "pelco i": require("../../../assets/pelco i.png"),
+  "pelco ii": require("../../../assets/pelco ii.png"),
+  "pelco iii": require("../../../assets/pelco iii.png"),
+  penelco: require("../../../assets/penelco.png"),
+  "quezelco i": require("../../../assets/quezelco i.png"),
+  "quezelco ii": require("../../../assets/quezelco ii.png"),
+  quirelco: require("../../../assets/quirelco.png"),
+  romelco: require("../../../assets/romelco.png"),
+  "samelco i": require("../../../assets/samelco i.png"),
+  "samelco ii": require("../../../assets/samelco ii.png"),
+  "socoteco i": require("../../../assets/socoteco i.png"),
+  "socoteco ii": require("../../../assets/socoteco ii.png"),
+  soleco: require("../../../assets/soleco.png"),
+  sukelco: require("../../../assets/sukelco.png"),
+  surneco: require("../../../assets/surneco.png"),
+  surseco: require("../../../assets/surseco.png"),
+  "tarelco i": require("../../../assets/tarelco i.png"),
+  "tarelco ii": require("../../../assets/tarelco ii.png"),
+  tawelco: require("../../../assets/tawelco.png"),
+  zamcelco: require("../../../assets/zamcelco.png"),
+  "zameco i": require("../../../assets/zameco i.png"),
+  "zameco ii": require("../../../assets/zameco ii.png"),
+  zamsureco: require("../../../assets/zamsureco.png"),
+  zaneco: require("../../../assets/zaneco.png"),
+};
+
+// --- HELPER: FORMAT TIME 24h -> 12h ---
+const formatTime12h = (time24) => {
+  if (!time24) return "--:--";
+  const [h, m] = time24.split(":");
+  const hour = parseInt(h, 10);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${m} ${ampm}`;
+};
 
 export default function DeviceControlScreen() {
   const navigation = useNavigation();
@@ -44,22 +173,36 @@ export default function DeviceControlScreen() {
     deviceId: null,
   };
 
-  // Helper to safely check "on" status (Handles "ON", "on", "On")
   const checkIsOn = (status) => {
     if (!status) return false;
     return status.toString().toLowerCase() === "on";
   };
 
+  // --- STATE ---
   const [isPowered, setIsPowered] = useState(checkIsOn(initialStatus));
-  const [currentWatts, setCurrentWatts] = useState(0); // <--- NEW: State for Real Watts
+  const [currentWatts, setCurrentWatts] = useState(0);
+  const [currentVoltage, setCurrentVoltage] = useState(220);
+  const [electricityRate, setElectricityRate] = useState(12);
+  const [providerName, setProviderName] = useState(null);
+
+  // Runtime & Historical Data State
+  const [dbRuntimeMinutes, setDbRuntimeMinutes] = useState(0);
+  const [sessionMinutes, setSessionMinutes] = useState(0); // Live counter
+  const [todayCost, setTodayCost] = useState(0);
+
   const [deviceId, setDeviceId] = useState(paramDeviceId);
-  const [isLoading, setIsLoading] = useState(!paramDeviceId);
+  const [hubId, setHubId] = useState(null);
+  const [hubLastSeen, setHubLastSeen] = useState(null);
+  const [now, setNow] = useState(Date.now());
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
 
-  // --- MOCK SCHEDULES ---
+  // --- SCHEDULE STATE ---
   const [schedules, setSchedules] = useState([
     {
       id: "1",
@@ -69,119 +212,339 @@ export default function DeviceControlScreen() {
       active: true,
     },
   ]);
-  const [scheduleTime, setScheduleTime] = useState("07:00");
+
+  const [schedHour, setSchedHour] = useState("07");
+  const [schedMinute, setSchedMinute] = useState("00");
+  const [schedAmPm, setSchedAmPm] = useState("AM");
+
   const [selectedDays, setSelectedDays] = useState(Array(7).fill(true));
   const [isActionOn, setIsActionOn] = useState(true);
 
-  // --- 1. FETCH & SUBSCRIBE ---
+  // --- DERIVED VALUES ---
+  // Online/Offline Check
+  const checkHubOnline = () => {
+    if (!hubLastSeen) return false;
+    let timeStr = hubLastSeen.replace(" ", "T");
+    if (!timeStr.endsWith("Z") && !timeStr.includes("+")) timeStr += "Z";
+    const lastSeenMs = new Date(timeStr).getTime();
+    if (isNaN(lastSeenMs)) return false;
+    const diffInSeconds = (now - lastSeenMs) / 1000;
+    return diffInSeconds < 15;
+  };
+
+  const isHubOnline = checkHubOnline();
+  const displayWatts = isHubOnline ? currentWatts : 0;
+  const displayVolts = isHubOnline ? `${currentVoltage.toFixed(1)} V` : "0 V";
+
+  // Calculate cost per hour based on current watts and rate
+  const estCostPerHour = (displayWatts / 1000) * electricityRate;
+
+  // --- LIVE RUNTIME TIMER ---
+  // Updates local session duration
   useEffect(() => {
-    let subscription;
+    let interval;
+    if (isPowered) {
+      interval = setInterval(() => {
+        setSessionMinutes((prev) => prev + 1 / 60);
+      }, 1000);
+    } else {
+      setSessionMinutes(0);
+    }
+    return () => clearInterval(interval);
+  }, [isPowered]);
 
-    const initDevice = async () => {
-      try {
-        let targetId = deviceId;
+  // --- ANIMATION REFS ---
+  const pulseAnim = useRef(new Animated.Value(0)).current;
 
-        // If we don't have an ID (legacy nav), fetch it by name
-        if (!targetId) {
-          const {
-            data: { user },
-          } = await supabase.auth.getUser();
-          if (!user) return;
+  // --- PULSE ANIMATION ---
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 2000,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulseAnim]);
 
-          const { data, error } = await supabase
-            .from("devices")
-            .select("*")
-            .eq("user_id", user.id)
-            .eq("name", deviceName)
-            .single();
+  const pulseScale = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.5],
+  });
 
-          if (error) throw error;
-          if (data) {
-            targetId = data.id;
-            setDeviceId(data.id);
-            setIsPowered(checkIsOn(data.status));
-            setCurrentWatts(data.current_power_watts || 0); // Set initial watts
-          }
-        }
-        // If we DO have an ID, ensure we have latest status & power
-        else {
-          const { data, error } = await supabase
-            .from("devices")
-            .select("status, current_power_watts") // <--- Fetch Watts too
-            .eq("id", targetId)
-            .single();
+  const pulseOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0],
+  });
 
-          if (!error && data) {
-            setIsPowered(checkIsOn(data.status));
-            setCurrentWatts(data.current_power_watts || 0);
-          }
-        }
+  // --- FETCH DATA ---
+  const fetchDeviceData = async (isRefetch = false) => {
+    if (isRefetch) setRefreshing(true);
+    else setIsLoading(true);
 
-        // 2. SUBSCRIBE USING ID (Robust)
-        if (targetId) {
-          const channelName = `device_control_${targetId}`;
-          subscription = supabase
-            .channel(channelName)
-            .on(
-              "postgres_changes",
-              {
-                event: "UPDATE",
-                schema: "public",
-                table: "devices",
-                filter: `id=eq.${targetId}`,
-              },
-              (payload) => {
-                if (payload.new) {
-                  LayoutAnimation.configureNext(
-                    LayoutAnimation.Presets.easeInEaseOut,
-                  );
-                  // Update Status
-                  if (payload.new.status) {
-                    setIsPowered(checkIsOn(payload.new.status));
-                  }
-                  // Update Watts (Realtime from ESP32)
-                  if (payload.new.current_power_watts !== undefined) {
-                    setCurrentWatts(payload.new.current_power_watts);
-                  }
-                }
-              },
+    try {
+      let targetId = deviceId;
+
+      const selectQuery = `
+        *,
+        hubs(id, last_seen, current_voltage),
+        users (
+            id,
+            custom_rate,
+            utility_rates!users_provider_id_fkey ( 
+                rate_per_kwh,
+                provider_name 
             )
-            .subscribe();
-        }
-      } catch (error) {
-        console.log("Error initializing device:", error.message);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+        )
+      `;
 
-    initDevice();
+      let data, error;
+
+      if (!targetId) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const response = await supabase
+          .from("devices")
+          .select(selectQuery)
+          .eq("user_id", user.id)
+          .eq("name", deviceName)
+          .single();
+
+        data = response.data;
+        error = response.error;
+      } else {
+        const response = await supabase
+          .from("devices")
+          .select(selectQuery)
+          .eq("id", targetId)
+          .single();
+
+        data = response.data;
+        error = response.error;
+      }
+
+      if (error) throw error;
+
+      if (data) {
+        if (!targetId) setDeviceId(data.id);
+
+        setIsPowered(checkIsOn(data.status));
+        setCurrentWatts(data.current_power_watts || 0);
+        setHubId(data.hub_id);
+        setHubLastSeen(data.hubs?.last_seen);
+        if (data.hubs?.current_voltage) {
+          setCurrentVoltage(data.hubs.current_voltage);
+        }
+
+        let finalRate = 12;
+        let finalProviderName = null;
+        const owner = data.users;
+
+        if (owner) {
+          if (owner.custom_rate !== null && owner.custom_rate > 0) {
+            finalRate = owner.custom_rate;
+            finalProviderName = "Manual";
+          } else if (owner.utility_rates?.rate_per_kwh) {
+            finalRate = owner.utility_rates.rate_per_kwh;
+            finalProviderName = owner.utility_rates.provider_name;
+          }
+        }
+        setElectricityRate(finalRate);
+        setProviderName(finalProviderName);
+
+        // --- FETCH HISTORICAL DATA ---
+        const dateNow = new Date();
+        const year = dateNow.getFullYear();
+        const month = String(dateNow.getMonth() + 1).padStart(2, "0");
+        const day = String(dateNow.getDate()).padStart(2, "0");
+        const todayStr = `${year}-${month}-${day}`;
+
+        const { data: usageData, error: usageError } = await supabase
+          .from("usage_analytics")
+          .select("duration_minutes, cost_incurred")
+          .eq("device_id", data.id)
+          .eq("date", todayStr);
+
+        if (!usageError && usageData) {
+          const totalMins = usageData.reduce(
+            (sum, item) => sum + (item.duration_minutes || 0),
+            0,
+          );
+          const totalCostVal = usageData.reduce(
+            (sum, item) => sum + (item.cost_incurred || 0),
+            0,
+          );
+
+          setDbRuntimeMinutes(totalMins);
+          setTodayCost(totalCostVal);
+        }
+      }
+
+      setNow(Date.now());
+    } catch (error) {
+      console.log("Error fetching device:", error.message);
+    } finally {
+      if (isRefetch) setRefreshing(false);
+      setIsLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchDeviceData();
+    }, [deviceId]),
+  );
+
+  const getProviderLogo = (name) => {
+    if (!name) return null;
+    const normalizedName = name.toLowerCase();
+    let localImage = PROVIDER_LOGOS[normalizedName];
+    if (!localImage) {
+      const firstWord = normalizedName.split(/[\s(]/)[0];
+      localImage = PROVIDER_LOGOS[firstWord];
+    }
+    return localImage;
+  };
+
+  const providerLogoSource = getProviderLogo(providerName);
+
+  const getRuntimeString = () => {
+    if (!isHubOnline) return "---";
+    const totalMinutes = dbRuntimeMinutes + sessionMinutes;
+    if (totalMinutes < 1 && isPowered) return "< 1m Today";
+    if (totalMinutes < 1) return "0m Today";
+    const h = Math.floor(totalMinutes / 60);
+    const m = Math.floor(totalMinutes % 60);
+    if (h > 0) return `${h}h ${m}m Today`;
+    return `${m}m Today`;
+  };
+
+  // --- REALTIME SUBSCRIPTIONS ---
+  useEffect(() => {
+    let deviceSub;
+    let hubSub;
+    let usageSub; // <--- NEW LISTENER FOR COST
+    let mounted = true;
+
+    if (deviceId) {
+      // 1. Device Status Changes
+      deviceSub = supabase
+        .channel(`device_control_${deviceId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "devices",
+            filter: `id=eq.${deviceId}`,
+          },
+          (payload) => {
+            if (mounted && payload.new) {
+              if (
+                payload.new.status &&
+                payload.new.status !== payload.old.status
+              ) {
+                LayoutAnimation.configureNext(
+                  LayoutAnimation.Presets.easeInEaseOut,
+                );
+                setIsPowered(checkIsOn(payload.new.status));
+              } else if (payload.new.status) {
+                setIsPowered(checkIsOn(payload.new.status));
+              }
+
+              if (payload.new.current_power_watts !== undefined) {
+                setCurrentWatts(payload.new.current_power_watts);
+              }
+            }
+          },
+        )
+        .subscribe();
+
+      // 2. Usage/Cost Updates (From ESP32)
+      usageSub = supabase
+        .channel(`usage_tracking_${deviceId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*", // Listen for INSERT and UPDATE
+            schema: "public",
+            table: "usage_analytics",
+            filter: `device_id=eq.${deviceId}`,
+          },
+          (payload) => {
+            // When DB updates, fetch the fresh total cost
+            if (mounted) fetchDeviceData();
+          },
+        )
+        .subscribe();
+    }
+
+    if (hubId) {
+      hubSub = supabase
+        .channel(`hub_heartbeat_${hubId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "hubs",
+            filter: `id=eq.${hubId}`,
+          },
+          (payload) => {
+            if (mounted && payload.new) {
+              if (payload.new.last_seen) setHubLastSeen(payload.new.last_seen);
+              if (payload.new.current_voltage !== undefined) {
+                setCurrentVoltage(payload.new.current_voltage);
+              }
+              setNow(Date.now());
+            }
+          },
+        )
+        .subscribe();
+    }
+
+    const timer = setInterval(() => {
+      if (mounted) setNow(Date.now());
+    }, 1000);
 
     return () => {
-      if (subscription) supabase.removeChannel(subscription);
+      mounted = false;
+      clearInterval(timer);
+      if (deviceSub) supabase.removeChannel(deviceSub);
+      if (hubSub) supabase.removeChannel(hubSub);
+      if (usageSub) supabase.removeChannel(usageSub);
     };
-  }, [deviceId, deviceName]);
+  }, [deviceId, hubId]);
 
-  // --- ACTIONS ---
   const confirmToggle = async () => {
     if (!deviceId) return;
-
+    if (!isHubOnline) {
+      alert("Hub is offline. Cannot control device.");
+      return;
+    }
     setShowConfirm(false);
     setIsToggling(true);
-
     const newStatus = isPowered ? "off" : "on";
-
     try {
       const { error } = await supabase
         .from("devices")
         .update({ status: newStatus })
         .eq("id", deviceId);
-
       if (error) throw error;
-
-      // Optimistic update
       setIsPowered(!isPowered);
-      // Reset watts to 0 if turning off
       if (newStatus === "off") setCurrentWatts(0);
     } catch (error) {
       console.error("Error toggling device:", error);
@@ -191,20 +554,30 @@ export default function DeviceControlScreen() {
     }
   };
 
-  // --- CALCULATE COST (Estimated) ---
-  // Assuming approx 12 pesos per kWh
-  const estCostPerHour = (currentWatts / 1000) * 12;
+  const statusIcon = isHubOnline
+    ? isPowered
+      ? "power"
+      : "power-off"
+    : "wifi-off";
+  const statusTitle = isHubOnline
+    ? isPowered
+      ? "Power ON"
+      : "Standby"
+    : "Hub Offline";
+  const statusSubtitle = isHubOnline
+    ? `${deviceName} is ${isPowered ? "running" : "idle"}`
+    : "Device unreachable";
 
-  // --- UI HELPERS ---
-  const gradientColors = isPowered
-    ? [theme.buttonPrimary, theme.background]
-    : isDarkMode
-      ? ["#2c3e50", theme.background]
-      : ["#94a3b8", theme.background];
+  const gradientColors = !isHubOnline
+    ? ["#666666", theme.background]
+    : isPowered
+      ? [theme.buttonPrimary, theme.background]
+      : isDarkMode
+        ? ["#2c3e50", theme.background]
+        : ["#94a3b8", theme.background];
 
-  const activeColor = theme.buttonPrimary;
+  const activeColor = !isHubOnline ? "#666" : theme.buttonPrimary;
 
-  // --- STYLES ---
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
     headerOverlay: {
@@ -215,6 +588,11 @@ export default function DeviceControlScreen() {
       zIndex: 10,
       flexDirection: "row",
       justifyContent: "space-between",
+      alignItems: "center",
+    },
+    heroContainer: {
+      paddingTop: 110,
+      paddingBottom: 25,
       alignItems: "center",
     },
     card: {
@@ -238,13 +616,15 @@ export default function DeviceControlScreen() {
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 4,
-      borderColor: isPowered ? `${activeColor}40` : theme.cardBorder,
-      backgroundColor: isPowered ? activeColor : theme.card,
-      shadowColor: isPowered ? activeColor : "#000",
+      borderColor:
+        isPowered && isHubOnline ? `${activeColor}40` : theme.cardBorder,
+      backgroundColor: isPowered && isHubOnline ? activeColor : theme.card,
+      shadowColor: isPowered && isHubOnline ? activeColor : "#000",
       shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: isPowered ? 0.6 : 0.1,
+      shadowOpacity: isPowered && isHubOnline ? 0.6 : 0.1,
       shadowRadius: 20,
       elevation: 10,
+      opacity: isHubOnline ? 1 : 0.5,
     },
     modalOverlay: {
       flex: 1,
@@ -320,9 +700,16 @@ export default function DeviceControlScreen() {
   };
 
   const saveSchedule = () => {
+    let h = parseInt(schedHour, 10);
+    const m = schedMinute;
+    if (schedAmPm === "PM" && h < 12) h += 12;
+    if (schedAmPm === "AM" && h === 12) h = 0;
+    const hStr = h.toString().padStart(2, "0");
+    const mStr = m.toString().padStart(2, "0");
+    const time24 = `${hStr}:${mStr}`;
     const newSchedule = {
       id: Date.now().toString(),
-      time: scheduleTime,
+      time: time24,
       days: selectedDays,
       action: isActionOn,
       active: true,
@@ -361,7 +748,13 @@ export default function DeviceControlScreen() {
 
       <View style={styles.headerOverlay}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate("MainApp");
+            }
+          }}
           style={{
             padding: 4,
             backgroundColor: "rgba(0,0,0,0.2)",
@@ -381,265 +774,343 @@ export default function DeviceControlScreen() {
         </TouchableOpacity>
       </View>
 
-      <LinearGradient
-        colors={gradientColors}
-        style={{ paddingTop: 110, paddingBottom: 25, alignItems: "center" }}
-      >
-        <View
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: 40,
-            backgroundColor: "rgba(0,0,0,0.2)",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 10,
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.2)",
-          }}
-        >
-          <MaterialIcons
-            name={isPowered ? "power" : "power-off"}
-            size={40}
-            color="#fff"
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchDeviceData(true)}
+            tintColor={theme.textSecondary}
+            colors={[theme.buttonPrimary]}
           />
-        </View>
-        <Text
-          style={{
-            fontSize: scaledSize(28),
-            fontWeight: "bold",
-            color: isDarkMode ? "#fff" : isPowered ? "#fff" : theme.text,
-            marginBottom: 2,
-          }}
-        >
-          {isPowered ? "Power ON" : "Standby"}
-        </Text>
-        <Text
-          style={{
-            fontSize: scaledSize(14),
-            color: isDarkMode
-              ? "rgba(255,255,255,0.7)"
-              : isPowered
-                ? "rgba(255,255,255,0.9)"
-                : theme.textSecondary,
-          }}
-        >
-          {deviceName} is {isPowered ? "running" : "idle"}
-        </Text>
-      </LinearGradient>
-
-      <ScrollView contentContainerStyle={{ padding: 24 }}>
-        <View style={styles.card}>
+        }
+      >
+        <LinearGradient colors={gradientColors} style={styles.heroContainer}>
+          <View
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: 40,
+              backgroundColor: "rgba(0,0,0,0.2)",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 10,
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.2)",
+            }}
+          >
+            {isHubOnline && (
+              <Animated.View
+                style={{
+                  position: "absolute",
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: 9999,
+                  borderWidth: 1,
+                  borderColor: "rgba(255,255,255,0.5)",
+                  transform: [{ scale: pulseScale }],
+                  opacity: pulseOpacity,
+                }}
+              />
+            )}
+            <MaterialIcons name={statusIcon} size={40} color="#fff" />
+          </View>
           <Text
-            style={[
-              styles.detailLabel,
-              {
+            style={{
+              fontSize: scaledSize(28),
+              fontWeight: "bold",
+              color: isDarkMode
+                ? "#fff"
+                : isPowered || !isHubOnline
+                  ? "#fff"
+                  : theme.text,
+              marginBottom: 2,
+            }}
+          >
+            {statusTitle}
+          </Text>
+          <Text
+            style={{
+              fontSize: scaledSize(14),
+              color: isDarkMode
+                ? "rgba(255,255,255,0.7)"
+                : isPowered || !isHubOnline
+                  ? "rgba(255,255,255,0.9)"
+                  : theme.textSecondary,
+            }}
+          >
+            {statusSubtitle}
+          </Text>
+        </LinearGradient>
+
+        <View style={{ padding: 24 }}>
+          <View style={styles.card}>
+            <Text
+              style={[
+                styles.detailLabel,
+                {
+                  marginBottom: 12,
+                  fontWeight: "bold",
+                  textTransform: "uppercase",
+                },
+              ]}
+            >
+              Real-time Metrics
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
                 marginBottom: 12,
+              }}
+            >
+              <View>
+                <Text style={styles.detailLabel}>Current Load</Text>
+                <Text style={styles.detailValue}>
+                  {displayWatts.toFixed(1)} W
+                </Text>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={styles.detailLabel}>Voltage</Text>
+                <Text style={styles.detailValue}>{displayVolts}</Text>
+              </View>
+            </View>
+            <View
+              style={{
+                height: 1,
+                backgroundColor: theme.cardBorder,
+                marginVertical: 12,
+              }}
+            />
+            <View
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
+            >
+              <View>
+                <Text style={styles.detailLabel}>Est. Cost/Hr</Text>
+                <Text
+                  style={[
+                    styles.detailValue,
+                    {
+                      color: isHubOnline
+                        ? theme.buttonPrimary
+                        : theme.textSecondary,
+                    },
+                  ]}
+                >
+                  ₱ {estCostPerHour.toFixed(2)}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => navigation.navigate("ProviderSetup")}
+                style={{ alignItems: "flex-end" }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    marginBottom: 2,
+                  }}
+                >
+                  {providerLogoSource && (
+                    <View
+                      style={{
+                        width: 20,
+                        height: 20,
+                        backgroundColor: "#fff",
+                        borderRadius: 4,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        overflow: "hidden",
+                        borderWidth: 1,
+                        borderColor: "#eee",
+                      }}
+                    >
+                      <Image
+                        source={providerLogoSource}
+                        style={{ width: "80%", height: "80%" }}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  )}
+                  <Text style={styles.detailLabel}>Rate</Text>
+                  <MaterialIcons
+                    name="chevron-right"
+                    size={14}
+                    color={theme.textSecondary}
+                  />
+                </View>
+                <Text style={styles.detailValue}>
+                  ₱ {electricityRate.toFixed(2)}/kWh
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 12, marginBottom: 30 }}>
+            <View
+              style={[
+                styles.card,
+                { flex: 1, marginBottom: 0, alignItems: "center" },
+              ]}
+            >
+              <MaterialIcons
+                name="timer"
+                size={20}
+                color={theme.textSecondary}
+                style={{ marginBottom: 8 }}
+              />
+              <Text style={styles.detailLabel}>Runtime</Text>
+              <Text style={styles.detailValue}>{getRuntimeString()}</Text>
+            </View>
+            <View
+              style={[
+                styles.card,
+                { flex: 1, marginBottom: 0, alignItems: "center" },
+              ]}
+            >
+              <MaterialIcons
+                name="attach-money"
+                size={20}
+                color={theme.textSecondary}
+                style={{ marginBottom: 8 }}
+              />
+              <Text style={styles.detailLabel}>Today's Cost</Text>
+              <Text style={styles.detailValue}>₱ {todayCost.toFixed(4)}</Text>
+            </View>
+          </View>
+
+          <View style={{ alignItems: "center", marginBottom: 30 }}>
+            <TouchableOpacity
+              style={styles.powerBtn}
+              onPress={() => setShowConfirm(true)}
+              activeOpacity={0.9}
+              disabled={!isHubOnline}
+            >
+              <MaterialIcons
+                name="power-settings-new"
+                size={40}
+                color={isPowered && isHubOnline ? "#fff" : theme.textSecondary}
+              />
+            </TouchableOpacity>
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: scaledSize(12),
                 fontWeight: "bold",
                 textTransform: "uppercase",
-              },
-            ]}
-          >
-            Real-time Metrics
-          </Text>
+                letterSpacing: 1.5,
+                color: theme.textSecondary,
+              }}
+            >
+              {!isHubOnline
+                ? "Controls Unavailable"
+                : isPowered
+                  ? "Tap to Cut Power"
+                  : "Tap to Restore Power"}
+            </Text>
+          </View>
+
           <View
             style={{
               flexDirection: "row",
               justifyContent: "space-between",
+              alignItems: "center",
               marginBottom: 12,
             }}
           >
-            <View>
-              <Text style={styles.detailLabel}>Current Load</Text>
-              {/* --- UPDATED: Shows Real Watts from Database --- */}
-              <Text style={styles.detailValue}>
-                {isPowered ? `${currentWatts.toFixed(1)} W` : "0 W"}
-              </Text>
-            </View>
-            <View style={{ alignItems: "flex-end" }}>
-              <Text style={styles.detailLabel}>Voltage</Text>
-              <Text style={styles.detailValue}>220.0 V</Text>
-            </View>
-          </View>
-          <View
-            style={{
-              height: 1,
-              backgroundColor: theme.cardBorder,
-              marginVertical: 12,
-            }}
-          />
-          <View
-            style={{ flexDirection: "row", justifyContent: "space-between" }}
-          >
-            <View>
-              <Text style={styles.detailLabel}>Est. Cost/Hr</Text>
-              {/* --- UPDATED: Calculates cost based on Real Watts --- */}
-              <Text
-                style={[styles.detailValue, { color: theme.buttonPrimary }]}
-              >
-                {isPowered ? `₱ ${estCostPerHour.toFixed(2)}` : "₱ 0.00"}
-              </Text>
-            </View>
-            <View style={{ alignItems: "flex-end" }}>
-              <Text style={styles.detailLabel}>Daily Usage</Text>
-              <Text style={styles.detailValue}>-- kWh</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ... Rest of UI (Runtime, Wifi, Power Button, Schedule) ... */}
-        {/* KEPT EXACTLY THE SAME AS YOUR ORIGINAL CODE BELOW */}
-
-        <View style={{ flexDirection: "row", gap: 12, marginBottom: 30 }}>
-          <View
-            style={[
-              styles.card,
-              { flex: 1, marginBottom: 0, alignItems: "center" },
-            ]}
-          >
-            <MaterialIcons
-              name="timer"
-              size={20}
-              color={theme.textSecondary}
-              style={{ marginBottom: 8 }}
-            />
-            <Text style={styles.detailLabel}>Runtime</Text>
-            <Text style={styles.detailValue}>
-              {isPowered ? "Active" : "---"}
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.card,
-              { flex: 1, marginBottom: 0, alignItems: "center" },
-            ]}
-          >
-            <MaterialIcons
-              name="wifi"
-              size={20}
-              color={theme.textSecondary}
-              style={{ marginBottom: 8 }}
-            />
-            <Text style={styles.detailLabel}>Signal</Text>
-            <Text style={styles.detailValue}>Strong</Text>
-          </View>
-        </View>
-
-        <View style={{ alignItems: "center", marginBottom: 30 }}>
-          <TouchableOpacity
-            style={styles.powerBtn}
-            onPress={() => setShowConfirm(true)}
-            activeOpacity={0.9}
-          >
-            <MaterialIcons
-              name="power-settings-new"
-              size={40}
-              color={isPowered ? "#fff" : theme.textSecondary}
-            />
-          </TouchableOpacity>
-          <Text
-            style={{
-              marginTop: 12,
-              fontSize: scaledSize(12),
-              fontWeight: "bold",
-              textTransform: "uppercase",
-              letterSpacing: 1.5,
-              color: theme.textSecondary,
-            }}
-          >
-            {isPowered ? "Tap to Cut Power" : "Tap to Restore Power"}
-          </Text>
-        </View>
-
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 12,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: scaledSize(12),
-              fontWeight: "bold",
-              textTransform: "uppercase",
-              letterSpacing: 1,
-              color: theme.textSecondary,
-            }}
-          >
-            Upcoming Schedules
-          </Text>
-          <TouchableOpacity onPress={() => setShowSchedule(true)}>
             <Text
               style={{
-                color: theme.buttonPrimary,
-                fontWeight: "bold",
                 fontSize: scaledSize(12),
+                fontWeight: "bold",
+                textTransform: "uppercase",
+                letterSpacing: 1,
+                color: theme.textSecondary,
               }}
             >
-              + Add New
+              Upcoming Schedules
             </Text>
-          </TouchableOpacity>
-        </View>
-
-        {schedules.map((item) => (
-          <View
-            key={item.id}
-            style={[
-              styles.card,
-              {
-                marginBottom: 10,
-                padding: 16,
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-              },
-            ]}
-          >
-            <View>
-              <View
+            <TouchableOpacity onPress={() => setShowSchedule(true)}>
+              <Text
                 style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: 4,
+                  color: theme.buttonPrimary,
+                  fontWeight: "bold",
+                  fontSize: scaledSize(12),
                 }}
               >
-                <MaterialIcons
-                  name="schedule"
-                  size={16}
-                  color={theme.textSecondary}
-                  style={{ marginRight: 6 }}
-                />
-                <Text
+                + Add New
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {schedules.map((item) => (
+            <View
+              key={item.id}
+              style={[
+                styles.card,
+                {
+                  marginBottom: 10,
+                  padding: 16,
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                },
+              ]}
+            >
+              <View>
+                <View
                   style={{
-                    fontSize: scaledSize(18),
-                    fontWeight: "bold",
-                    color: theme.text,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 4,
                   }}
                 >
-                  {item.time}
+                  <MaterialIcons
+                    name="schedule"
+                    size={16}
+                    color={theme.textSecondary}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={{
+                      fontSize: scaledSize(18),
+                      fontWeight: "bold",
+                      color: theme.text,
+                    }}
+                  >
+                    {formatTime12h(item.time)}
+                  </Text>
+                </View>
+                <Text
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(12),
+                  }}
+                >
+                  {item.action ? "Auto-ON" : "Auto-OFF"} •{" "}
+                  {item.days.every((d) => d) ? "Everyday" : "Custom"}
                 </Text>
               </View>
-              <Text
-                style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
-              >
-                {item.action ? "Auto-ON" : "Auto-OFF"} •{" "}
-                {item.days.every((d) => d) ? "Everyday" : "Custom"}
-              </Text>
+              <CustomSwitch
+                value={item.active}
+                onToggle={() => toggleScheduleActive(item.id)}
+                theme={theme}
+              />
             </View>
-            <CustomSwitch
-              value={item.active}
-              onToggle={() => toggleScheduleActive(item.id)}
-              theme={theme}
-            />
-          </View>
-        ))}
-        <View style={{ height: 40 }} />
+          ))}
+          <View style={{ height: 40 }} />
+        </View>
       </ScrollView>
 
-      {/* MODALS AND LOADERS */}
-      <Modal visible={showConfirm} transparent animationType="fade">
+      {/* MODAL: POWER CONFIRM */}
+      <Modal
+        visible={showConfirm}
+        transparent
+        animationType="fade"
+        statusBarTranslucent={true}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <Text style={styles.modalTitle}>
@@ -688,12 +1159,25 @@ export default function DeviceControlScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showSchedule} transparent animationType="fade">
+      {/* MODAL: SCHEDULE */}
+      <Modal
+        visible={showSchedule}
+        transparent
+        animationType="fade"
+        statusBarTranslucent={true}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <Text style={styles.modalTitle}>Set Schedule</Text>
+
             <View
-              style={{ marginBottom: 20, width: "100%", alignItems: "center" }}
+              style={{
+                marginBottom: 20,
+                width: "100%",
+                flexDirection: "row",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
             >
               <TextInput
                 style={{
@@ -704,16 +1188,77 @@ export default function DeviceControlScreen() {
                   borderBottomWidth: 1,
                   borderBottomColor: theme.cardBorder,
                   paddingBottom: 8,
-                  minWidth: 120,
+                  minWidth: 50,
                 }}
-                value={scheduleTime}
-                onChangeText={setScheduleTime}
-                keyboardType="numeric"
-                maxLength={5}
-                placeholder="00:00"
+                value={schedHour}
+                onChangeText={(t) => {
+                  const clean = t.replace(/[^0-9]/g, "");
+                  if (parseInt(clean) > 12) return;
+                  setSchedHour(clean);
+                }}
+                keyboardType="number-pad"
+                maxLength={2}
+                placeholder="07"
                 placeholderTextColor={theme.textSecondary}
               />
+
+              <Text
+                style={{
+                  fontSize: scaledSize(32),
+                  fontWeight: "bold",
+                  color: theme.text,
+                  marginHorizontal: 5,
+                  paddingBottom: 8,
+                }}
+              >
+                :
+              </Text>
+
+              <TextInput
+                style={{
+                  fontSize: scaledSize(32),
+                  fontWeight: "bold",
+                  color: theme.text,
+                  textAlign: "center",
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.cardBorder,
+                  paddingBottom: 8,
+                  minWidth: 50,
+                }}
+                value={schedMinute}
+                onChangeText={(t) => {
+                  const clean = t.replace(/[^0-9]/g, "");
+                  if (parseInt(clean) > 59) return;
+                  setSchedMinute(clean);
+                }}
+                keyboardType="number-pad"
+                maxLength={2}
+                placeholder="00"
+                placeholderTextColor={theme.textSecondary}
+              />
+
+              <TouchableOpacity
+                onPress={() => setSchedAmPm((p) => (p === "AM" ? "PM" : "AM"))}
+                style={{
+                  marginLeft: 10,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  backgroundColor: theme.buttonNeutral,
+                  borderRadius: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: scaledSize(16),
+                    fontWeight: "bold",
+                    color: theme.buttonPrimary,
+                  }}
+                >
+                  {schedAmPm}
+                </Text>
+              </TouchableOpacity>
             </View>
+
             <View
               style={{
                 flexDirection: "row",

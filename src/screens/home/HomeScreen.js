@@ -1,4 +1,11 @@
-import React, { useRef, useEffect, useState, useMemo, forwardRef } from "react";
+import React, {
+  useRef,
+  useEffect,
+  useState,
+  useMemo,
+  forwardRef,
+  useCallback,
+} from "react";
 import {
   View,
   Text,
@@ -13,6 +20,8 @@ import {
   Platform,
   LayoutAnimation,
   UIManager,
+  RefreshControl,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -30,7 +39,7 @@ if (
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// ... (Static Data remains the same)
+// --- STATIC DATA ---
 const SHARED_HUBS = [
   {
     id: "hub3",
@@ -42,10 +51,12 @@ const SHARED_HUBS = [
     icon: "garage",
     totalSpending: 320.0,
     budgetLimit: 5000.0,
+    currentVoltage: 0.0, // FIXED: Default to 0V
     devices: [],
   },
 ];
 
+// --- TOUR STEPS ---
 const TOUR_STEPS = [
   {
     id: "welcome",
@@ -62,6 +73,15 @@ const TOUR_STEPS = [
     description:
       "Access settings, hub configuration, and account management here.",
     target: "menuRef",
+    shape: "circle",
+  },
+  {
+    id: "notifications",
+    type: "highlight",
+    title: "Notifications",
+    description:
+      "Stay updated with alerts about your energy usage, budget limits, and system status.",
+    target: "notifRef",
     shape: "circle",
   },
   {
@@ -82,6 +102,15 @@ const TOUR_STEPS = [
     target: "budgetRef",
     shape: "card",
   },
+  {
+    id: "hubs",
+    type: "highlight",
+    title: "Hub Selection",
+    description:
+      "Filter your dashboard by specific hubs or view all connected devices at once.",
+    target: "hubsRef",
+    shape: "rect",
+  },
 ];
 
 export default function HomeScreen() {
@@ -91,17 +120,37 @@ export default function HomeScreen() {
   const scaledSize = (size) => size * (fontScale || 1);
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  // --- LOADING STATES ---
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // --- TOUR STATE ---
   const [tourStepIndex, setTourStepIndex] = useState(-1);
   const [activeLayout, setActiveLayout] = useState(null);
 
-  // --- STATE ---
+  // --- APP STATE ---
   const [activeTab, setActiveTab] = useState("personal");
   const [activeHubFilter, setActiveHubFilter] = useState("all");
   const [unreadCount, setUnreadCount] = useState(0);
-  const [personalHubs, setPersonalHubs] = useState([]); // Real Hubs Data
+  const [userRate, setUserRate] = useState(12.0); // Default Rate
 
-  // --- NEW REF: PREVENT INFINITE REDIRECT LOOP ---
+  // --- DATA STATE ---
+  const [rawHubs, setRawHubs] = useState([]);
+  const [personalHubs, setPersonalHubs] = useState([]);
+  const [now, setNow] = useState(Date.now());
+
+  // --- MODAL STATE FOR UNUSED ---
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [selectedHubId, setSelectedHubId] = useState(null);
+
+  // --- DATA DERIVATION ---
+  const sourceData = activeTab === "personal" ? personalHubs : SHARED_HUBS;
+  const displayData =
+    activeHubFilter === "all"
+      ? sourceData
+      : sourceData.filter((h) => h.id === activeHubFilter);
+
   const hasRedirected = useRef(false);
 
   // --- REFS ---
@@ -109,15 +158,16 @@ export default function HomeScreen() {
   const notifRef = useRef(null);
   const budgetRef = useRef(null);
   const toggleRef = useRef(null);
+  const hubsRef = useRef(null);
 
   // Colors
   const primaryColor = isDarkMode ? theme.buttonPrimary : "#00995e";
   const dangerColor = isDarkMode ? theme.buttonDangerText : "#cc0000";
   const warningColor = isDarkMode ? "#ffaa00" : "#ff9900";
 
-  // --- 1. FETCH REAL HUBS & DEVICES ---
-  const fetchHubs = async () => {
-    console.log("--- HOME SCREEN FETCHING ---");
+  // --- 1. FETCH DATA ---
+  const fetchHubs = async (isRefetch = false) => {
+    if (!isRefetch && rawHubs.length === 0) setIsLoading(true);
 
     try {
       const {
@@ -125,107 +175,174 @@ export default function HomeScreen() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      // QUERY: Select Hubs AND join Devices
-      const { data, error } = await supabase
-        .from("hubs")
+      // A. Fetch User Rate
+      const { data: userData } = await supabase
+        .from("users")
         .select(
           `
-          *,
-          devices (*)
+          custom_rate,
+          utility_rates ( rate_per_kwh )
         `,
         )
+        .eq("id", user.id)
+        .single();
+
+      let finalRate = 12.0;
+      if (userData) {
+        if (userData.custom_rate) finalRate = userData.custom_rate;
+        else if (userData.utility_rates?.rate_per_kwh)
+          finalRate = userData.utility_rates.rate_per_kwh;
+      }
+      setUserRate(finalRate);
+
+      // B. Fetch Hubs & Devices
+      const { data, error } = await supabase
+        .from("hubs")
+        .select(`*, devices (*)`)
         .eq("user_id", user.id);
 
       if (error) throw error;
 
-      // ============================================================
-      // --- LOGIC: REDIRECT ONLY ONCE PER SESSION ---
-      // ============================================================
       if (!data || data.length === 0) {
         setIsLoading(false);
-
         if (!hasRedirected.current) {
-          console.log("First load with 0 hubs. Redirecting to SetupHub...");
           hasRedirected.current = true;
           navigation.navigate("SetupHub");
           return;
         }
       }
-      // ============================================================
 
-      // Transform Data
-      const formattedHubs = (data || []).map((hub) => {
-        const deviceList = hub.devices || [];
-
-        const activeCount = deviceList.filter(
-          (d) => d.status && d.status.toLowerCase() === "on",
-        ).length;
-
-        return {
-          id: hub.id,
-          name: hub.name,
-          owner: "Me",
-          total: deviceList.length,
-          active: activeCount,
-          icon: hub.icon || "router",
-          totalSpending: 0,
-          budgetLimit: 0,
-          devices: deviceList.map((d) => {
-            const isOn = d.status && d.status.toLowerCase() === "on";
-
-            return {
-              id: d.id,
-              name: d.name,
-              cost: isOn ? "Active" : "Standby",
-              watts: d.current_power_watts
-                ? `${d.current_power_watts} W`
-                : "0 W",
-              icon: d.icon || "power",
-              type: isOn ? "normal" : "off",
-              tag: d.outlet_number ? `Outlet ${d.outlet_number}` : "DEVICE",
-              status: d.status,
-            };
-          }),
-        };
-      });
-
-      setPersonalHubs(formattedHubs);
+      setRawHubs(data || []);
     } catch (error) {
       console.log("Error fetching hubs:", error.message);
     } finally {
       setIsLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // Fetch on focus
-  useEffect(() => {
-    if (isFocused) {
-      fetchHubs();
-    }
-  }, [isFocused]);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchHubs(true);
+    setRefreshing(false);
+  }, []);
 
-  // Realtime Subscription
+  // --- 2. TRANSFORM DATA ---
   useEffect(() => {
+    const formattedHubs = rawHubs.map((hub) => {
+      // Check Online Status (90s Buffer)
+      let isHubOnline = false;
+      if (hub.last_seen) {
+        let timeStr = hub.last_seen.replace(" ", "T");
+        if (!timeStr.endsWith("Z") && !timeStr.includes("+")) timeStr += "Z";
+        const lastSeenMs = new Date(timeStr).getTime();
+
+        if (!isNaN(lastSeenMs)) {
+          const diffSeconds = (now - lastSeenMs) / 1000;
+          isHubOnline = diffSeconds < 90;
+        }
+      }
+
+      // Sort Devices
+      const deviceList = (hub.devices || []).sort(
+        (a, b) => (a.outlet_number || 0) - (b.outlet_number || 0),
+      );
+
+      const activeCount = deviceList.filter(
+        (d) => d.status && d.status.toLowerCase() === "on",
+      ).length;
+
+      // [FIX] Determine Hub Voltage
+      // 1. Get raw from DB or default to 0 (NOT 220)
+      const rawVoltage = hub.current_voltage ? Number(hub.current_voltage) : 0;
+      // 2. Force 0 if Offline
+      const hubVoltage = isHubOnline ? rawVoltage : 0;
+
+      return {
+        id: hub.id,
+        serial: hub.serial_number,
+        name: hub.name,
+        owner: "Me",
+        total: deviceList.length,
+        active: isHubOnline ? activeCount : 0,
+        icon: hub.icon || "router",
+        totalSpending: 0,
+        budgetLimit: 0,
+        currentVoltage: hubVoltage,
+        devices: deviceList.map((d) => {
+          // Offline State
+          if (!isHubOnline) {
+            return {
+              id: d.id,
+              name: d.name,
+              statusText: "Offline",
+              watts: "---",
+              volts: "0 V",
+              costPerHr: "---",
+              icon: "wifi-off",
+              type: "off",
+              tag: d.outlet_number ? `Outlet ${d.outlet_number}` : "DEVICE",
+              status: "offline",
+              dbType: d.type,
+            };
+          }
+
+          // Online State
+          const isOn = d.status && d.status.toLowerCase() === "on";
+          const isUnused = d.type === "Unused";
+          const watts = d.current_power_watts || 0;
+          const costPerHour = (watts / 1000) * userRate;
+
+          return {
+            id: d.id,
+            name: d.name,
+            statusText: isUnused
+              ? "Not Configured"
+              : isOn
+                ? "Active"
+                : "Standby",
+            watts: isUnused ? "---" : `${watts.toFixed(1)} W`,
+            volts: isUnused ? "0 V" : `${hubVoltage.toFixed(1)} V`,
+            costPerHr: isUnused ? "---" : `₱ ${costPerHour.toFixed(2)} / hr`,
+            icon: d.icon || "power",
+            type: isUnused ? "off" : isOn ? "normal" : "off",
+            tag: d.outlet_number ? `Outlet ${d.outlet_number}` : "DEVICE",
+            status: d.status,
+            dbType: d.type, // For logic check
+          };
+        }),
+      };
+    });
+
+    setPersonalHubs(formattedHubs);
+  }, [rawHubs, now, userRate]);
+
+  // --- 3. TIMERS ---
+  useEffect(() => {
+    if (isFocused) fetchHubs();
+    const timer = setInterval(() => setNow(Date.now()), 2000);
+
     const channel = supabase
       .channel("home_combined_realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "hubs" },
-        () => fetchHubs(),
+        () => fetchHubs(true),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "devices" },
-        () => fetchHubs(),
+        () => fetchHubs(true),
       )
       .subscribe();
 
     return () => {
+      clearInterval(timer);
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [isFocused]);
 
-  // --- 2. NOTIFICATION LISTENER ---
+  // --- 4. NOTIF COUNT ---
   useEffect(() => {
     let subscription;
     const fetchUnreadCount = async () => {
@@ -268,46 +385,8 @@ export default function HomeScreen() {
     };
   }, [isFocused]);
 
-  // --- FILTER LOGIC ---
-  useEffect(() => {
-    setActiveHubFilter("all");
-  }, [activeTab]);
-
-  const sourceData = activeTab === "personal" ? personalHubs : SHARED_HUBS;
-  const displayData =
-    activeHubFilter === "all"
-      ? sourceData
-      : sourceData.filter((h) => h.id === activeHubFilter);
-
-  // --- STATIC BUDGET DATA ---
-  const summaryData = useMemo(() => {
-    return {
-      spending: 850.5,
-      limit: 1200.0,
-      title: "Total Spending",
-      indicator: "All Hubs",
-    };
-  }, []);
-
-  const percentage = Math.min(
-    summaryData.limit > 0
-      ? (summaryData.spending / summaryData.limit) * 100
-      : 0,
-    100,
-  );
-  let progressBarColor = primaryColor;
-  if (percentage >= 90) progressBarColor = dangerColor;
-  else if (percentage >= 75) progressBarColor = warningColor;
-
-  const textColor = progressBarColor;
-
-  // --- TOUR LOGIC ---
-  const refMap = {
-    menuRef,
-    notifRef,
-    budgetRef,
-    toggleRef,
-  };
+  // --- 5. TOUR LOGIC ---
+  const refMap = { menuRef, notifRef, budgetRef, toggleRef, hubsRef };
 
   useEffect(() => {
     checkTourStatus();
@@ -326,7 +405,6 @@ export default function HomeScreen() {
     setTourStepIndex(-1);
     setActiveLayout(null);
     await AsyncStorage.setItem("hasSeenHomeTour", "true");
-    setTimeout(() => navigation.navigate("DndCheck"), 500);
   };
 
   const handleResetTour = async () => {
@@ -370,6 +448,7 @@ export default function HomeScreen() {
     }
   };
 
+  // --- HANDLERS ---
   const handleHubSelect = (hubId) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setActiveHubFilter(hubId);
@@ -380,8 +459,6 @@ export default function HomeScreen() {
     setActiveTab(scope);
     setActiveHubFilter("all");
   };
-
-  // --- FULL SCREEN LOADER REMOVED FOR "INSTANT FEEL" ---
 
   // --- RENDER HELPERS ---
   const renderHubSummary = (hub) => (
@@ -415,7 +492,8 @@ export default function HomeScreen() {
           <Text
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
           >
-            {hub.active}/{hub.total} Devices Active
+            {hub.active}/{hub.total} Devices Active •{" "}
+            {hub.currentVoltage.toFixed(0)}V
           </Text>
         </View>
         <MaterialIcons
@@ -436,24 +514,27 @@ export default function HomeScreen() {
         >
           {hub.name} Devices
         </Text>
-        {activeTab === "shared" && (
+        <View className="flex-row items-center gap-2">
+          {/* Show Hub Voltage here as well */}
           <View
-            className="px-2 py-1 rounded-md flex-row items-center"
-            style={{ backgroundColor: theme.buttonNeutral }}
+            style={{
+              backgroundColor: theme.buttonNeutral,
+              paddingHorizontal: 6,
+              paddingVertical: 2,
+              borderRadius: 4,
+            }}
           >
-            <MaterialIcons
-              name="person"
-              size={12}
-              color={theme.text}
-              style={{ marginRight: 4 }}
-            />
             <Text
-              style={{ color: theme.text, fontSize: 10, fontWeight: "bold" }}
+              style={{
+                color: theme.textSecondary,
+                fontSize: 10,
+                fontWeight: "bold",
+              }}
             >
-              {hub.owner} • {hub.permission}
+              {hub.currentVoltage.toFixed(1)} V
             </Text>
           </View>
-        )}
+        </View>
       </View>
       <View>
         {hub.devices.length === 0 ? (
@@ -469,11 +550,16 @@ export default function HomeScreen() {
               isDarkMode={isDarkMode}
               scaledSize={scaledSize}
               onPress={() => {
-                navigation.navigate("DeviceControl", {
-                  deviceName: device.name,
-                  status: device.status,
-                  deviceId: device.id,
-                });
+                if (device.dbType === "Unused") {
+                  setSelectedHubId(hub.serial || hub.id);
+                  setShowConfigModal(true);
+                } else {
+                  navigation.navigate("DeviceControl", {
+                    deviceName: device.name,
+                    status: device.status,
+                    deviceId: device.id,
+                  });
+                }
               }}
             />
           ))
@@ -481,6 +567,26 @@ export default function HomeScreen() {
       </View>
     </View>
   );
+
+  // --- BUDGET DATA ---
+  const summaryData = useMemo(() => {
+    return {
+      spending: 850.5,
+      limit: 1200.0,
+      title: "Total Spending",
+      indicator: "All Hubs",
+    };
+  }, []);
+
+  const percentage = Math.min(
+    summaryData.limit > 0
+      ? (summaryData.spending / summaryData.limit) * 100
+      : 0,
+    100,
+  );
+  let progressBarColor = primaryColor;
+  if (percentage >= 90) progressBarColor = dangerColor;
+  else if (percentage >= 75) progressBarColor = warningColor;
 
   return (
     <SafeAreaView
@@ -493,7 +599,7 @@ export default function HomeScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- HEADER (ALWAYS VISIBLE) --- */}
+      {/* --- HEADER --- */}
       <View
         className="flex-row justify-between items-center px-6 py-5"
         style={{ backgroundColor: theme.background }}
@@ -506,6 +612,7 @@ export default function HomeScreen() {
           <MaterialIcons name="menu" size={28} color={theme.textSecondary} />
         </TouchableOpacity>
 
+        {/* TAP LOGO TO RESTART TOUR */}
         <TouchableOpacity onPress={handleResetTour}>
           <Image
             source={require("../../../assets/GridWatch-logo.png")}
@@ -541,6 +648,14 @@ export default function HomeScreen() {
         contentContainerClassName="pb-24"
         showsVerticalScrollIndicator={false}
         stickyHeaderIndices={[1]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.textSecondary}
+            colors={[theme.buttonPrimary]}
+          />
+        }
       >
         <View className="mb-2" />
 
@@ -717,7 +832,7 @@ export default function HomeScreen() {
                 <View className="flex-row justify-between mb-1.5">
                   <Text
                     className="font-medium"
-                    style={{ color: textColor, fontSize: theme.font.xs }}
+                    style={{ color: progressBarColor, fontSize: theme.font.xs }}
                   >
                     {percentage.toFixed(0)}% Used
                   </Text>
@@ -783,7 +898,7 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* --- 3. HUB FILTER --- */}
-        <View style={{ marginBottom: 20 }}>
+        <View ref={hubsRef} style={{ marginBottom: 20 }}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -851,9 +966,8 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
 
-        {/* --- 4. CONTENT LIST (WITH LOADING SPINNER INSIDE) --- */}
+        {/* --- 4. CONTENT LIST --- */}
         <View className="px-6 pb-6">
-          {/* LOADING STATE - Only affects the list part */}
           {isLoading ? (
             <View className="py-12 items-center">
               <ActivityIndicator size="small" color={theme.textSecondary} />
@@ -898,7 +1012,6 @@ export default function HomeScreen() {
                   )}
                 </View>
               ) : (
-                // Detail View (Devices)
                 <View>
                   {displayData.length > 0 ? (
                     displayData.map((hub) => renderHubDetail(hub))
@@ -944,11 +1057,58 @@ export default function HomeScreen() {
           scaledSize={scaledSize}
         />
       )}
+
+      {/* FIXED MODAL PLACEMENT - PREVENTS FLICKERING */}
+      <Modal transparent visible={showConfigModal} animationType="fade">
+        <View style={homeStyles.modalOverlay}>
+          <View
+            style={[
+              homeStyles.modalContent,
+              { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            ]}
+          >
+            <Text style={[homeStyles.modalTitle, { color: theme.text }]}>
+              Outlet Not Configured
+            </Text>
+            <Text style={[homeStyles.modalMsg, { color: theme.textSecondary }]}>
+              This outlet is currently marked as Unused. To monitor energy, you
+              must assign an appliance type.
+            </Text>
+            <View style={homeStyles.modalBtnRow}>
+              <TouchableOpacity
+                style={[homeStyles.modalBtn, { borderColor: theme.cardBorder }]}
+                onPress={() => setShowConfigModal(false)}
+              >
+                <Text style={{ color: theme.text, fontWeight: "bold" }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  homeStyles.modalBtn,
+                  { backgroundColor: theme.buttonPrimary, borderWidth: 0 },
+                ]}
+                onPress={() => {
+                  setShowConfigModal(false);
+                  navigation.navigate("HubConfig", {
+                    hubId: selectedHubId,
+                    fromBudget: true,
+                  });
+                }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                  Configure
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-// ... StatItem
+// ... StatItem (Unchanged)
 function StatItem({ label, value, icon, theme, isDarkMode, scaledSize }) {
   return (
     <View className="flex-1 flex-row items-center gap-3">
@@ -979,7 +1139,7 @@ function StatItem({ label, value, icon, theme, isDarkMode, scaledSize }) {
   );
 }
 
-// ... DeviceItem
+// ... DeviceItem (Unchanged)
 const DeviceItem = forwardRef(
   ({ data, theme, isDarkMode, onPress, scaledSize }, ref) => {
     const scale = useRef(new Animated.Value(1)).current;
@@ -998,7 +1158,6 @@ const DeviceItem = forwardRef(
         tension: 40,
         useNativeDriver: true,
       }).start();
-      if (onPress) onPress();
     };
 
     let statusColor = "#22c55e"; // Green
@@ -1026,6 +1185,7 @@ const DeviceItem = forwardRef(
         ref={ref}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
+        onPress={onPress}
         activeOpacity={1}
         className="w-full mb-3"
       >
@@ -1043,6 +1203,7 @@ const DeviceItem = forwardRef(
             elevation: 2,
           }}
         >
+          {/* ICON BOX */}
           <View
             className="w-12 h-12 rounded-2xl items-center justify-center mr-4"
             style={{ backgroundColor: bgColor }}
@@ -1050,7 +1211,9 @@ const DeviceItem = forwardRef(
             <MaterialIcons name={data.icon} size={24} color={statusColor} />
           </View>
 
+          {/* TEXT CONTENT */}
           <View className="flex-1 justify-center">
+            {/* ROW 1: Name and Tag */}
             <View className="flex-row items-center justify-between mb-1">
               <Text
                 className="font-bold"
@@ -1078,7 +1241,8 @@ const DeviceItem = forwardRef(
               )}
             </View>
 
-            <View className="flex-row items-center">
+            {/* ROW 2: Status, Watts, Volts */}
+            <View className="flex-row items-center mb-1">
               <Text
                 style={{
                   color:
@@ -1088,19 +1252,44 @@ const DeviceItem = forwardRef(
                   marginRight: 8,
                 }}
               >
-                {data.cost}
+                {data.statusText}
               </Text>
-              {data.watts !== "0 W" && (
-                <Text
-                  style={{
-                    color: theme.textSecondary,
-                    fontSize: scaledSize(12),
-                  }}
-                >
-                  • {data.watts}
-                </Text>
+
+              {data.watts !== "---" && (
+                <>
+                  <Text
+                    style={{
+                      color: theme.textSecondary,
+                      fontSize: scaledSize(12),
+                    }}
+                  >
+                    • {data.watts}
+                  </Text>
+                  <Text
+                    style={{
+                      color: theme.textSecondary,
+                      fontSize: scaledSize(12),
+                      marginLeft: 8,
+                    }}
+                  >
+                    • {data.volts}
+                  </Text>
+                </>
               )}
             </View>
+
+            {/* ROW 3: Est Cost */}
+            {data.costPerHr !== "---" && data.type !== "off" && (
+              <Text
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(11),
+                  fontStyle: "italic",
+                }}
+              >
+                Est. {data.costPerHr}
+              </Text>
+            )}
           </View>
 
           <MaterialIcons
@@ -1114,7 +1303,6 @@ const DeviceItem = forwardRef(
   },
 );
 
-// ... TourOverlay
 const TourOverlay = ({
   step,
   layout,
@@ -1124,72 +1312,225 @@ const TourOverlay = ({
   onSkip,
   scaledSize,
 }) => {
-  if (!layout) return null;
-  return (
-    <Modal transparent visible={true} animationType="fade">
-      <View style={{ flex: 1 }}>
-        <TouchableOpacity
+  if (step.type === "highlight" && !layout) return null;
+
+  // 1. COORDINATE FIX
+  const yOffset = Platform.OS === "android" ? StatusBar.currentHeight : 0;
+
+  // 2. MASK GENERATION
+  const maskColor = "rgba(0, 0, 0, 0.85)";
+  const pad = 4;
+
+  let MaskLayer = null;
+  let topPosition = 0;
+
+  if (step.type === "modal") {
+    MaskLayer = (
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: maskColor,
+        }}
+      />
+    );
+  } else if (layout) {
+    const targetY = layout.y + yOffset;
+    const targetX = layout.x;
+    const targetW = layout.width;
+    const targetH = layout.height;
+
+    // --- POSITIONING LOGIC UPDATE ---
+    // 1. Force 'hubs' to be upper.
+    // 2. Increase offset to -250 so the card (height ~200) sits clearly ABOVE the highlight.
+    if (targetY > SCREEN_HEIGHT / 2 || step.id === "hubs") {
+      topPosition = targetY - 250;
+    } else {
+      topPosition = targetY + targetH + 20;
+    }
+
+    MaskLayer = (
+      <>
+        {/* Top Block */}
+        <View
           style={{
             position: "absolute",
             top: 0,
             left: 0,
             right: 0,
+            height: Math.max(0, targetY - pad),
+            backgroundColor: maskColor,
+          }}
+        />
+        {/* Bottom Block */}
+        <View
+          style={{
+            position: "absolute",
+            top: targetY + targetH + pad,
+            left: 0,
+            right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.7)",
+            backgroundColor: maskColor,
           }}
-          onPress={onNext}
         />
+        {/* Left Block */}
         <View
           style={{
             position: "absolute",
-            top: layout.y,
-            left: layout.x,
-            width: layout.width,
-            height: layout.height,
-            borderColor: "white",
-            borderWidth: 2,
-            borderRadius: step.shape === "circle" ? layout.width / 2 : 12,
+            top: targetY - pad,
+            left: 0,
+            width: Math.max(0, targetX - pad),
+            height: targetH + pad * 2,
+            backgroundColor: maskColor,
           }}
         />
+        {/* Right Block */}
         <View
           style={{
             position: "absolute",
-            top: layout.y + layout.height + 20,
-            left: 20,
-            right: 20,
+            top: targetY - pad,
+            left: targetX + targetW + pad,
+            right: 0,
+            height: targetH + pad * 2,
+            backgroundColor: maskColor,
+          }}
+        />
+      </>
+    );
+  }
+
+  const modalWidth = 288;
+
+  return (
+    <Modal transparent visible={true} animationType="fade">
+      {/* 1. Render the Mask */}
+      <View style={{ flex: 1 }}>{MaskLayer}</View>
+
+      {/* 2. Render the Highlight Border */}
+      {step.type === "highlight" && layout && (
+        <View
+          style={{
+            position: "absolute",
+            top: layout.y + yOffset - 4,
+            left: layout.x - 4,
+            width: layout.width + 8,
+            height: layout.height + 8,
+            borderColor: theme.buttonPrimary,
+            borderWidth: 4,
+            borderRadius: step.shape === "circle" ? (layout.width + 8) / 2 : 16,
+          }}
+        />
+      )}
+
+      {/* 3. Render the Card */}
+      <View
+        style={
+          step.type === "modal"
+            ? {
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
+                justifyContent: "center",
+                alignItems: "center",
+              }
+            : {
+                position: "absolute",
+                top: topPosition, // Uses the new calculated value
+                left: 24,
+                right: 24,
+              }
+        }
+      >
+        <View
+          style={{
+            width: step.type === "modal" ? modalWidth : "auto",
             backgroundColor: theme.card,
-            padding: 20,
             borderRadius: 16,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: theme.cardBorder,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 10,
           }}
         >
           <Text
             style={{
               fontWeight: "bold",
-              fontSize: 18,
+              fontSize: scaledSize ? scaledSize(18) : 18,
               color: theme.text,
               marginBottom: 8,
+              textAlign: step.type === "modal" ? "center" : "left",
             }}
           >
             {step.title}
           </Text>
+
           <Text
             style={{
               color: theme.textSecondary,
-              marginBottom: 16,
+              marginBottom: 24,
+              fontSize: scaledSize ? scaledSize(13) : 13,
               lineHeight: 20,
+              textAlign: step.type === "modal" ? "center" : "left",
             }}
           >
             {step.description}
           </Text>
-          <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
-            <TouchableOpacity onPress={onSkip} style={{ marginRight: 20 }}>
-              <Text style={{ color: theme.textSecondary, fontWeight: "bold" }}>
+
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 10,
+              width: "100%",
+              justifyContent: "flex-end",
+            }}
+          >
+            <TouchableOpacity
+              onPress={onSkip}
+              style={{
+                flex: step.type === "modal" ? 1 : 0,
+                borderRadius: 12,
+                height: 40,
+                justifyContent: "center",
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: theme.textSecondary,
+                paddingHorizontal: step.type === "modal" ? 0 : 16,
+              }}
+            >
+              <Text
+                style={{
+                  fontWeight: "bold",
+                  fontSize: 12,
+                  color: theme.text,
+                }}
+              >
                 Skip
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={onNext}>
-              <Text style={{ color: theme.buttonPrimary, fontWeight: "bold" }}>
-                Next
+
+            <TouchableOpacity
+              onPress={onNext}
+              style={{
+                flex: step.type === "modal" ? 1 : 0,
+                borderRadius: 12,
+                height: 40,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: theme.buttonPrimary,
+                paddingHorizontal: step.type === "modal" ? 0 : 16,
+              }}
+            >
+              <Text style={{ fontWeight: "bold", fontSize: 12, color: "#fff" }}>
+                {step.buttonText || "Next"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1198,3 +1539,40 @@ const TourOverlay = ({
     </Modal>
   );
 };
+
+const homeStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    width: 288,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  modalMsg: {
+    fontSize: 12,
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  modalBtnRow: { flexDirection: "row", gap: 10, width: "100%" },
+  modalBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+});

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,51 +7,146 @@ import {
   StatusBar,
   ActivityIndicator,
   Image,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../context/ThemeContext";
-
-const SUMMARY_DATA = {
-  currentBill: 1450.75,
-  budgetLimit: 1900,
-  status: "Good",
-  activeDevicesCount: 6,
-};
-
-const HUBS_SUMMARY = [
-  {
-    id: "hub1",
-    name: "Living Room",
-    status: "ONLINE",
-    active: 4,
-    totalCost: "₱ 19.70 / hr",
-    icon: "weekend",
-  },
-  {
-    id: "hub2",
-    name: "Kitchen",
-    status: "OFFLINE",
-    active: 0,
-    totalCost: "₱ 0.00 / hr",
-    icon: "kitchen",
-  },
-];
+import { supabase } from "../../lib/supabase";
 
 export default function SimpleHomeScreen() {
   const { theme, isDarkMode, fontScale } = useTheme();
   const navigation = useNavigation();
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // --- REAL DATA STATE ---
+  const [billData, setBillData] = useState({
+    currentBill: 0,
+    budgetLimit: 0,
+    status: "Good",
+    activeDevicesCount: 0,
+  });
+  const [realHubs, setRealHubs] = useState([]);
+  const [userRate, setUserRate] = useState(12.0);
 
   // Helper for scaling
   const scaledSize = (size) => size * (fontScale || 1);
 
-  const percentage = Math.min(
-    (SUMMARY_DATA.currentBill / SUMMARY_DATA.budgetLimit) * 100,
-    100
+  // --- FETCH DATA FUNCTION ---
+  const fetchData = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const now = new Date();
+      const startOfMonth = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1,
+      ).toISOString();
+
+      // 1. Fetch User Settings (Rate & Budget)
+      const { data: userData } = await supabase
+        .from("users")
+        .select("monthly_budget, custom_rate, utility_rates(rate_per_kwh)")
+        .eq("id", user.id)
+        .single();
+
+      let rate = 12.0;
+      let budget = 2000; // Default fallback if not set in DB
+
+      if (userData) {
+        // If monthly_budget is null/0, it falls back to 2000
+        budget = userData.monthly_budget || 2000;
+        if (userData.custom_rate) rate = userData.custom_rate;
+        else if (userData.utility_rates?.rate_per_kwh)
+          rate = userData.utility_rates.rate_per_kwh;
+      }
+      setUserRate(rate);
+
+      // 2. Fetch Total Bill (Usage Analytics for this month)
+      const { data: usageData } = await supabase
+        .from("usage_analytics")
+        .select("cost_incurred")
+        .eq("user_id", user.id)
+        .gte("date", startOfMonth);
+
+      const totalBill =
+        usageData?.reduce((sum, row) => sum + (row.cost_incurred || 0), 0) || 0;
+
+      // 3. Fetch Hubs & Devices
+      const { data: hubsData } = await supabase
+        .from("hubs")
+        .select("*, devices(*)")
+        .eq("user_id", user.id);
+
+      // Process Hubs
+      let totalActiveDevices = 0;
+      const processedHubs = (hubsData || []).map((hub) => {
+        let isOnline = false;
+        if (hub.last_seen) {
+          const lastSeenDate = new Date(hub.last_seen);
+          const diffSeconds = (Date.now() - lastSeenDate.getTime()) / 1000;
+          isOnline = diffSeconds < 90;
+        }
+
+        const activeDevs = (hub.devices || []).filter((d) => d.status === "on");
+        const activeCount = activeDevs.length;
+        if (isOnline) totalActiveDevices += activeCount;
+
+        const totalWatts = activeDevs.reduce(
+          (sum, d) => sum + (d.current_power_watts || 0),
+          0,
+        );
+        const costPerHour = (totalWatts / 1000) * rate;
+
+        return {
+          id: hub.id,
+          name: hub.name,
+          status: isOnline ? "ONLINE" : "OFFLINE",
+          active: isOnline ? activeCount : 0,
+          totalCost: isOnline
+            ? `₱ ${costPerHour.toFixed(2)} / hr`
+            : "₱ 0.00 / hr",
+          icon: "router",
+        };
+      });
+
+      setRealHubs(processedHubs);
+      setBillData({
+        currentBill: totalBill,
+        budgetLimit: budget,
+        activeDevicesCount: totalActiveDevices,
+      });
+    } catch (error) {
+      console.error("Error fetching simple home:", error);
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, []),
   );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
+
+  // --- UI LOGIC ---
+  const percentage =
+    billData.budgetLimit > 0
+      ? Math.min((billData.currentBill / billData.budgetLimit) * 100, 100)
+      : 0;
 
   let statusColor = isDarkMode ? theme.buttonPrimary : "#00995e";
   let statusText = "You are on track.";
@@ -64,29 +159,25 @@ export default function SimpleHomeScreen() {
     statusText = "Approaching budget limit.";
   }
 
-  useEffect(() => {
-    setTimeout(() => setIsLoading(false), 500);
-  }, []);
-
-  // --- UPDATED LOADING STATE ---
+  // --- RENDER ---
   if (isLoading) {
     return (
       <View
         className="flex-1 justify-center items-center"
-        style={{ backgroundColor: theme.background }} // Reverted to theme background
+        style={{ backgroundColor: theme.background }}
       >
         <ActivityIndicator size="large" color="#B0B0B0" />
         <Text
           style={{
             marginTop: 20,
             color: "#B0B0B0",
-            fontSize: 12, // Hardcoded 12
+            fontSize: 12,
             textAlign: "center",
             width: "100%",
             fontFamily: theme.fontRegular,
           }}
         >
-          Loading...
+          Syncing GridWatch...
         </Text>
       </View>
     );
@@ -94,8 +185,7 @@ export default function SimpleHomeScreen() {
 
   return (
     <SafeAreaView
-      className="flex-1"
-      style={{ backgroundColor: theme.background }}
+      style={{ flex: 1, backgroundColor: theme.background }}
       edges={["top", "left", "right"]}
     >
       <StatusBar
@@ -103,10 +193,16 @@ export default function SimpleHomeScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- HEADER (Fixed Alignment) --- */}
+      {/* --- HEADER --- */}
       <View
-        className="flex-row justify-between items-center px-6 py-5"
-        style={{ backgroundColor: theme.background }}
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          paddingHorizontal: 24,
+          paddingVertical: 20,
+          backgroundColor: theme.background,
+        }}
       >
         <TouchableOpacity
           onPress={() => navigation.navigate("Menu")}
@@ -134,199 +230,296 @@ export default function SimpleHomeScreen() {
             size={scaledSize(28)}
             color={theme.text}
           />
-          <View
-            className="absolute bg-[#ff4d4d] rounded-[7px] w-3.5 h-3.5 justify-center items-center border-2"
-            style={{
-              borderColor: theme.background,
-              top: 4,
-              right: 4,
-            }}
-          >
-            <Text className="text-white text-[8px] font-bold">2</Text>
-          </View>
         </TouchableOpacity>
       </View>
 
       <ScrollView
         contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.textSecondary}
+            colors={[theme.buttonPrimary]}
+          />
+        }
       >
-        <View className="px-6">
-          {/* --- MAIN BILL CARD --- */}
-          <View
-            className="w-full rounded-3xl p-6 mb-8 shadow-sm border mt-4"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
+        <View style={{ paddingHorizontal: 24 }}>
+          {/* --- MAIN BILL CARD (Clickable) --- */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate("SimpleBudgetManager")}
           >
-            <View className="flex-row justify-between items-center mb-4">
-              <View className="flex-row items-center">
-                <View
-                  className="w-2 h-2 rounded-full mr-2"
-                  style={{ backgroundColor: statusColor }}
+            <View
+              style={{
+                width: "100%",
+                borderRadius: 24,
+                padding: 24,
+                marginBottom: 32,
+                borderWidth: 1,
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+                marginTop: 16,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 16,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      marginRight: 8,
+                      backgroundColor: statusColor,
+                    }}
+                  />
+                  <Text
+                    style={{
+                      fontWeight: "500",
+                      color: theme.textSecondary,
+                      fontSize: scaledSize(12),
+                    }}
+                  >
+                    Current Bill (This Month)
+                  </Text>
+                </View>
+                <MaterialIcons
+                  name="chevron-right"
+                  size={scaledSize(20)}
+                  color={theme.textSecondary}
                 />
-                <Text
-                  className="font-medium"
-                  style={{
-                    color: theme.textSecondary,
-                    fontSize: scaledSize(12),
-                  }}
-                >
-                  Current Bill
+              </View>
+
+              <Text
+                style={{
+                  fontWeight: "900",
+                  textAlign: "center",
+                  marginBottom: 4,
+                  color: theme.text,
+                  fontSize: scaledSize(42),
+                }}
+              >
+                ₱{" "}
+                {billData.currentBill.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </Text>
+
+              <Text
+                style={{
+                  textAlign: "center",
+                  fontWeight: "500",
+                  marginBottom: 24,
+                  color: statusColor,
+                  fontSize: scaledSize(14),
+                }}
+              >
+                {statusText}
+              </Text>
+
+              <View
+                style={{
+                  width: "100%",
+                  height: 16,
+                  backgroundColor: isDarkMode ? "#27272a" : "#f4f4f5",
+                  borderRadius: 9999,
+                  overflow: "hidden",
+                  marginBottom: 8,
+                }}
+              >
+                <LinearGradient
+                  colors={[statusColor, statusColor]}
+                  style={{ width: `${percentage}%`, height: "100%" }}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
+              </View>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Text style={{ color: theme.textSecondary, fontSize: 10 }}>
+                  {billData.activeDevicesCount} Active Devices
+                </Text>
+                <Text style={{ color: theme.textSecondary, fontSize: 10 }}>
+                  Limit: ₱ {billData.budgetLimit.toLocaleString()}
                 </Text>
               </View>
-              <MaterialIcons
-                name="chevron-right"
-                size={scaledSize(20)}
-                color={theme.textSecondary}
-              />
             </View>
-
-            <Text
-              className="font-extrabold text-center mb-1"
-              style={{ color: theme.text, fontSize: scaledSize(42) }}
-            >
-              ₱ {SUMMARY_DATA.currentBill.toLocaleString()}
-            </Text>
-
-            <Text
-              className="text-center font-medium mb-6"
-              style={{ color: statusColor, fontSize: scaledSize(14) }}
-            >
-              {statusText}
-            </Text>
-
-            <View className="w-full h-4 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden mb-2">
-              <LinearGradient
-                colors={[statusColor, statusColor]}
-                style={{ width: `${percentage}%`, height: "100%" }}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              />
-            </View>
-            <View className="flex-row justify-between">
-              <Text style={{ color: theme.textSecondary, fontSize: 10 }}>
-                0%
-              </Text>
-              <Text style={{ color: theme.textSecondary, fontSize: 10 }}>
-                Limit: ₱ {SUMMARY_DATA.budgetLimit.toLocaleString()}
-              </Text>
-            </View>
-          </View>
+          </TouchableOpacity>
 
           {/* --- ROOM SUMMARY --- */}
           <Text
-            className="font-bold uppercase tracking-widest mb-4"
-            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
+            style={{
+              fontWeight: "bold",
+              textTransform: "uppercase",
+              letterSpacing: 1,
+              marginBottom: 16,
+              color: theme.textSecondary,
+              fontSize: scaledSize(11),
+            }}
           >
             My Rooms & Usage
           </Text>
 
-          <View className="gap-3">
-            {HUBS_SUMMARY.map((hub) => {
-              const isOnline = hub.status === "ONLINE";
-              const badgeBg = isOnline
-                ? theme.buttonPrimary
-                : theme.buttonNeutral;
-              const badgeText = isOnline ? "#FFFFFF" : theme.textSecondary;
+          <View style={{ gap: 12 }}>
+            {realHubs.length > 0 ? (
+              realHubs.map((hub) => {
+                const isOnline = hub.status === "ONLINE";
+                const badgeBg = isOnline
+                  ? theme.buttonPrimary
+                  : theme.buttonNeutral;
+                const badgeText = isOnline ? "#FFFFFF" : theme.textSecondary;
 
-              return (
-                <TouchableOpacity
-                  key={hub.id}
-                  onPress={() =>
-                    navigation.navigate("BudgetDeviceList", {
-                      hubName: hub.name,
-                    })
-                  }
-                  activeOpacity={0.8}
-                  className="flex-row items-center p-4 rounded-2xl border"
-                  style={{
-                    backgroundColor: theme.card,
-                    borderColor: theme.cardBorder,
-                  }}
-                >
-                  <View
-                    className="w-12 h-12 rounded-xl justify-center items-center mr-4"
-                    style={{ backgroundColor: theme.buttonNeutral }}
+                return (
+                  <TouchableOpacity
+                    key={hub.id}
+                    onPress={() =>
+                      navigation.navigate("BudgetDeviceList", {
+                        hubName: hub.name,
+                        hubId: hub.id,
+                      })
+                    }
+                    activeOpacity={0.8}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      padding: 16,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                      marginBottom: 12,
+                    }}
                   >
-                    <MaterialIcons
-                      name={hub.icon}
-                      size={scaledSize(24)}
-                      color={
-                        isOnline ? theme.buttonPrimary : theme.textSecondary
-                      }
-                    />
-                  </View>
-
-                  <View className="flex-1">
-                    <Text
-                      className="font-bold mb-1.5"
-                      style={{ color: theme.text, fontSize: scaledSize(16) }}
+                    <View
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 12,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        marginRight: 16,
+                        backgroundColor: theme.buttonNeutral,
+                      }}
                     >
-                      {hub.name}
-                    </Text>
+                      <MaterialIcons
+                        name={hub.icon}
+                        size={scaledSize(24)}
+                        color={
+                          isOnline ? theme.buttonPrimary : theme.textSecondary
+                        }
+                      />
+                    </View>
 
-                    {/* --- NEW BADGE POSITION (Under Name, perfectly aligned) --- */}
-                    <View className="flex-row items-center">
-                      <View
-                        className="rounded justify-center items-center"
+                    <View style={{ flex: 1 }}>
+                      <Text
                         style={{
-                          backgroundColor: badgeBg,
-                          paddingHorizontal: scaledSize(6),
-                          paddingVertical: scaledSize(2),
-                          marginRight: 8,
+                          fontWeight: "bold",
+                          marginBottom: 6,
+                          color: theme.text,
+                          fontSize: scaledSize(16),
                         }}
                       >
-                        <Text
-                          className="font-bold"
-                          style={{ color: badgeText, fontSize: scaledSize(9) }}
+                        {hub.name}
+                      </Text>
+
+                      <View
+                        style={{ flexDirection: "row", alignItems: "center" }}
+                      >
+                        <View
+                          style={{
+                            borderRadius: 4,
+                            justifyContent: "center",
+                            alignItems: "center",
+                            backgroundColor: badgeBg,
+                            paddingHorizontal: scaledSize(6),
+                            paddingVertical: scaledSize(2),
+                            marginRight: 8,
+                          }}
                         >
-                          {hub.status}
+                          <Text
+                            style={{
+                              fontWeight: "bold",
+                              color: badgeText,
+                              fontSize: scaledSize(9),
+                            }}
+                          >
+                            {hub.status}
+                          </Text>
+                        </View>
+
+                        <Text
+                          style={{
+                            color: theme.textSecondary,
+                            fontSize: scaledSize(11),
+                          }}
+                        >
+                          {hub.active} devices
                         </Text>
                       </View>
+                    </View>
 
+                    <View style={{ alignItems: "flex-end", marginRight: 8 }}>
+                      <Text
+                        style={{
+                          fontWeight: "bold",
+                          color: theme.text,
+                          fontSize: scaledSize(14),
+                        }}
+                      >
+                        {hub.totalCost}
+                      </Text>
                       <Text
                         style={{
                           color: theme.textSecondary,
-                          fontSize: scaledSize(11),
+                          fontSize: scaledSize(10),
                         }}
                       >
-                        {hub.active} devices
+                        Current Load
                       </Text>
                     </View>
-                  </View>
 
-                  <View className="items-end mr-2">
-                    <Text
-                      className="font-bold"
-                      style={{ color: theme.text, fontSize: scaledSize(14) }}
-                    >
-                      {hub.totalCost}
-                    </Text>
-                    <Text
-                      style={{
-                        color: theme.textSecondary,
-                        fontSize: scaledSize(10),
-                      }}
-                    >
-                      Current Load
-                    </Text>
-                  </View>
-
-                  <MaterialIcons
-                    name="chevron-right"
-                    size={scaledSize(24)}
-                    color={theme.textSecondary}
-                  />
-                </TouchableOpacity>
-              );
-            })}
+                    <MaterialIcons
+                      name="chevron-right"
+                      size={scaledSize(24)}
+                      color={theme.textSecondary}
+                    />
+                  </TouchableOpacity>
+                );
+              })
+            ) : (
+              <View style={{ alignItems: "center", paddingVertical: 20 }}>
+                <Text style={{ color: theme.textSecondary }}>
+                  No hubs found. Add one to see usage here.
+                </Text>
+              </View>
+            )}
 
             <TouchableOpacity
               onPress={() => navigation.navigate("SetupHub")}
-              className="flex-row items-center justify-center p-4 rounded-2xl border border-dashed mt-2"
-              style={{ borderColor: theme.textSecondary }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 16,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: theme.textSecondary,
+                borderStyle: "dashed",
+                marginTop: 8,
+              }}
             >
               <MaterialIcons
                 name="add"
@@ -334,8 +527,12 @@ export default function SimpleHomeScreen() {
                 color={theme.textSecondary}
               />
               <Text
-                className="ml-2 font-bold"
-                style={{ color: theme.textSecondary, fontSize: scaledSize(14) }}
+                style={{
+                  marginLeft: 8,
+                  fontWeight: "bold",
+                  color: theme.textSecondary,
+                  fontSize: scaledSize(14),
+                }}
               >
                 Add Room
               </Text>

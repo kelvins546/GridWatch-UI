@@ -24,7 +24,7 @@ export default function MyHubsScreen() {
 
   const scaledSize = (baseSize) => baseSize * (fontScale || 1);
 
-  // --- 1. FETCH HUBS (Functional Logic) ---
+  // --- 1. FETCH HUBS ---
   const fetchHubs = async () => {
     try {
       const {
@@ -34,8 +34,9 @@ export default function MyHubsScreen() {
 
       const { data, error } = await supabase
         .from("hubs")
-        .select(`*, devices(count)`)
-        .eq("user_id", user.id);
+        .select(`*, devices(id, type)`) // Fetch devices to count manually
+        .eq("user_id", user.id)
+        .neq("devices.type", "Unused"); // Filter out "Unused" devices
 
       if (error) throw error;
       setHubs(data || []);
@@ -47,7 +48,7 @@ export default function MyHubsScreen() {
     }
   };
 
-  // --- 2. AUTO REFRESH INTERVAL (Functional Logic) ---
+  // --- 2. AUTO REFRESH ---
   useEffect(() => {
     const autoRefreshInterval = setInterval(() => {
       fetchHubs();
@@ -56,7 +57,7 @@ export default function MyHubsScreen() {
     return () => clearInterval(autoRefreshInterval);
   }, []);
 
-  // --- 3. REALTIME SUBSCRIPTION (Functional Logic) ---
+  // --- 3. REALTIME SUBSCRIPTION ---
   useEffect(() => {
     const channel = supabase
       .channel("hubs_realtime_check")
@@ -104,7 +105,7 @@ export default function MyHubsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- HEADER (UI) --- */}
+      {/* --- HEADER --- */}
       <View
         className="flex-row items-center px-6 py-5 border-b"
         style={{
@@ -139,7 +140,7 @@ export default function MyHubsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="gray" // <--- UPDATED: Changed from theme.primary to gray
+            tintColor="gray"
           />
         }
       >
@@ -147,7 +148,7 @@ export default function MyHubsScreen() {
           {loading ? (
             <ActivityIndicator
               size="large"
-              color="gray" // <--- UPDATED: Changed from theme.primary to gray
+              color="gray"
               style={{ marginTop: 20 }}
             />
           ) : hubs.length === 0 ? (
@@ -181,7 +182,6 @@ export default function MyHubsScreen() {
 }
 
 function HubCard({ hub, theme, scaledSize, navigation }) {
-  // --- 4. TIME CALCULATION LOGIC (Functional Logic) ---
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -190,7 +190,6 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
   }, []);
 
   let isOnline = false;
-  let diffInSeconds = 0;
   let timeAgoText = "";
 
   if (hub.last_seen) {
@@ -201,12 +200,13 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
 
     const lastSeenMs = new Date(timeStr).getTime();
     if (!isNaN(lastSeenMs)) {
-      diffInSeconds = (now - lastSeenMs) / 1000;
-      // Online if seen in last 8 seconds
-      isOnline = diffInSeconds < 8 && diffInSeconds > -5;
+      const diffSeconds = (now - lastSeenMs) / 1000;
+
+      // --- FIXED LINE BELOW ---
+      isOnline = diffSeconds < 8 && diffSeconds > -5;
 
       if (!isOnline) {
-        let displayDiff = Math.max(1, diffInSeconds - 7);
+        let displayDiff = Math.max(1, diffSeconds - 7);
         if (displayDiff < 60) {
           timeAgoText = `${Math.floor(displayDiff)}s ago`;
         } else if (displayDiff < 3600) {
@@ -220,10 +220,9 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
     }
   }
 
-  // Count devices from joined table
-  const deviceCount = hub.devices?.[0]?.count || 0;
+  // Count Real Devices Only (Filtered by query)
+  const deviceCount = hub.devices ? hub.devices.length : 0;
 
-  // --- 5. UI STYLING (UI Logic) ---
   const statusColor = isOnline ? theme.buttonPrimary : theme.textSecondary;
   const cardBgColor = isOnline ? `${theme.buttonPrimary}1A` : theme.card;
   const iconContainerBg = isOnline

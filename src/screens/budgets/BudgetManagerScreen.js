@@ -1,4 +1,10 @@
-import React, { useRef, useState, useMemo, useEffect } from "react";
+import React, {
+  useRef,
+  useState,
+  useMemo,
+  useEffect,
+  useCallback,
+} from "react";
 import {
   View,
   Text,
@@ -11,16 +17,17 @@ import {
   FlatList,
   TextInput,
   StyleSheet,
-  Dimensions,
   Platform,
   LayoutAnimation,
   UIManager,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation, useRoute } from "@react-navigation/native"; // Added useRoute
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
 
 if (
   Platform.OS === "android" &&
@@ -31,7 +38,7 @@ if (
 
 export default function BudgetManagerScreen() {
   const navigation = useNavigation();
-  const route = useRoute(); // Added route hook to read params
+  const route = useRoute();
   const { theme, isDarkMode, fontScale } = useTheme();
   const scaledSize = (size) => size * fontScale;
 
@@ -43,19 +50,200 @@ export default function BudgetManagerScreen() {
   const [activeTab, setActiveTab] = useState("personal");
   const [activeHubFilter, setActiveHubFilter] = useState("all");
 
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+
+  // Modals
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
 
-  // --- BUDGET DATA ---
-  const [monthlyBudget, setMonthlyBudget] = useState(2800);
-  const [billingDate, setBillingDate] = useState("15");
+  // Status Modal (Fixed)
+  const [statusModal, setStatusModal] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    type: "success",
+  });
 
-  // --- NEW LOGIC: AUTO-SHOW MODAL ON ONBOARDING ---
+  // --- REAL DATA STATE ---
+  const [monthlyBudget, setMonthlyBudget] = useState(0);
+  const [billingDate, setBillingDate] = useState("1");
+  const [personalHubs, setPersonalHubs] = useState([]);
+  const [sharedHubs, setSharedHubs] = useState([]);
+  const [daysRemaining, setDaysRemaining] = useState(0);
+  const [now, setNow] = useState(Date.now());
+
+  // --- ANIMATION REF ---
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  // --- TIMER FOR ONLINE CHECK ---
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 2000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // --- FETCH FUNCTION ---
+  const fetchData = async (isRefetch = false) => {
+    if (isRefetch) setRefreshing(true);
+    else setIsLoading(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // A. Get User Settings
+      const { data: rpcData, error: rpcError } = await supabase.rpc(
+        "get_current_cycle_usage",
+        { target_user_id: user.id },
+      );
+
+      if (rpcError) throw rpcError;
+
+      if (rpcData) {
+        setMonthlyBudget(rpcData.budget_limit);
+        setDaysRemaining(rpcData.days_remaining);
+        const startDay = new Date(rpcData.cycle_start).getDate();
+        setBillingDate(startDay.toString());
+
+        // B. Fetch Hub Breakdown
+        await fetchHubsBreakdown(
+          user.id,
+          rpcData.cycle_start,
+          rpcData.cycle_end,
+        );
+      }
+    } catch (error) {
+      console.error("Fetch error:", error);
+    } finally {
+      if (isRefetch) setRefreshing(false);
+      setIsLoading(false);
+    }
+  };
+
+  const fetchHubsBreakdown = async (userId, startDate, endDate) => {
+    try {
+      // 1. Fetch Personal Hubs
+      const { data: ownedHubs, error: ownedError } = await supabase
+        .from("hubs")
+        .select("id, name, status, last_seen, devices(id)")
+        .eq("user_id", userId);
+
+      if (ownedError) throw ownedError;
+
+      // 2. Fetch Shared Hubs
+      const { data: sharedAccess, error: accessError } = await supabase
+        .from("hub_access")
+        .select("hub_id, role")
+        .eq("user_id", userId);
+
+      if (accessError) throw accessError;
+
+      let sharedHubsList = [];
+      if (sharedAccess && sharedAccess.length > 0) {
+        const sharedIds = sharedAccess.map((row) => row.hub_id);
+        const { data: sharedHubData, error: sharedError } = await supabase
+          .from("hubs")
+          .select("id, name, status, last_seen, devices(id)")
+          .in("id", sharedIds);
+
+        if (sharedError) throw sharedError;
+        sharedHubsList = sharedHubData;
+      }
+
+      // 3. Combine Device IDs for usage logs
+      const allHubs = [...(ownedHubs || []), ...(sharedHubsList || [])];
+      const allDeviceIds = allHubs.flatMap(
+        (h) => h.devices?.map((d) => d.id) || [],
+      );
+
+      let logs = [];
+      if (allDeviceIds.length > 0) {
+        const { data: usageData, error: logError } = await supabase
+          .from("usage_analytics")
+          .select("cost_incurred, device_id")
+          .in("device_id", allDeviceIds)
+          .gte("date", startDate)
+          .lte("date", endDate);
+
+        if (logError) console.error("Log error:", logError);
+        else logs = usageData;
+      }
+
+      const processHubs = (hubList) => {
+        return hubList.map((hub) => {
+          const hubDeviceIds = hub.devices?.map((d) => d.id) || [];
+          const totalSpent = logs
+            .filter((log) => hubDeviceIds.includes(log.device_id))
+            .reduce((sum, log) => sum + (log.cost_incurred || 0), 0);
+
+          return {
+            id: hub.id,
+            name: hub.name,
+            last_seen: hub.last_seen,
+            devices: hub.devices?.length || 0,
+            icon: "router",
+            totalSpending: totalSpent,
+            limit: 0,
+          };
+        });
+      };
+
+      setPersonalHubs(processHubs(ownedHubs || []));
+      setSharedHubs(processHubs(sharedHubsList || []));
+    } catch (error) {
+      console.error("Hub fetch error:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // --- REALTIME SUBSCRIPTION ---
+  useEffect(() => {
+    const channel = supabase
+      .channel("budget_hubs_realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "hubs",
+        },
+        (payload) => {
+          setPersonalHubs((current) =>
+            current.map((h) =>
+              h.id === payload.new.id
+                ? { ...h, last_seen: payload.new.last_seen }
+                : h,
+            ),
+          );
+          setSharedHubs((current) =>
+            current.map((h) =>
+              h.id === payload.new.id
+                ? { ...h, last_seen: payload.new.last_seen }
+                : h,
+            ),
+          );
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    fetchData(true);
+  }, []);
+
   useEffect(() => {
     if (route.params?.showSetupModal) {
-      // Small delay to ensure screen transition finishes before modal pops up
       const timer = setTimeout(() => {
         setShowBudgetModal(true);
       }, 500);
@@ -63,86 +251,8 @@ export default function BudgetManagerScreen() {
     }
   }, [route.params]);
 
-  // --- HELPER: ORDINAL SUFFIX (st, nd, rd, th) ---
-  const getOrdinalSuffix = (day) => {
-    const d = parseInt(day);
-    if (d > 3 && d < 21) return "th"; // Covers 11th, 12th, 13th
-    switch (d % 10) {
-      case 1:
-        return "st";
-      case 2:
-        return "nd";
-      case 3:
-        return "rd";
-      default:
-        return "th";
-    }
-  };
-
-  // --- CALENDAR LOGIC ---
-  const today = new Date();
-  const currentMonthName = today.toLocaleString("default", { month: "long" });
-  const currentYear = today.getFullYear();
-
-  const daysInMonth = new Date(currentYear, today.getMonth() + 1, 0).getDate();
-  const firstDayOfMonth = new Date(currentYear, today.getMonth(), 1).getDay();
-
-  // Generate calendar grid
-  const calendarData = [
-    ...Array(firstDayOfMonth).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
-
-  const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-  // --- DATA SOURCES ---
-  const PERSONAL_HUBS = [
-    {
-      id: "living",
-      name: "Living Room Hub",
-      status: "Online",
-      devices: 3,
-      icon: "weekend",
-      totalSpending: 850.5,
-      limit: 1200,
-    },
-    {
-      id: "kitchen",
-      name: "Kitchen Hub",
-      status: "Online",
-      devices: 2,
-      icon: "kitchen",
-      totalSpending: 600.25,
-      limit: 800,
-    },
-  ];
-
-  const SHARED_HUBS = [
-    {
-      id: "francis",
-      name: "Francis' Garage",
-      owner: "Francis Gian",
-      status: "Online",
-      devices: 3,
-      icon: "handyman",
-      totalSpending: 320.0,
-      limit: 1000,
-    },
-    {
-      id: "cielo",
-      name: "Cielo's House",
-      owner: "Cielo Cortado",
-      status: "Online",
-      devices: 6,
-      icon: "home",
-      totalSpending: 2100.0,
-      limit: 4000,
-    },
-  ];
-
-  // --- CALCULATIONS ---
-  const sourceData = activeTab === "personal" ? PERSONAL_HUBS : SHARED_HUBS;
-
+  // --- HELPERS ---
+  const sourceData = activeTab === "personal" ? personalHubs : sharedHubs;
   const displayList =
     activeHubFilter === "all"
       ? sourceData
@@ -157,27 +267,49 @@ export default function BudgetManagerScreen() {
         (acc, hub) => acc + (hub.totalSpending || 0),
         0,
       );
-      hardLimitTotal = sourceData.reduce(
-        (acc, hub) => acc + (hub.limit || 0),
-        0,
-      );
+      hardLimitTotal = monthlyBudget;
     } else {
       const hub = sourceData.find((h) => h.id === activeHubFilter);
       if (hub) {
         current = hub.totalSpending || 0;
-        hardLimitTotal = hub.limit || 0;
+        hardLimitTotal = hub.limit || monthlyBudget;
       }
     }
     return { current, hardLimitTotal };
-  }, [activeTab, activeHubFilter, sourceData]);
+  }, [activeTab, activeHubFilter, sourceData, monthlyBudget]);
 
   const currentSpending = budgetStats.current;
-  const activeLimit =
-    activeHubFilter === "all" ? monthlyBudget : budgetStats.hardLimitTotal;
-  const percentage = Math.min((currentSpending / activeLimit) * 100, 100);
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const activeLimit = budgetStats.hardLimitTotal;
+  const percentage =
+    activeLimit > 0 ? Math.min((currentSpending / activeLimit) * 100, 100) : 0;
 
-  // --- ACTIONS ---
+  const getOrdinalSuffix = (day) => {
+    const d = parseInt(day);
+    if (d > 3 && d < 21) return "th";
+    switch (d % 10) {
+      case 1:
+        return "st";
+      case 2:
+        return "nd";
+      case 3:
+        return "rd";
+      default:
+        return "th";
+    }
+  };
+
+  const today = new Date();
+  const currentMonthName = today.toLocaleString("default", { month: "long" });
+  const currentYear = today.getFullYear();
+  const daysInMonth = new Date(currentYear, today.getMonth() + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentYear, today.getMonth(), 1).getDay();
+  const calendarData = [
+    ...Array(firstDayOfMonth).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  // --- HANDLERS ---
   const handleScopeChange = (scope) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setActiveTab(scope);
@@ -198,23 +330,116 @@ export default function BudgetManagerScreen() {
     }).start();
   };
 
-  const handleManualReset = () => {
+  // --- SOFT RESET (Update Cycle to Today) ---
+  const handleManualReset = async () => {
     setShowConfirmModal(false);
     setIsResetting(true);
-    setTimeout(() => setIsResetting(false), 2000);
+
+    // 1. Clear current view immediately to give visual feedback of "Reset"
+    setPersonalHubs([]);
+    setSharedHubs([]);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const todayDay = new Date().getDate();
+
+      // Update bill cycle to TODAY
+      const { error } = await supabase
+        .from("users")
+        .update({ bill_cycle_day: todayDay })
+        .eq("id", user.id);
+
+      if (error) throw error;
+
+      setBillingDate(todayDay.toString());
+
+      // Fetch fresh data (which will be from Today 00:00 onwards)
+      await fetchData(true);
+
+      setStatusModal({
+        visible: true,
+        title: "Reset Successful",
+        message:
+          "Cycle has been reset to start from today. Previous data is preserved for analytics.",
+        type: "success",
+      });
+    } catch (err) {
+      setStatusModal({
+        visible: true,
+        title: "Error",
+        message: "Failed to reset spending.",
+        type: "error",
+      });
+    } finally {
+      setIsResetting(false);
+    }
   };
 
-  const handleSaveBudget = () => {
+  const handleSaveBudget = async () => {
     setShowBudgetModal(false);
     setIsResetting(true);
-    // In a real app, you would save 'monthlyBudget' to Supabase here
-    setTimeout(() => setIsResetting(false), 1000);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from("users")
+        .update({ monthly_budget: monthlyBudget })
+        .eq("id", user.id);
+
+      if (error) throw error;
+      await fetchData(true);
+      setStatusModal({
+        visible: true,
+        title: "Success",
+        message: "Monthly budget limit updated.",
+        type: "success",
+      });
+    } catch (error) {
+      setStatusModal({
+        visible: true,
+        title: "Error",
+        message: "Failed to save budget.",
+        type: "error",
+      });
+    } finally {
+      setIsResetting(false);
+    }
   };
 
-  const handleDateSelect = (day) => {
-    if (day) {
+  const handleDateSelect = async (day) => {
+    if (!day) return;
+    setShowDatePicker(false);
+    setIsResetting(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from("users")
+        .update({ bill_cycle_day: day })
+        .eq("id", user.id);
+
+      if (error) throw error;
       setBillingDate(day.toString());
-      setShowDatePicker(false);
+      await fetchData(true);
+      setStatusModal({
+        visible: true,
+        title: "Date Updated",
+        message: `Billing cycle start set to day ${day}.`,
+        type: "success",
+      });
+    } catch (error) {
+      setStatusModal({
+        visible: true,
+        title: "Error",
+        message: "Failed to update date.",
+        type: "error",
+      });
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -225,7 +450,6 @@ export default function BudgetManagerScreen() {
     else if (cleanedText === "") setMonthlyBudget(0);
   };
 
-  // --- STYLES ---
   const styles = StyleSheet.create({
     card: {
       backgroundColor: theme.card,
@@ -250,8 +474,8 @@ export default function BudgetManagerScreen() {
       borderWidth: 1,
       padding: 20,
       borderRadius: 16,
-      width: "90%",
-      maxWidth: 300,
+
+      maxWidth: 288,
       alignItems: "center",
       backgroundColor: theme.card,
       borderColor: theme.cardBorder,
@@ -291,9 +515,39 @@ export default function BudgetManagerScreen() {
       fontWeight: "bold",
       fontSize: scaledSize(12),
       textTransform: "uppercase",
-      letterSpacing: 1,
     },
   });
+
+  // --- RENDER ---
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: theme.background,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <StatusBar
+          barStyle={theme.statusBarStyle}
+          backgroundColor={theme.background}
+        />
+        <ActivityIndicator size="large" color="#B0B0B0" />
+        <Text
+          style={{
+            marginTop: 12,
+            color: "#B0B0B0",
+            fontSize: scaledSize(12),
+            fontWeight: "500",
+            letterSpacing: 0.5,
+          }}
+        >
+          Loading Budget...
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -389,6 +643,14 @@ export default function BudgetManagerScreen() {
       <ScrollView
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.textSecondary}
+            colors={[theme.buttonPrimary]}
+          />
+        }
       >
         {/* --- HERO CARD --- */}
         <View style={{ paddingHorizontal: 24 }}>
@@ -429,7 +691,11 @@ export default function BudgetManagerScreen() {
                       fontWeight: "900",
                     }}
                   >
-                    ₱ {currentSpending.toLocaleString()}
+                    ₱{" "}
+                    {currentSpending.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </Text>
                 </View>
                 <MaterialIcons
@@ -495,9 +761,9 @@ export default function BudgetManagerScreen() {
                 }}
               >
                 <StatItem
-                  label="Daily Avg"
-                  value={`₱ ${(currentSpending / 30).toFixed(2)}`}
-                  icon="trending-up"
+                  label="Days Left"
+                  value={`${daysRemaining} Days`}
+                  icon="hourglass-empty"
                   theme={theme}
                   scaledSize={scaledSize}
                 />
@@ -729,8 +995,12 @@ export default function BudgetManagerScreen() {
                 theme={theme}
                 primaryColor={primaryColor}
                 scaledSize={scaledSize}
+                now={now} // Pass 'now' for online check
                 onPress={() =>
-                  navigation.navigate("BudgetDeviceList", { hubName: hub.name })
+                  navigation.navigate("BudgetDeviceList", {
+                    hubName: hub.name,
+                    hubId: hub.id,
+                  })
                 }
               />
             ))
@@ -742,13 +1012,13 @@ export default function BudgetManagerScreen() {
         </View>
       </ScrollView>
 
-      {/* --- MODALS --- */}
+      {/* --- CONFIRM RESET MODAL --- */}
       <Modal visible={showConfirmModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <Text style={styles.modalTitle}>Reset Spending?</Text>
             <Text style={styles.modalBody}>
-              This will clear your current spending tracking.
+              This will clear your current spending tracking to 0.
             </Text>
             <View style={styles.buttonRow}>
               <TouchableOpacity
@@ -775,6 +1045,7 @@ export default function BudgetManagerScreen() {
         </View>
       </Modal>
 
+      {/* --- BUDGET MODAL --- */}
       <Modal visible={showBudgetModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -827,7 +1098,6 @@ export default function BudgetManagerScreen() {
                 style={styles.modalCancelBtn}
               >
                 <Text style={[styles.modalButtonText, { color: theme.text }]}>
-                  {/* --- CHANGED: Dynamic Button Text --- */}
                   {route.params?.showSetupModal ? "Not Now" : "Cancel"}
                 </Text>
               </TouchableOpacity>
@@ -847,7 +1117,33 @@ export default function BudgetManagerScreen() {
         </View>
       </Modal>
 
-      {/* --- DATE PICKER MODAL (TRUE CALENDAR) --- */}
+      {/* --- STATUS MODAL (Unified) --- */}
+      <Modal visible={statusModal.visible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>{statusModal.title}</Text>
+            <Text style={styles.modalBody}>{statusModal.message}</Text>
+            <TouchableOpacity
+              onPress={() => setStatusModal({ ...statusModal, visible: false })}
+              style={{
+                backgroundColor:
+                  statusModal.type === "error" ? dangerColor : primaryColor,
+                width: "100%",
+                height: 44,
+                borderRadius: 12,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                OKAY
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- DATE PICKER MODAL --- */}
       <Modal visible={showDatePicker} transparent animationType="slide">
         <View
           style={{
@@ -890,7 +1186,6 @@ export default function BudgetManagerScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* DAY HEADERS */}
             <View
               style={{
                 flexDirection: "row",
@@ -899,13 +1194,7 @@ export default function BudgetManagerScreen() {
               }}
             >
               {weekDays.map((day) => (
-                <View
-                  key={day}
-                  style={{
-                    flex: 1,
-                    alignItems: "center",
-                  }}
-                >
+                <View key={day} style={{ flex: 1, alignItems: "center" }}>
                   <Text
                     style={{
                       color: theme.textSecondary,
@@ -919,13 +1208,11 @@ export default function BudgetManagerScreen() {
               ))}
             </View>
 
-            {/* CALENDAR GRID */}
             <FlatList
               data={calendarData}
               numColumns={7}
               keyExtractor={(item, index) => index.toString()}
               renderItem={({ item }) => {
-                // RENDER EMPTY SLOT
                 if (item === null) {
                   return (
                     <View style={{ flex: 1, aspectRatio: 1, margin: 2 }} />
@@ -964,7 +1251,7 @@ export default function BudgetManagerScreen() {
         </View>
       </Modal>
 
-      {/* LOADING OVERLAY */}
+      {/* LOADING OVERLAY - GRAY */}
       {isResetting && (
         <View
           style={{
@@ -976,7 +1263,7 @@ export default function BudgetManagerScreen() {
             alignItems: "center",
           }}
         >
-          <ActivityIndicator size="large" color={primaryColor} />
+          <ActivityIndicator size="large" color="#B0B0B0" />
         </View>
       )}
     </SafeAreaView>
@@ -1023,8 +1310,29 @@ function StatItem({ label, value, icon, theme, scaledSize }) {
   );
 }
 
-function HubListItem({ data, theme, primaryColor, scaledSize, onPress }) {
-  const usagePercent = Math.min((data.totalSpending / data.limit) * 100, 100);
+function HubListItem({ data, theme, primaryColor, scaledSize, onPress, now }) {
+  const usagePercent =
+    data.limit > 0 ? Math.min((data.totalSpending / data.limit) * 100, 100) : 0;
+
+  // --- ONLINE DETECTION LOGIC ---
+  let isOnline = false;
+  if (data.last_seen) {
+    let timeStr = data.last_seen.replace(" ", "T");
+    if (!timeStr.endsWith("Z") && !timeStr.includes("+")) {
+      timeStr += "Z";
+    }
+    const lastSeenMs = new Date(timeStr).getTime();
+    if (!isNaN(lastSeenMs)) {
+      const diffSeconds = (now - lastSeenMs) / 1000;
+      // Allow 8s lag, 5s clock skew
+      isOnline = diffSeconds < 8 && diffSeconds > -5;
+    }
+  }
+
+  // Refined Icon Background (Subtle instead of green circle)
+  const iconBg = theme.buttonNeutral;
+  const iconColor = isOnline ? primaryColor : theme.textSecondary;
+
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -1045,12 +1353,32 @@ function HubListItem({ data, theme, primaryColor, scaledSize, onPress }) {
           height: 44,
           borderRadius: 12,
           marginRight: 12,
-          backgroundColor: `${primaryColor}15`,
+          backgroundColor: iconBg,
           justifyContent: "center",
           alignItems: "center",
         }}
       >
-        <MaterialIcons name={data.icon} size={22} color={primaryColor} />
+        <MaterialIcons
+          name={isOnline ? "router" : "wifi-off"}
+          size={22}
+          color={iconColor}
+        />
+        {/* Status Dot */}
+        {isOnline && (
+          <View
+            style={{
+              position: "absolute",
+              bottom: 10,
+              right: 10,
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: primaryColor,
+              borderWidth: 1,
+              borderColor: theme.card,
+            }}
+          />
+        )}
       </View>
       <View style={{ flex: 1 }}>
         <View
@@ -1076,7 +1404,7 @@ function HubListItem({ data, theme, primaryColor, scaledSize, onPress }) {
               fontSize: scaledSize(14),
             }}
           >
-            ₱{data.totalSpending}
+            ₱{data.totalSpending.toFixed(2)}
           </Text>
         </View>
         <View
@@ -1103,9 +1431,13 @@ function HubListItem({ data, theme, primaryColor, scaledSize, onPress }) {
           }}
         >
           <Text
-            style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
+            style={{
+              color: iconColor,
+              fontSize: scaledSize(11),
+              fontWeight: "600",
+            }}
           >
-            Limit: ₱{data.limit}
+            {isOnline ? "Online" : "Offline"}
           </Text>
           <Text
             style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}

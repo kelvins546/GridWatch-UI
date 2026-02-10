@@ -20,7 +20,6 @@ import { useTheme } from "../../context/ThemeContext";
 import { supabase } from "../../lib/supabase";
 
 // --- STATIC IMAGE MAPPING ---
-// Map the "DB Name" (lowercase) to your local assets
 const PROVIDER_LOGOS = {
   meralco: require("../../../assets/meralco.png"),
   veco: require("../../../assets/visayan.png"),
@@ -159,24 +158,56 @@ export default function ProviderSetupScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  // --- 1. FETCH RATES FROM DB ---
+  // --- 1. INITIALIZE DATA (User & Rates) ---
   useEffect(() => {
-    fetchRates();
+    initData();
   }, []);
 
-  const fetchRates = async () => {
+  const initData = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      // 1. Fetch All Active Providers
+      const { data: ratesData, error: ratesError } = await supabase
         .from("utility_rates")
         .select("*")
         .eq("status", "active")
         .order("provider_name", { ascending: true });
 
-      if (error) throw error;
-      setProviders(data || []);
+      if (ratesError) throw ratesError;
+      setProviders(ratesData || []);
+
+      // 2. Fetch User's Current Selection
+      if (user) {
+        const { data: userData, error: userError } = await supabase
+          .from("users")
+          .select("provider_id, custom_rate")
+          .eq("id", user.id)
+          .single();
+
+        if (userData) {
+          if (userData.provider_id) {
+            // Case A: User has a specific provider
+            setSelectedId(userData.provider_id);
+            // IMPORTANT: Switch the tab to match the selected provider's type
+            const selectedProvider = ratesData.find(
+              (p) => p.id === userData.provider_id,
+            );
+            if (selectedProvider) {
+              setSelectedRateType(selectedProvider.rate_type);
+            }
+          } else if (userData.custom_rate) {
+            // Case B: User has a custom rate
+            setSelectedId("manual");
+            setCustomRate(userData.custom_rate.toString());
+          }
+        }
+      }
     } catch (err) {
-      console.log("Fetch Error:", err);
+      console.log("Init Error:", err);
     } finally {
       setLoading(false);
     }
@@ -445,11 +476,11 @@ export default function ProviderSetupScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View className="px-6">
-            {/* LOADING STATE */}
+            {/* LOADING STATE - Now using GRAY color */}
             {loading ? (
               <ActivityIndicator
                 size="large"
-                color={activeColor}
+                color="gray"
                 style={{ marginTop: 40 }}
               />
             ) : (
@@ -620,13 +651,11 @@ function ProviderCard({
   scaledSize,
 }) {
   // Attempt to match provider name to local image
-  // It handles "Meralco" -> "meralco" and "Visayan Electric (VECO)" -> "visayan" (via split)
   const normalizedName = item.provider_name.toLowerCase();
 
   // Try full name key first, then first word key
   let localImage = PROVIDER_LOGOS[normalizedName];
   if (!localImage) {
-    // Split by space or '(' to get the first significant word (e.g. "Visayan" from "Visayan Electric")
     const firstWord = normalizedName.split(/[\s(]/)[0];
     localImage = PROVIDER_LOGOS[firstWord];
   }

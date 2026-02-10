@@ -57,6 +57,16 @@ export default function DeviceConfigScreen() {
     loading: false,
   });
 
+  // --- SAFE BACK NAVIGATION ---
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      // Fallback if stack is empty
+      navigation.navigate("MainApp", { screen: "Home" });
+    }
+  };
+
   // --- ANIMATION LOOP ---
   useEffect(() => {
     const animation = Animated.loop(
@@ -471,7 +481,7 @@ export default function DeviceConfigScreen() {
 
       <View style={styles.headerOverlay}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={handleBack} // USE THE SAFE BACK HANDLER HERE
           style={{
             padding: 4,
             backgroundColor: "rgba(0,0,0,0.2)",
@@ -489,8 +499,6 @@ export default function DeviceConfigScreen() {
       >
         <LinearGradient colors={gradientColors} style={styles.heroContainer}>
           <View style={styles.heroIconContainer}>
-            {/* --- UPDATED: REMOVED (!isOnline || isRestarting) CHECK --- */}
-            {/* The Animated View will now render always, giving the wave effect to Online too */}
             <Animated.View
               style={{
                 position: "absolute",
@@ -643,7 +651,8 @@ export default function DeviceConfigScreen() {
             disabled={isRestarting}
             onPress={() =>
               navigation.navigate("HubConfig", {
-                hubId: hubData.serial_number,
+                hubId: hubData.serial_number || hubId, // Ensure ID is passed
+                fromBudget: true, // Mark as coming from an internal screen
                 status: isOnline ? "Online" : "Offline",
               })
             }

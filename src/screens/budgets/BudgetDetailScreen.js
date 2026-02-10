@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,11 +7,14 @@ import {
   StatusBar,
   TextInput,
   StyleSheet,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase"; // Import Supabase
 
 export default function BudgetDetailScreen() {
   const navigation = useNavigation();
@@ -20,29 +23,149 @@ export default function BudgetDetailScreen() {
 
   const scaledSize = (size) => size * fontScale;
 
-  const { deviceName } = route.params || { deviceName: "Air Conditioner" };
+  // Expecting deviceName, but ideally deviceId should be passed.
+  // We'll fetch based on name if ID is missing, but safer to use ID.
+  const { deviceName, deviceId } = route.params || {
+    deviceName: "Air Conditioner",
+  };
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [period, setPeriod] = useState("Monthly");
-  const [limit, setLimit] = useState("2000");
-  const [autoCutoff, setAutoCutoff] = useState(true);
+  const [limit, setLimit] = useState("0");
+  const [autoCutoff, setAutoCutoff] = useState(false);
+  const [pushNotifications, setPushNotifications] = useState(true); // Mapped to is_monitored
 
-  const [pushNotifications, setPushNotifications] = useState(true);
+  // --- REAL DB DATA STATE ---
+  const [globalBudget, setGlobalBudget] = useState(0);
+  const [otherDevicesLimit, setOtherDevicesLimit] = useState(0);
+  const [usedAmount, setUsedAmount] = useState(0);
+  const [currentDbDevice, setCurrentDbDevice] = useState(null);
 
-  // --- SIMULATION DATA ---
-  const globalBudget = 3000; // Your Global Goal
-  const otherDevicesLimit = 1500; // Total limits of ALL OTHER devices
+  useEffect(() => {
+    fetchDeviceData();
+  }, [deviceName]);
+
+  const fetchDeviceData = async () => {
+    setIsLoading(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // 1. Get Device Details
+      let query = supabase.from("devices").select("*").eq("user_id", user.id);
+
+      if (deviceId) {
+        query = query.eq("id", deviceId);
+      } else {
+        query = query.eq("name", deviceName);
+      }
+
+      const { data: deviceData, error: deviceError } = await query.single();
+
+      if (deviceError) throw deviceError;
+      setCurrentDbDevice(deviceData);
+
+      // Initialize State from DB
+      setLimit(
+        deviceData.budget_limit ? deviceData.budget_limit.toString() : "0",
+      );
+      setAutoCutoff(deviceData.auto_cutoff || false);
+      setPushNotifications(deviceData.is_monitored || false);
+
+      // 2. Get Global User Budget
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("monthly_budget")
+        .eq("id", user.id)
+        .single();
+
+      if (userError) throw userError;
+      setGlobalBudget(userData.monthly_budget || 0);
+
+      // 3. Get Other Devices' Limits
+      const { data: allDevices, error: allDevError } = await supabase
+        .from("devices")
+        .select("id, budget_limit")
+        .eq("user_id", user.id)
+        .neq("id", deviceData.id); // Exclude current
+
+      if (allDevError) throw allDevError;
+
+      const othersTotal = allDevices.reduce(
+        (sum, d) => sum + (d.budget_limit || 0),
+        0,
+      );
+      setOtherDevicesLimit(othersTotal);
+
+      // 4. Calculate Usage (Current Month)
+      const now = new Date();
+      const startOfMonth = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1,
+      ).toISOString();
+
+      const { data: usageData, error: usageError } = await supabase
+        .from("usage_analytics")
+        .select("cost_incurred")
+        .eq("device_id", deviceData.id)
+        .gte("date", startOfMonth);
+
+      if (usageError) throw usageError;
+
+      const totalUsed = usageData.reduce(
+        (sum, row) => sum + (row.cost_incurred || 0),
+        0,
+      );
+      setUsedAmount(totalUsed);
+    } catch (error) {
+      console.log("Error fetching budget details:", error);
+      Alert.alert("Error", "Failed to load device data.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!currentDbDevice) return;
+    setIsSaving(true);
+    try {
+      const numericLimit = parseFloat(limit) || 0;
+
+      const { error } = await supabase
+        .from("devices")
+        .update({
+          budget_limit: numericLimit,
+          auto_cutoff: autoCutoff,
+          is_monitored: pushNotifications,
+        })
+        .eq("id", currentDbDevice.id);
+
+      if (error) throw error;
+
+      Alert.alert("Success", "Device budget settings updated.");
+      navigation.goBack();
+    } catch (error) {
+      Alert.alert("Error", "Failed to save settings.");
+      console.log(error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // --- CALCULATIONS ---
   const currentDeviceLimit = parseFloat(limit) || 0;
   const totalAllocated = otherDevicesLimit + currentDeviceLimit;
-
-  // Logic: Does this specific device push the total over the global goal?
   const isOverAllocated = totalAllocated > globalBudget;
 
   const primaryColor = isDarkMode ? theme.buttonPrimary : "#00995e";
   const dangerColor = isDarkMode ? theme.buttonDangerText : "#cc0000";
 
-  const usedAmount = 1450.75;
   const numericLimit = parseFloat(limit) || 0;
-
   const percentage =
     numericLimit > 0
       ? Math.min((usedAmount / numericLimit) * 100, 100).toFixed(0)
@@ -57,9 +180,24 @@ export default function BudgetDetailScreen() {
   };
 
   const handleLimitChange = (text) => {
-    const cleaned = text.replace(/[^0-9]/g, "");
+    const cleaned = text.replace(/[^0-9.]/g, "");
     setLimit(cleaned);
   };
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: theme.background,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <ActivityIndicator size="large" color={theme.buttonPrimary} />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -106,18 +244,23 @@ export default function BudgetDetailScreen() {
         </Text>
 
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={handleSave}
+          disabled={isSaving}
           style={{ padding: 4 }}
         >
-          <Text
-            style={{
-              color: theme.buttonPrimary,
-              fontSize: scaledSize(14),
-              fontWeight: "bold",
-            }}
-          >
-            Save
-          </Text>
+          {isSaving ? (
+            <ActivityIndicator size="small" color={theme.buttonPrimary} />
+          ) : (
+            <Text
+              style={{
+                color: theme.buttonPrimary,
+                fontSize: scaledSize(14),
+                fontWeight: "bold",
+              }}
+            >
+              Save
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -221,7 +364,7 @@ export default function BudgetDetailScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* --- [ADDED] BUDGET HEALTH WARNING --- */}
+          {/* --- BUDGET HEALTH WARNING --- */}
           <View
             className="p-3 rounded-xl border mb-8"
             style={{
@@ -230,8 +373,8 @@ export default function BudgetDetailScreen() {
                   ? "rgba(255,68,68,0.1)"
                   : "rgba(255,200,200,0.3)"
                 : isDarkMode
-                ? "rgba(0,153,94,0.1)"
-                : "rgba(200,255,220,0.3)",
+                  ? "rgba(0,153,94,0.1)"
+                  : "rgba(200,255,220,0.3)",
               borderColor: isOverAllocated ? dangerColor : primaryColor,
             }}
           >
@@ -260,11 +403,10 @@ export default function BudgetDetailScreen() {
               }}
             >
               {isOverAllocated
-                ? `This limit combined with others (₱${otherDevicesLimit}) exceeds your global goal of ₱${globalBudget}.`
+                ? `This limit (₱${currentDeviceLimit}) combined with others (₱${otherDevicesLimit}) exceeds your global goal of ₱${globalBudget}.`
                 : "This limit fits safely within your overall budget goal."}
             </Text>
           </View>
-          {/* ------------------------------------- */}
 
           <Text
             className="font-bold uppercase tracking-widest mb-3"
@@ -280,7 +422,11 @@ export default function BudgetDetailScreen() {
                   fontSize: scaledSize(13),
                 }}
               >
-                Used: ₱ {usedAmount.toLocaleString()}
+                Used: ₱{" "}
+                {usedAmount.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
               </Text>
               <Text
                 className="font-bold"
@@ -321,7 +467,13 @@ export default function BudgetDetailScreen() {
                   fontSize: scaledSize(11),
                 }}
               >
-                Resets in: 12 Days
+                Resets in:{" "}
+                {new Date(
+                  new Date().getFullYear(),
+                  new Date().getMonth() + 1,
+                  0,
+                ).getDate() - new Date().getDate()}{" "}
+                Days
               </Text>
             </View>
           </View>
@@ -357,6 +509,7 @@ export default function BudgetDetailScreen() {
   );
 }
 
+// ... (Subcomponents remain the same)
 function RuleItem({
   title,
   desc,

@@ -13,7 +13,6 @@ import {
   ActivityIndicator,
   StyleSheet,
   BackHandler,
-  Alert, // Added Alert for user feedback
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -57,13 +56,22 @@ export default function HubConfigScreen() {
 
   const scaledSize = (size) => size * fontScale;
 
-  const { hubId } = route.params || { hubId: null };
+  const { hubId, fromBudget } = route.params || {
+    hubId: null,
+    fromBudget: false,
+  };
 
+  const [currentSerial, setCurrentSerial] = useState(hubId);
   const [isLoading, setIsLoading] = useState(false);
 
   // --- EXIT & RESET STATES ---
   const [exitModalVisible, setExitModalVisible] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+
+  // --- NEW MODAL STATES ---
+  const [noInternetModalVisible, setNoInternetModalVisible] = useState(false);
+  const [connectionFailedModalVisible, setConnectionFailedModalVisible] =
+    useState(false);
 
   const [hubName, setHubName] = useState({
     selection: PLACEHOLDER_HUB,
@@ -84,48 +92,121 @@ export default function HubConfigScreen() {
   });
 
   // ============================================================
-  // 1. HARDWARE BACK BUTTON INTERCEPTOR
+  // 1. FETCH EXISTING CONFIGURATION (ON LOAD)
+  // ============================================================
+  useEffect(() => {
+    if (!hubId) return;
+
+    const fetchConfig = async () => {
+      setIsLoading(true);
+      try {
+        let { data: hubData } = await supabase
+          .from("hubs")
+          .select("id, serial_number, name")
+          .eq("id", hubId)
+          .maybeSingle();
+
+        if (!hubData) {
+          const { data: hubBySerial } = await supabase
+            .from("hubs")
+            .select("id, serial_number, name")
+            .eq("serial_number", hubId)
+            .maybeSingle();
+          hubData = hubBySerial;
+        }
+
+        if (hubData) {
+          setCurrentSerial(hubData.serial_number);
+
+          if (HUB_LOCATIONS.includes(hubData.name)) {
+            setHubName({ selection: hubData.name, custom: "" });
+          } else {
+            setHubName({ selection: "Others", custom: hubData.name });
+          }
+
+          const { data: devices } = await supabase
+            .from("devices")
+            .select("outlet_number, type, name")
+            .eq("hub_id", hubData.id);
+
+          if (devices) {
+            const mapToState = (num) => {
+              const d = devices.find((x) => x.outlet_number === num);
+              if (!d) return { selection: "Unused", custom: "" };
+
+              const isCustom =
+                d.type === "Others" ||
+                (d.type !== "Unused" && d.name !== d.type);
+
+              return {
+                selection: d.type,
+                custom: isCustom ? d.name : "",
+              };
+            };
+
+            setOutlet1(mapToState(1));
+            setOutlet2(mapToState(2));
+            setOutlet3(mapToState(3));
+            setOutlet4(mapToState(4));
+          }
+        }
+      } catch (err) {
+        console.log("Error fetching config:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchConfig();
+  }, [hubId]);
+
+  // ============================================================
+  // 2. HARDWARE BACK BUTTON INTERCEPTOR
   // ============================================================
   useEffect(() => {
     const onBackPress = () => {
+      if (fromBudget) {
+        navigation.goBack();
+        return true;
+      }
       setExitModalVisible(true);
       return true;
     };
-    BackHandler.addEventListener("hardwareBackPress", onBackPress);
-    return () =>
-      BackHandler.removeEventListener("hardwareBackPress", onBackPress);
-  }, []);
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onBackPress,
+    );
+
+    return () => subscription.remove();
+  }, [fromBudget]);
 
   // ============================================================
-  // 2. ROBUST RESET LOGIC (With Live IP Fetch)
+  // 3. RESET LOGIC (Unchanged)
   // ============================================================
   const handleResetAndExit = async () => {
     setIsResetting(true);
 
-    // 1. Get the absolute latest IP from DB (in case it just connected)
     let freshIP = null;
-    if (hubId) {
+    if (currentSerial) {
       const { data } = await supabase
         .from("hubs")
         .select("ip_address")
-        .eq("serial_number", hubId)
+        .eq("serial_number", currentSerial)
         .single();
       if (data?.ip_address) freshIP = data.ip_address;
     }
 
-    // 2. Build Targets
     const targets = [];
-    if (freshIP) targets.push(`http://${freshIP}/reset`); // Try Home Network
-    targets.push("http://192.168.4.1/reset"); // Try Hotspot (Fallback)
+    if (freshIP) targets.push(`http://${freshIP}/reset`);
+    targets.push("http://192.168.4.1/reset");
 
     let resetSuccess = false;
 
-    // 3. Attempt Reset
     for (const url of targets) {
       try {
         console.log(`Attempting reset at: ${url}`);
         const controller = new AbortController();
-        // Increased timeout to 5s to be safe
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         const response = await fetch(url, {
@@ -136,50 +217,36 @@ export default function HubConfigScreen() {
         clearTimeout(timeoutId);
 
         if (response.ok) {
-          console.log("Reset command success at " + url);
           resetSuccess = true;
-          break; // Stop if successful
+          break;
         }
       } catch (e) {
         console.log(`Failed to reach ${url}:`, e.message);
       }
     }
 
-    // 4. Handle Result
     if (resetSuccess) {
-      // Best Case: Hub accepted reset. We wipe DB and exit.
       await performCloudUnlink();
       setIsResetting(false);
       setExitModalVisible(false);
       navigation.navigate("SetupHub");
     } else {
-      // Worst Case: Hub is unreachable.
       setIsResetting(false);
-      // Ask user to Force Exit since software reset failed
-      Alert.alert(
-        "Connection Failed",
-        "Could not reach the Hub to reset Wi-Fi. It might be on a different network.\n\nDo you want to force exit? (You must reset the Hub manually using the physical button).",
-        [
-          { text: "Retry", style: "cancel" },
-          {
-            text: "Force Exit",
-            style: "destructive",
-            onPress: async () => {
-              await performCloudUnlink();
-              setExitModalVisible(false);
-              navigation.navigate("SetupHub");
-            },
-          },
-        ],
-      );
+      setConnectionFailedModalVisible(true);
     }
   };
 
+  const handleForceExit = async () => {
+    await performCloudUnlink();
+    setConnectionFailedModalVisible(false);
+    setExitModalVisible(false);
+    navigation.navigate("SetupHub");
+  };
+
   const performCloudUnlink = async () => {
-    if (!hubId) return;
+    if (!currentSerial) return;
     try {
-      console.log("Unlinking from Database...");
-      await supabase.from("hubs").delete().eq("serial_number", hubId);
+      await supabase.from("hubs").delete().eq("serial_number", currentSerial);
     } catch (e) {
       console.log("DB Cleanup failed:", e);
     }
@@ -206,8 +273,12 @@ export default function HubConfigScreen() {
     return true;
   };
 
+  // ============================================================
+  // 4. SAVE LOGIC
+  // ============================================================
   const handleFinishSetup = async () => {
-    if (!hubId) return showAlert("Error", "No Hub Serial Number found.");
+    if (!currentSerial)
+      return showAlert("Error", "No Hub Serial Number found.");
     if (!isValid(hubName, PLACEHOLDER_HUB))
       return showAlert("Missing Info", "Please select or name your Hub.");
     if (!isValid(outlet1, INVALID_SELECTION))
@@ -218,6 +289,17 @@ export default function HubConfigScreen() {
       return showAlert("Missing Info", "Check Outlet 3.");
     if (!isValid(outlet4, INVALID_SELECTION))
       return showAlert("Missing Info", "Check Outlet 4.");
+
+    const allUnused = [outlet1, outlet2, outlet3, outlet4].every(
+      (o) => o.selection === "Unused",
+    );
+
+    if (allUnused) {
+      return showAlert(
+        "Configuration Required",
+        "You must configure at least one outlet device to continue.",
+      );
+    }
 
     setIsLoading(true);
 
@@ -234,7 +316,7 @@ export default function HubConfigScreen() {
         .upsert(
           {
             user_id: user.id,
-            serial_number: hubId,
+            serial_number: currentSerial,
             name: getFinalName(hubName),
             status: "online",
             model: "GridWatch-V1",
@@ -245,51 +327,51 @@ export default function HubConfigScreen() {
         .select()
         .single();
 
-      if (hubError) {
-        if (
-          hubError.message &&
-          (hubError.message.includes("Network request failed") ||
-            hubError.code === "PGRST000")
-        ) {
-          throw new Error("No Internet. Please disconnect from Hub Wi-Fi.");
-        }
-        throw hubError;
-      }
+      if (hubError) throw hubError;
 
       const realHubUUID = hubData.id;
 
-      const outlets = [
+      const outletsData = [
         { data: outlet1, num: 1 },
         { data: outlet2, num: 2 },
         { data: outlet3, num: 3 },
         { data: outlet4, num: 4 },
-      ];
+      ].map((outlet) => ({
+        hub_id: realHubUUID,
+        user_id: user.id,
+        name: getFinalName(outlet.data),
+        type: outlet.data.selection,
+        outlet_number: outlet.num,
+        status: "off",
+        is_monitored: true,
+      }));
 
-      for (const outlet of outlets) {
-        const { error: deviceError } = await supabase.from("devices").upsert(
-          {
-            hub_id: realHubUUID,
-            user_id: user.id,
-            name: getFinalName(outlet.data),
-            type: outlet.data.selection,
-            outlet_number: outlet.num,
-            status: "off",
-            is_monitored: true,
-          },
-          { onConflict: "hub_id, outlet_number" },
+      const { error: deviceError } = await supabase
+        .from("devices")
+        .upsert(outletsData, { onConflict: "hub_id, outlet_number" });
+
+      if (deviceError) throw deviceError;
+
+      setIsLoading(false);
+
+      if (fromBudget) {
+        showAlert("Updated", "Configuration saved!", "success", () => {
+          navigation.goBack();
+        });
+      } else {
+        showAlert("Setup Complete", "Hub & Outlets Synced!", "success", () =>
+          navigation.navigate("ProviderSetup", { fromOnboarding: true }),
         );
-
-        if (deviceError) throw deviceError;
       }
-
-      setIsLoading(false);
-      showAlert("Setup Complete", "Hub & Outlets Synced!", "success", () =>
-        navigation.navigate("ProviderSetup", { fromOnboarding: true }),
-      );
     } catch (error) {
-      console.error("Setup Error:", error);
       setIsLoading(false);
-      showAlert("Error", "Could not save: " + error.message);
+
+      const msg = error.message || "";
+      if (msg.includes("Network request failed")) {
+        setNoInternetModalVisible(true);
+      } else {
+        showAlert("Error", "Could not save: " + msg);
+      }
     }
   };
 
@@ -384,7 +466,9 @@ export default function HubConfigScreen() {
               letterSpacing: 0.5,
             }}
           >
-            Finalizing Setup...
+            {fromBudget
+              ? "Saving Configuration..."
+              : "Loading Configuration..."}
           </Text>
         </View>
       </Modal>
@@ -396,7 +480,15 @@ export default function HubConfigScreen() {
           borderBottomColor: theme.cardBorder,
         }}
       >
-        <TouchableOpacity onPress={() => setExitModalVisible(true)}>
+        <TouchableOpacity
+          onPress={() => {
+            if (fromBudget) {
+              navigation.goBack();
+            } else {
+              setExitModalVisible(true);
+            }
+          }}
+        >
           <MaterialIcons
             name="arrow-back"
             size={scaledSize(20)}
@@ -447,6 +539,7 @@ export default function HubConfigScreen() {
               style={{ borderColor: theme.cardBorder }}
             />
 
+            {/* --- RESTORED ACCURACY WARNING BOX --- */}
             <View
               className="p-4 rounded-xl border mb-8"
               style={{
@@ -537,7 +630,7 @@ export default function HubConfigScreen() {
                 className="font-bold uppercase"
                 style={{ color: "#fff", fontSize: scaledSize(16) }}
               >
-                Finish Setup
+                {fromBudget ? "Save Changes" : "Finish Setup"}
               </Text>
             </View>
           </TouchableOpacity>
@@ -570,7 +663,33 @@ export default function HubConfigScreen() {
         </View>
       </Modal>
 
-      {/* --- EXIT WARNING MODAL (NO ICON) --- */}
+      {/* --- NO INTERNET MODAL --- */}
+      <Modal transparent visible={noInternetModalVisible} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>No Internet Connection</Text>
+            <Text style={styles.modalBody}>
+              Your phone cannot reach the server. {"\n\n"}
+              {fromBudget
+                ? "Please check your Wi-Fi or Mobile Data connection."
+                : "You are likely still connected to the Hub's Wi-Fi (GridWatch-Setup) which has no internet."}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setNoInternetModalVisible(false)}
+              style={[
+                styles.modalButtonFull,
+                { backgroundColor: theme.buttonPrimary },
+              ]}
+            >
+              <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                I Reconnected, Retry
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- EXIT / RESET MODAL (Only if onboarding) --- */}
       <Modal transparent visible={exitModalVisible} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -578,13 +697,7 @@ export default function HubConfigScreen() {
             <Text style={styles.modalBody}>
               Your Hub is likely already connected to Wi-Fi. If you exit now,
               you will need to provision it again.
-              {"\n\n"}
-              <Text style={{ fontStyle: "italic", fontSize: scaledSize(11) }}>
-                We will try to reset the Hub automatically. If that fails, hold
-                the Hub's physical button for 5s to reset.
-              </Text>
             </Text>
-
             <View style={styles.buttonRow}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
@@ -594,7 +707,6 @@ export default function HubConfigScreen() {
                   Resume
                 </Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={styles.modalConfirmBtn}
                 onPress={handleResetAndExit}
