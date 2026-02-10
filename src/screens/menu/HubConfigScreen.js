@@ -182,7 +182,7 @@ export default function HubConfigScreen() {
   }, [fromBudget]);
 
   // ============================================================
-  // 3. RESET LOGIC (Unchanged)
+  // 3. RESET LOGIC
   // ============================================================
   const handleResetAndExit = async () => {
     setIsResetting(true);
@@ -205,7 +205,6 @@ export default function HubConfigScreen() {
 
     for (const url of targets) {
       try {
-        console.log(`Attempting reset at: ${url}`);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
@@ -375,7 +374,6 @@ export default function HubConfigScreen() {
     }
   };
 
-  // --- STYLES ---
   const styles = StyleSheet.create({
     modalOverlay: {
       flex: 1,
@@ -539,7 +537,6 @@ export default function HubConfigScreen() {
               style={{ borderColor: theme.cardBorder }}
             />
 
-            {/* --- RESTORED ACCURACY WARNING BOX --- */}
             <View
               className="p-4 rounded-xl border mb-8"
               style={{
@@ -689,7 +686,7 @@ export default function HubConfigScreen() {
         </View>
       </Modal>
 
-      {/* --- EXIT / RESET MODAL (Only if onboarding) --- */}
+      {/* --- EXIT / RESET MODAL --- */}
       <Modal transparent visible={exitModalVisible} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -728,6 +725,7 @@ export default function HubConfigScreen() {
   );
 }
 
+// --- FIXED: MOVED OUTSIDE MAIN COMPONENT TO PREVENT FLICKERING ---
 function ConfigDropdown({
   label,
   options,
