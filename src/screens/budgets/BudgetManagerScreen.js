@@ -466,7 +466,7 @@ export default function BudgetManagerScreen() {
     },
     modalOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.7)",
+      backgroundColor: "rgba(0,0,0,0.8)", // Matches DeviceConfig
       justifyContent: "center",
       alignItems: "center",
     },
@@ -474,8 +474,7 @@ export default function BudgetManagerScreen() {
       borderWidth: 1,
       padding: 20,
       borderRadius: 16,
-
-      maxWidth: 288,
+      width: 288, // Fixed width matching other modals
       alignItems: "center",
       backgroundColor: theme.card,
       borderColor: theme.cardBorder,
@@ -502,7 +501,7 @@ export default function BudgetManagerScreen() {
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
-      borderColor: theme.textSecondary,
+      borderColor: theme.cardBorder, // Updated to match DeviceConfig
     },
     modalConfirmBtn: {
       flex: 1,
@@ -515,6 +514,7 @@ export default function BudgetManagerScreen() {
       fontWeight: "bold",
       fontSize: scaledSize(12),
       textTransform: "uppercase",
+      letterSpacing: 1, // Matches HubConfig
     },
   });
 
@@ -1129,7 +1129,7 @@ export default function BudgetManagerScreen() {
                 backgroundColor:
                   statusModal.type === "error" ? dangerColor : primaryColor,
                 width: "100%",
-                height: 44,
+                height: 40,
                 borderRadius: 12,
                 alignItems: "center",
                 justifyContent: "center",

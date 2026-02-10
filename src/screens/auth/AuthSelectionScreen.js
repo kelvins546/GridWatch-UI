@@ -12,8 +12,8 @@ import {
   ScrollView,
   Alert,
   TextInput,
-  Platform, // Added Platform
-  UIManager, // Added UIManager
+  Platform,
+  UIManager,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -153,7 +153,6 @@ export default function AuthSelectionScreen() {
       }
 
       // 2. Manually Trigger Push Notification (So it shows Banner)
-      // We do this manually because the AppNavigator listener might not be ready yet during login transition.
       await Notifications.scheduleNotificationAsync({
         content: {
           title: title,
@@ -168,7 +167,7 @@ export default function AuthSelectionScreen() {
   };
 
   // --- HELPER: RESUME GOOGLE LOGIN (Used by main flow & reactivation) ---
-  const proceedWithGoogleLogin = async (tempClient, idToken) => {
+  const proceedWithGoogleLogin = async (tempClient, idToken, googleUser) => {
     // 1. Check 2FA Factors
     const { data: factors } = await tempClient.auth.mfa.listFactors();
     const totpFactor = factors?.totp?.find((f) => f.status === "verified");
@@ -192,7 +191,7 @@ export default function AuthSelectionScreen() {
       }
 
       setIsLoading(false);
-      // Double check profile existence logic from original code
+      // Double check profile existence logic
       const { data: profile } = await supabase
         .from("users")
         .select("id")
@@ -204,6 +203,7 @@ export default function AuthSelectionScreen() {
       } else {
         // Fallback if profile missing but auth exists
         setPendingIdToken(idToken);
+        setPendingGoogleUser(googleUser);
         setTermsModalVisible(true);
       }
     }
@@ -256,6 +256,7 @@ export default function AuthSelectionScreen() {
 
       if (isNewUser) {
         // --- NEW USER FLOW ---
+        // We delete the 'shadow' account immediately so we can re-register properly with profile data
         await tempClient.rpc("delete_own_account");
         setIsLoading(false);
         setPendingIdToken(idToken);
@@ -280,7 +281,7 @@ export default function AuthSelectionScreen() {
         }
 
         // 2. Proceed if Active
-        await proceedWithGoogleLogin(tempClient, idToken);
+        await proceedWithGoogleLogin(tempClient, idToken, userObj);
       }
     } catch (error) {
       setIsLoading(false);
@@ -297,7 +298,6 @@ export default function AuthSelectionScreen() {
     setReactivateModalVisible(false);
 
     try {
-      // Create fresh temp client for the update operation
       const tempClient = createClient(
         supabase.supabaseUrl,
         supabase.supabaseKey,
@@ -330,7 +330,7 @@ export default function AuthSelectionScreen() {
       if (updateError) throw updateError;
 
       // Resume Login Flow
-      await proceedWithGoogleLogin(tempClient, pendingReactivationToken);
+      await proceedWithGoogleLogin(tempClient, pendingReactivationToken, null);
     } catch (error) {
       setIsLoading(false);
       showModal(
@@ -461,22 +461,31 @@ export default function AuthSelectionScreen() {
 
       if (!firstName) firstName = "Member";
 
+      // --- CRITICAL FIX HERE: Added Placeholder Data ---
       const { error: dbError } = await supabase.from("users").upsert(
         [
           {
             id: user.id,
             email: user.email,
             first_name: firstName,
-            last_name: lastName,
+            last_name: lastName || "",
             role: "resident",
             status: "active",
             avatar_url: meta.photo || null,
+            // ADDED TO SATISFY DB "NOT NULL" CONSTRAINT:
+            region: "Not Set",
+            city: "Not Set",
+            zip_code: "0000",
+            street_address: "Not Set",
           },
         ],
         { onConflict: "id" },
       );
 
-      if (dbError) console.log("Profile Upsert Note:", dbError.message);
+      if (dbError) {
+        console.log("Profile Upsert Error:", dbError.message);
+        throw new Error(dbError.message);
+      }
 
       await sendWelcomeEmail(user.email, firstName);
 
@@ -944,6 +953,7 @@ export default function AuthSelectionScreen() {
               >
                 Last Updated: January 2026
               </Text>
+              {/* Terms Content */}
               <Text className="font-bold mb-2" style={{ color: theme.text }}>
                 1. Service Usage & Monitoring
               </Text>

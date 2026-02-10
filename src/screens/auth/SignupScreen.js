@@ -21,16 +21,15 @@ import { supabase } from "../../lib/supabase";
 import { createClient } from "@supabase/supabase-js"; // Shadow Client
 
 // --- CUSTOM LOCAL COMPONENT ---
+// (Kept incase you add it back later, or remove if unused)
 import FirebaseRecaptcha from "../../components/FirebaseRecaptcha";
 
 // --- FIREBASE IMPORTS ---
-import { PhoneAuthProvider, signInWithCredential } from "firebase/auth";
 import { auth, firebaseConfig } from "../../lib/firebaseConfig";
 
 const ALLOWED_EMAIL_REGEX =
   /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
 const ZIP_REGEX = /^[0-9]{4}$/;
-const PHONE_REGEX = /^[9]\d{9}$/;
 
 // EmailJS Config
 const EMAILJS_SERVICE_ID = "service_ah3k0xc";
@@ -58,7 +57,7 @@ export default function SignupScreen() {
   // Form State
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  // Removed phoneNumber
   const [region, setRegion] = useState("");
   const [city, setCity] = useState("");
   const [zipCode, setZipCode] = useState("");
@@ -75,16 +74,6 @@ export default function SignupScreen() {
   const [emailChecking, setEmailChecking] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsVisible, setTermsVisible] = useState(false);
-
-  // --- PHONE OTP STATE ---
-  const [phoneOtpModalVisible, setPhoneOtpModalVisible] = useState(false);
-  const [phoneSuccessModalVisible, setPhoneSuccessModalVisible] =
-    useState(false);
-  const [phoneOtp, setPhoneOtp] = useState(["", "", "", "", "", ""]);
-  const [verificationId, setVerificationId] = useState(null);
-  const [phoneTimer, setPhoneTimer] = useState(60);
-  const [canResendPhone, setCanResendPhone] = useState(false);
-  const phoneInputRefs = useRef([]);
 
   // --- EMAIL OTP STATE ---
   const [otpModalVisible, setOtpModalVisible] = useState(false);
@@ -119,7 +108,7 @@ export default function SignupScreen() {
   const passAnalysis = checkPasswordStrength(password);
   const isMatch = password === confirmPassword && password.length > 0;
 
-  // --- TIMERS ---
+  // --- TIMER ---
   useEffect(() => {
     let interval;
     if (otpModalVisible && timer > 0) {
@@ -129,16 +118,6 @@ export default function SignupScreen() {
     }
     return () => clearInterval(interval);
   }, [otpModalVisible, timer]);
-
-  useEffect(() => {
-    let interval;
-    if (phoneOtpModalVisible && phoneTimer > 0) {
-      interval = setInterval(() => setPhoneTimer((prev) => prev - 1), 1000);
-    } else if (phoneTimer === 0) {
-      setCanResendPhone(true);
-    }
-    return () => clearInterval(interval);
-  }, [phoneOtpModalVisible, phoneTimer]);
 
   const showModal = (
     type,
@@ -159,18 +138,7 @@ export default function SignupScreen() {
     setModalVisible(true);
   };
 
-  const formatPhoneNumber = (text) => {
-    const cleaned = text.replace(/\D/g, "");
-    const truncated = cleaned.slice(0, 10);
-    let formatted = truncated;
-    if (truncated.length > 3)
-      formatted = `${truncated.slice(0, 3)} ${truncated.slice(3)}`;
-    if (truncated.length > 6)
-      formatted = `${formatted.slice(0, 7)} ${truncated.slice(6)}`;
-    return formatted;
-  };
-
-  // --- FIX: ADDED LASTNAME VALIDATION ---
+  // --- VALIDATION ---
   const validateField = (field, value) => {
     let error = null;
     switch (field) {
@@ -180,12 +148,7 @@ export default function SignupScreen() {
       case "lastName":
         if (!value) error = "Required";
         break;
-      case "phoneNumber":
-        const rawPhone = value.replace(/\s/g, "");
-        if (!rawPhone) error = "Required";
-        else if (!PHONE_REGEX.test(rawPhone))
-          error = "Invalid (Must start with 9)";
-        break;
+      // Removed phoneNumber case
       case "region":
       case "city":
       case "fullAddress":
@@ -215,14 +178,7 @@ export default function SignupScreen() {
 
   const handleChange = (field, value) => {
     if (field === "zipCode" && !/^[0-9]*$/.test(value)) return;
-    if (field === "phoneNumber") {
-      const formatted = formatPhoneNumber(value);
-      setPhoneNumber(formatted);
-      setTouched((prev) => ({ ...prev, [field]: true }));
-      validateField(field, formatted.replace(/\s/g, ""));
-      return;
-    }
-    // Standard fields
+
     switch (field) {
       case "firstName":
         setFirstName(value);
@@ -254,7 +210,6 @@ export default function SignupScreen() {
         break;
     }
     setTouched((prev) => ({ ...prev, [field]: true }));
-    // Passwords match check
     if (field === "password" && touched.confirmPassword) {
       setErrors((p) => ({
         ...p,
@@ -271,7 +226,6 @@ export default function SignupScreen() {
     }
   };
 
-  // --- FIX: ADDED LASTNAME CHECK TO BUTTON ---
   const handleNextToLocation = () => {
     const isFirstValid = validateField("firstName", firstName);
     const isLastValid = validateField("lastName", lastName);
@@ -324,7 +278,6 @@ export default function SignupScreen() {
     }
   };
 
-  // --- REAL-TIME EMAIL CHECK ---
   const handleEmailBlur = async () => {
     if (!email) return;
     if (!ALLOWED_EMAIL_REGEX.test(email)) {
@@ -343,13 +296,8 @@ export default function SignupScreen() {
 
   const handleSignUpPress = async () => {
     if (isLoading || emailChecking) return;
-    const fields = ["email", "password", "confirmPassword", "phoneNumber"];
-    const values = {
-      email,
-      password,
-      confirmPassword,
-      phoneNumber: phoneNumber.replace(/\s/g, ""),
-    };
+    const fields = ["email", "password", "confirmPassword"];
+    const values = { email, password, confirmPassword };
     let isAllValid = true;
     fields.forEach((key) => {
       if (!validateField(key, values[key])) isAllValid = false;
@@ -392,72 +340,7 @@ export default function SignupScreen() {
       return;
     }
 
-    startPhoneVerification();
-  };
-
-  const startPhoneVerification = async () => {
-    try {
-      const rawPhone = phoneNumber.replace(/\s/g, "");
-      const fullPhoneNumber = `+63${rawPhone}`;
-
-      const phoneProvider = new PhoneAuthProvider(auth);
-      const verificationId = await phoneProvider.verifyPhoneNumber(
-        fullPhoneNumber,
-        recaptchaVerifier.current,
-      );
-
-      setVerificationId(verificationId);
-      setIsLoading(false);
-      setPhoneOtpModalVisible(true);
-      setPhoneTimer(60);
-      setCanResendPhone(false);
-      setPhoneOtp(["", "", "", "", "", ""]);
-    } catch (err) {
-      setIsLoading(false);
-      if (err.message && err.message.includes("cancelled")) {
-        console.log("User cancelled recaptcha");
-        return;
-      }
-      console.log("SMS Error:", err);
-      if (err.code === "auth/quota-exceeded") {
-        Alert.alert("Limit Reached", "SMS quota exceeded. Try a test number.");
-      } else {
-        Alert.alert("SMS Failed", `${err.message}`);
-      }
-    }
-  };
-
-  const handleVerifyPhoneOtp = async () => {
-    if (isLoading) return;
-    setIsLoading(true);
-    const code = phoneOtp.join("");
-
-    try {
-      const credential = PhoneAuthProvider.credential(verificationId, code);
-      await signInWithCredential(auth, credential);
-
-      setIsLoading(false);
-      setPhoneOtpModalVisible(false);
-
-      setTimeout(() => {
-        setPhoneSuccessModalVisible(true);
-      }, 500);
-    } catch (err) {
-      setIsLoading(false);
-      showModal("error", "Invalid Code", "The SMS code is incorrect.");
-    }
-  };
-
-  const handlePhoneSuccessContinue = () => {
-    setPhoneSuccessModalVisible(false);
-    setTimeout(() => {
-      startEmailVerification();
-    }, 500);
-  };
-
-  const handleResendPhone = () => {
-    setIsLoading(true);
-    startPhoneVerification();
+    startEmailVerification();
   };
 
   const startEmailVerification = async () => {
@@ -472,8 +355,6 @@ export default function SignupScreen() {
       setTimer(180);
       setCanResend(false);
       setOtp(["", "", "", "", "", ""]);
-    } else {
-      showModal("error", "Email Failed", "Could not send verification code.");
     }
   };
 
@@ -502,8 +383,14 @@ export default function SignupScreen() {
           body: JSON.stringify(data),
         },
       );
-      return response.ok;
+      if (!response.ok) {
+        const errorText = await response.text();
+        Alert.alert("EmailJS Error", errorText);
+        return false;
+      }
+      return true;
     } catch (error) {
+      Alert.alert("Network Error", error.message);
       return false;
     }
   };
@@ -520,7 +407,6 @@ export default function SignupScreen() {
   const createSupabaseAccount = async () => {
     setIsLoading(true);
 
-    // --- SHADOW CLIENT: Creates user WITHOUT logging them in globally yet ---
     const tempClient = createClient(
       supabase.supabaseUrl,
       supabase.supabaseKey,
@@ -546,15 +432,13 @@ export default function SignupScreen() {
 
     const userId = authData.user?.id;
     if (userId) {
-      const fullPhoneNumber = `+63${phoneNumber.replace(/\s/g, "")}`;
-      // Use tempClient for database insert to respect RLS
+      // FIX: Removed phone_number from DB insert since we removed the input
       const { error: dbError } = await tempClient.from("users").upsert([
         {
           id: userId,
           email: email,
           first_name: firstName,
           last_name: lastName || "",
-          phone_number: fullPhoneNumber,
           region: region,
           city: city,
           zip_code: zipCode,
@@ -573,15 +457,14 @@ export default function SignupScreen() {
         );
       } else {
         setOtpModalVisible(false);
-        setTempSession(authData.session); // Save session for after modal
+        setTempSession(authData.session);
 
-        // --- SUCCESS MODAL APPEARS HERE ---
         setTimeout(() => {
           showModal(
             "success",
             "Account Successfully Created",
             "Account has been verified and created.",
-            handleFinalSignup, // Redirect only when they click
+            handleFinalSignup, // Pass the handler here
           );
         }, 400);
       }
@@ -611,7 +494,6 @@ export default function SignupScreen() {
         "A new code has been sent to your email.",
       );
     } else {
-      showModal("error", "Resend Failed", "Could not resend OTP.");
       setCanResend(true);
     }
   };
@@ -624,14 +506,31 @@ export default function SignupScreen() {
     if (text.length === 0 && index > 0) refs.current[index - 1]?.focus();
   };
 
-  // --- FINAL REDIRECT HANDLER ---
+  // --- MODIFIED FINAL REDIRECT HANDLER ---
   const handleFinalSignup = async () => {
     setModalVisible(false);
-    // Trigger global auth change only now
-    if (tempSession) {
-      await supabase.auth.setSession(tempSession);
+    setIsLoading(true);
+
+    try {
+      if (tempSession) {
+        // This triggers the global Auth Listener in your App.js
+        // The app will detect the session and automatically switch screens.
+        await supabase.auth.setSession(tempSession);
+      } else {
+        // Fallback login
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) console.log("Manual fallback error:", error);
+      }
+    } catch (e) {
+      console.log("Session error:", e);
+    } finally {
+      setIsLoading(false);
+      // NOTE: Removed navigation.navigate() / navigation.reset()
+      // because the Auth Listener handles the screen switch.
     }
-    // NO MANUAL NAVIGATION NEEDED - AppNavigator will auto-detect change
   };
 
   const formatTime = (seconds) => {
@@ -739,6 +638,7 @@ export default function SignupScreen() {
         </View>
       )}
 
+      {/* Header */}
       <View
         style={{
           flexDirection: "row",
@@ -826,7 +726,6 @@ export default function SignupScreen() {
                   theme={theme}
                   scaledSize={scaledSize}
                 />
-                {/* --- FIX: Error Prop Added --- */}
                 <InputGroup
                   label="Last Name"
                   icon="person-outline"
@@ -966,20 +865,7 @@ export default function SignupScreen() {
                   theme={theme}
                   scaledSize={scaledSize}
                 />
-
-                <InputGroup
-                  label="Mobile Number"
-                  icon="phone"
-                  placeholder="902 123 456"
-                  value={phoneNumber}
-                  onChangeText={(t) => handleChange("phoneNumber", t)}
-                  error={touched.phoneNumber && errors.phoneNumber}
-                  keyboardType="phone-pad"
-                  maxLength={12}
-                  prefix="+(63)"
-                  theme={theme}
-                  scaledSize={scaledSize}
-                />
+                {/* REMOVED PHONE INPUT */}
                 <InputGroup
                   label="Password"
                   icon="lock"
@@ -1192,143 +1078,6 @@ export default function SignupScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* --- PHONE OTP MODAL --- */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={phoneOtpModalVisible}
-        onRequestClose={() => {
-          if (!isLoading) setPhoneOtpModalVisible(false);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.otpModalContainer}>
-            <Text style={styles.modalTitle}>Verify Mobile Number</Text>
-            <Text style={styles.modalBody}>
-              Enter the 6-digit code sent to +63 {phoneNumber}.
-            </Text>
-            <View
-              style={{
-                flexDirection: "row",
-                gap: 1,
-                marginBottom: 20,
-                justifyContent: "center",
-              }}
-            >
-              {phoneOtp.map((digit, index) => (
-                <TextInput
-                  key={index}
-                  ref={(ref) => (phoneInputRefs.current[index] = ref)}
-                  style={styles.otpInput}
-                  maxLength={1}
-                  keyboardType="number-pad"
-                  value={digit}
-                  onChangeText={(text) =>
-                    handleOtpChange(
-                      text,
-                      index,
-                      setPhoneOtp,
-                      phoneOtp,
-                      phoneInputRefs,
-                    )
-                  }
-                  placeholder="-"
-                  placeholderTextColor={theme.textSecondary}
-                  editable={!isLoading}
-                />
-              ))}
-            </View>
-            <TouchableOpacity
-              onPress={handleVerifyPhoneOtp}
-              style={{ width: "100%", marginBottom: 12 }}
-              disabled={isLoading}
-            >
-              <View
-                style={{
-                  height: 40,
-                  borderRadius: 12,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  backgroundColor: isLoading
-                    ? theme.buttonNeutral
-                    : theme.buttonPrimary,
-                }}
-              >
-                <Text
-                  style={{
-                    color: theme.buttonPrimaryText,
-                    fontWeight: "bold",
-                    fontSize: scaledSize(12),
-                  }}
-                >
-                  VERIFY PHONE
-                </Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              disabled={!canResendPhone || isLoading}
-              onPress={handleResendPhone}
-            >
-              <Text
-                style={{
-                  fontSize: scaledSize(12),
-                  fontWeight: "bold",
-                  color:
-                    canResendPhone && !isLoading
-                      ? theme.buttonPrimary
-                      : theme.textSecondary,
-                }}
-              >
-                {canResendPhone
-                  ? "Resend Code"
-                  : `Resend in ${formatTime(phoneTimer)}`}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* --- PHONE SUCCESS MODAL --- */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={phoneSuccessModalVisible}
-        onRequestClose={() => {}}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Phone Verified</Text>
-            <Text style={styles.modalBody}>
-              Your phone number has been successfully verified. Now let's verify
-              your email address.
-            </Text>
-            <TouchableOpacity
-              style={{ width: "100%" }}
-              onPress={handlePhoneSuccessContinue}
-            >
-              <View
-                style={[
-                  styles.modalButton,
-                  { backgroundColor: theme.buttonPrimary },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: theme.buttonPrimaryText,
-                    fontWeight: "bold",
-                    fontSize: scaledSize(12),
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                  }}
-                >
-                  CONTINUE
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
       {/* --- EMAIL OTP MODAL --- */}
       <Modal
         animationType="fade"
@@ -1469,7 +1218,8 @@ export default function SignupScreen() {
               >
                 Last Updated: January 2026
               </Text>
-              {/* Terms Content Kept Short */}
+
+              {/* --- RESTORED TERMS CONTENT --- */}
               <Text className="font-bold mb-2" style={{ color: theme.text }}>
                 1. Service Usage & Monitoring
               </Text>
@@ -1477,8 +1227,12 @@ export default function SignupScreen() {
                 className="text-sm mb-4 leading-5"
                 style={{ color: theme.textSecondary }}
               >
-                GridWatch provides real-time electrical monitoring...
+                GridWatch provides real-time electrical monitoring services. By
+                using the App and Hub, you acknowledge that data regarding your
+                voltage, current, and wattage consumption will be uploaded to
+                our cloud servers for analysis.
               </Text>
+
               <Text className="font-bold mb-2" style={{ color: theme.text }}>
                 2. Data Privacy
               </Text>
@@ -1486,7 +1240,38 @@ export default function SignupScreen() {
                 className="text-sm mb-4 leading-5"
                 style={{ color: theme.textSecondary }}
               >
-                We value your privacy...
+                We value your privacy. Your personal information and specific
+                location data are encrypted. We do not sell your individual
+                appliance usage patterns to third-party advertisers. Aggregated,
+                anonymous data may be used to improve grid efficiency analysis.
+              </Text>
+
+              <Text className="font-bold mb-2" style={{ color: theme.text }}>
+                3. Hardware Safety & Responsibility
+              </Text>
+              <Text
+                className="text-sm mb-4 leading-5"
+                style={{ color: theme.textSecondary }}
+              >
+                The GridWatch Hub is designed to assist in monitoring and fault
+                protection. However, it is not a substitute for professional
+                electrical maintenance. Users are responsible for ensuring their
+                appliances are safe to operate remotely. Do not overload the
+                device beyond its rated 10A capacity.
+              </Text>
+
+              <Text className="font-bold mb-2" style={{ color: theme.text }}>
+                4. Limitation of Liability
+              </Text>
+              <Text
+                className="text-sm mb-4 leading-5"
+                style={{ color: theme.textSecondary }}
+              >
+                GridWatch is not liable for any damages, electrical fires, or
+                equipment failures resulting from misuse, overloading, or
+                modification of the hardware. The "Safety Cut-off" feature is a
+                supplementary protection layer and not a guarantee against all
+                electrical faults.
               </Text>
             </ScrollView>
             <View
@@ -1695,7 +1480,7 @@ function InputGroup({
           secureTextEntry={isPassword && !showPassword}
           value={value}
           onChangeText={onChangeText}
-          onBlur={onBlur} // <--- KEY CHANGE: Pass onBlur to TextInput
+          onBlur={onBlur}
           maxLength={maxLength}
           keyboardType={keyboardType}
         />
