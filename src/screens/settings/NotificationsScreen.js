@@ -20,25 +20,22 @@ export default function NotificationsScreen() {
   const { theme, isDarkMode, fontScale } = useTheme();
   const scaledSize = (size) => size * fontScale;
 
-  const [activeTab, setActiveTab] = useState("system"); // 'system' or 'login'
+  const [activeTab, setActiveTab] = useState("system");
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // --- 1. HELPER: STANDARDIZE DATA STRUCTURE ---
   const normalizeData = (item, source) => {
     let title, body, category, type, icon, dateObj, isRead;
 
     if (source === "invite") {
-      // --- HANDLE INVITES (hub_invites table) ---
       title = "New Invitation";
       body = "You have been invited to join a Hub! Tap to view.";
       category = "system";
-      type = "success"; // Green check/person icon
+      type = "success";
       icon = "person-add";
       dateObj = new Date(item.created_at);
-      isRead = false; // Invites are always "unread" in logs until handled
+      isRead = false;
     } else {
-      // --- HANDLE APP NOTIFICATIONS (app_notifications table) ---
       title = item.title;
       body = item.body;
       isRead = item.is_read;
@@ -47,29 +44,23 @@ export default function NotificationsScreen() {
       const tLower = title.toLowerCase();
       const bLower = body.toLowerCase();
 
-      // SECURITY INTERCEPTOR
       if (
-        tLower.includes("login successful") || // Catch standard login
+        tLower.includes("login successful") ||
         tLower.includes("other device") ||
         bLower.includes("other device") ||
         bLower.includes("someone login") ||
         bLower.includes("did you just login")
       ) {
-        // Only rewrite to "Alert" if we are viewing the log
-        // (You might want logic to distinguish 'my login' vs 'other login',
-        // but for safety, we highlight concurrent logins here if needed)
         if (title === "Security Alert" || tLower.includes("other device")) {
           category = "system";
           type = "critical";
           icon = "security";
         } else {
-          // Standard login logs
           category = "login";
           type = "login_success";
           icon = "lock-open";
         }
       } else {
-        // Standard Categorization
         if (tLower.includes("login") || tLower.includes("password")) {
           category = "login";
           type = tLower.includes("failed") ? "login_failed" : "login_success";
@@ -96,7 +87,6 @@ export default function NotificationsScreen() {
       }
     }
 
-    // Date Formatting
     const timeString =
       dateObj.toLocaleDateString() === new Date().toLocaleDateString()
         ? dateObj.toLocaleTimeString([], {
@@ -115,11 +105,10 @@ export default function NotificationsScreen() {
       time: timeString,
       unread: !isRead,
       rawDate: dateObj,
-      source, // 'invite' or 'notification'
+      source,
     };
   };
 
-  // --- 2. FETCH ALL DATA (NOTIFICATIONS + INVITES) ---
   const fetchAllLogs = async () => {
     setLoading(true);
     try {
@@ -128,7 +117,6 @@ export default function NotificationsScreen() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      // A. Fetch Notifications
       const { data: notifs, error: notifError } = await supabase
         .from("app_notifications")
         .select("*")
@@ -137,17 +125,15 @@ export default function NotificationsScreen() {
 
       if (notifError) throw notifError;
 
-      // B. Fetch Pending Invites
       const { data: invites, error: inviteError } = await supabase
         .from("hub_invites")
         .select("*")
-        .eq("email", user.email) // Filter by email for invites
+        .eq("email", user.email)
         .eq("status", "pending")
         .order("created_at", { ascending: false });
 
       if (inviteError) throw inviteError;
 
-      // C. Merge & Sort
       const parsedNotifs = notifs.map((n) => normalizeData(n, "notification"));
       const parsedInvites = invites.map((i) => normalizeData(i, "invite"));
 
@@ -163,7 +149,6 @@ export default function NotificationsScreen() {
     }
   };
 
-  // --- 3. REALTIME LISTENERS (BOTH TABLES) ---
   useEffect(() => {
     let subscription;
     const setupLive = async () => {
@@ -174,7 +159,7 @@ export default function NotificationsScreen() {
 
       subscription = supabase
         .channel("screen_logs")
-        // Listen for App Notifications
+
         .on(
           "postgres_changes",
           {
@@ -184,7 +169,6 @@ export default function NotificationsScreen() {
             filter: `user_id=eq.${user.id}`,
           },
           (payload) => {
-            // Apply Concurrent Login Logic Here
             let rawData = payload.new;
             if (rawData.title.toLowerCase().includes("login successful")) {
               rawData = {
@@ -197,7 +181,7 @@ export default function NotificationsScreen() {
             setNotifications((prev) => [newNote, ...prev]);
           },
         )
-        // Listen for New Invites
+
         .on(
           "postgres_changes",
           {
@@ -222,19 +206,17 @@ export default function NotificationsScreen() {
     };
   }, []);
 
-  // --- 4. MARK AS READ ---
   const handleMarkAllRead = async () => {
     setNotifications(notifications.map((n) => ({ ...n, unread: false })));
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      // Only mark app_notifications as read in DB
+
       await supabase
         .from("app_notifications")
         .update({ is_read: true })
         .eq("user_id", user.id);
-      // Invites remain "pending" in DB until accepted/declined in Invitations screen
     } catch (err) {
       console.log("Error marking read:", err);
     }
@@ -254,7 +236,7 @@ export default function NotificationsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- HEADER --- */}
+      {}
       <View
         style={{
           flexDirection: "row",
@@ -310,7 +292,7 @@ export default function NotificationsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* TABS */}
+      {}
       <View style={styles.tabContainer}>
         <TabButton
           label="System Logs"
@@ -457,7 +439,6 @@ function NotificationCard({ data, theme, isDarkMode, scaledSize, navigation }) {
     bgColor = isDarkMode ? "rgba(0, 255, 153, 0.15)" : "rgba(0, 153, 94, 0.15)";
   }
 
-  // Handle tap for invites
   const handlePress = () => {
     if (data.source === "invite") {
       navigation.navigate("Invitations");

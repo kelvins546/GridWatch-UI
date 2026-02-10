@@ -34,7 +34,6 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// --- STATIC IMAGE MAPPING ---
 const PROVIDER_LOGOS = {
   meralco: require("../../../assets/meralco.png"),
   veco: require("../../../assets/visayan.png"),
@@ -146,7 +145,6 @@ const PROVIDER_LOGOS = {
   zaneco: require("../../../assets/zaneco.png"),
 };
 
-// --- HELPER: FORMAT TIME 24h -> 12h ---
 const formatTime12h = (time24) => {
   if (!time24) return "--:--";
   const [h, m] = time24.split(":");
@@ -162,7 +160,6 @@ export default function DeviceControlScreen() {
   const { theme, fontScale, isDarkMode } = useTheme();
   const scaledSize = (size) => size * fontScale;
 
-  // 1. GET THE ID FROM PARAMS
   const {
     deviceName,
     status: initialStatus,
@@ -178,16 +175,14 @@ export default function DeviceControlScreen() {
     return status.toString().toLowerCase() === "on";
   };
 
-  // --- STATE ---
   const [isPowered, setIsPowered] = useState(checkIsOn(initialStatus));
   const [currentWatts, setCurrentWatts] = useState(0);
   const [currentVoltage, setCurrentVoltage] = useState(220);
   const [electricityRate, setElectricityRate] = useState(12);
   const [providerName, setProviderName] = useState(null);
 
-  // Runtime & Historical Data State
   const [dbRuntimeMinutes, setDbRuntimeMinutes] = useState(0);
-  const [sessionMinutes, setSessionMinutes] = useState(0); // Live counter
+  const [sessionMinutes, setSessionMinutes] = useState(0);
   const [todayCost, setTodayCost] = useState(0);
 
   const [deviceId, setDeviceId] = useState(paramDeviceId);
@@ -202,7 +197,6 @@ export default function DeviceControlScreen() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
 
-  // --- SCHEDULE STATE ---
   const [schedules, setSchedules] = useState([
     {
       id: "1",
@@ -220,8 +214,6 @@ export default function DeviceControlScreen() {
   const [selectedDays, setSelectedDays] = useState(Array(7).fill(true));
   const [isActionOn, setIsActionOn] = useState(true);
 
-  // --- DERIVED VALUES ---
-  // Online/Offline Check
   const checkHubOnline = () => {
     if (!hubLastSeen) return false;
     let timeStr = hubLastSeen.replace(" ", "T");
@@ -236,11 +228,8 @@ export default function DeviceControlScreen() {
   const displayWatts = isHubOnline ? currentWatts : 0;
   const displayVolts = isHubOnline ? `${currentVoltage.toFixed(1)} V` : "0 V";
 
-  // Calculate cost per hour based on current watts and rate
   const estCostPerHour = (displayWatts / 1000) * electricityRate;
 
-  // --- LIVE RUNTIME TIMER ---
-  // Updates local session duration
   useEffect(() => {
     let interval;
     if (isPowered) {
@@ -253,10 +242,8 @@ export default function DeviceControlScreen() {
     return () => clearInterval(interval);
   }, [isPowered]);
 
-  // --- ANIMATION REFS ---
   const pulseAnim = useRef(new Animated.Value(0)).current;
 
-  // --- PULSE ANIMATION ---
   useEffect(() => {
     const animation = Animated.loop(
       Animated.sequence([
@@ -287,7 +274,6 @@ export default function DeviceControlScreen() {
     outputRange: [0.3, 0],
   });
 
-  // --- FETCH DATA ---
   const fetchDeviceData = async (isRefetch = false) => {
     if (isRefetch) setRefreshing(true);
     else setIsLoading(true);
@@ -365,7 +351,6 @@ export default function DeviceControlScreen() {
         setElectricityRate(finalRate);
         setProviderName(finalProviderName);
 
-        // --- FETCH HISTORICAL DATA ---
         const dateNow = new Date();
         const year = dateNow.getFullYear();
         const month = String(dateNow.getMonth() + 1).padStart(2, "0");
@@ -432,15 +417,13 @@ export default function DeviceControlScreen() {
     return `${m}m Today`;
   };
 
-  // --- REALTIME SUBSCRIPTIONS ---
   useEffect(() => {
     let deviceSub;
     let hubSub;
-    let usageSub; // <--- NEW LISTENER FOR COST
+    let usageSub;
     let mounted = true;
 
     if (deviceId) {
-      // 1. Device Status Changes
       deviceSub = supabase
         .channel(`device_control_${deviceId}`)
         .on(
@@ -473,19 +456,17 @@ export default function DeviceControlScreen() {
         )
         .subscribe();
 
-      // 2. Usage/Cost Updates (From ESP32)
       usageSub = supabase
         .channel(`usage_tracking_${deviceId}`)
         .on(
           "postgres_changes",
           {
-            event: "*", // Listen for INSERT and UPDATE
+            event: "*",
             schema: "public",
             table: "usage_analytics",
             filter: `device_id=eq.${deviceId}`,
           },
           (payload) => {
-            // When DB updates, fetch the fresh total cost
             if (mounted) fetchDeviceData();
           },
         )
@@ -1104,7 +1085,7 @@ export default function DeviceControlScreen() {
         </View>
       </ScrollView>
 
-      {/* MODAL: POWER CONFIRM */}
+      {}
       <Modal
         visible={showConfirm}
         transparent
@@ -1159,7 +1140,7 @@ export default function DeviceControlScreen() {
         </View>
       </Modal>
 
-      {/* MODAL: SCHEDULE */}
+      {}
       <Modal
         visible={showSchedule}
         transparent

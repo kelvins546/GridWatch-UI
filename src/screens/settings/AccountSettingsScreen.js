@@ -44,14 +44,12 @@ export default function AccountSettingsScreen() {
 
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- SECURITY GATE STATE ---
   const [isVerified, setIsVerified] = useState(false);
   const [verificationPassword, setVerificationPassword] = useState("");
   const [showVerifyPass, setShowVerifyPass] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [userEmail, setUserEmail] = useState("");
 
-  // --- SETTINGS STATE ---
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPass, setShowNewPass] = useState(false);
@@ -59,17 +57,15 @@ export default function AccountSettingsScreen() {
   const [isChangePasswordExpanded, setIsChangePasswordExpanded] =
     useState(false);
 
-  // --- 2FA STATE ---
   const [is2FAEnabled, setIs2FAEnabled] = useState(false);
   const [mfaModalVisible, setMfaModalVisible] = useState(false);
   const [mfaSecret, setMfaSecret] = useState("");
   const [mfaFactorId, setMfaFactorId] = useState("");
   const [mfaCode, setMfaCode] = useState("");
   const [isMfaLoading, setIsMfaLoading] = useState(false);
-  const [pendingAction, setPendingAction] = useState(null); // 'DISABLE_2FA' | 'SAVE_PASSWORD'
+  const [pendingAction, setPendingAction] = useState(null);
   const [isCopied, setIsCopied] = useState(false);
 
-  // --- DEACTIVATION STATE ---
   const [isAccountControlExpanded, setIsAccountControlExpanded] =
     useState(false);
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
@@ -94,7 +90,6 @@ export default function AccountSettingsScreen() {
     checkUserAndMfaStatus();
   }, []);
 
-  // Timer for Deactivation
   useEffect(() => {
     let interval;
     if (showDeactivateModal && deactivateTimer > 0) {
@@ -108,7 +103,6 @@ export default function AccountSettingsScreen() {
   const checkUserAndMfaStatus = async () => {
     setIsLoading(true);
     try {
-      // 1. Check User & verification status
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -121,14 +115,12 @@ export default function AccountSettingsScreen() {
             user.app_metadata.providers.includes("email"));
         const hasMetadataPass = user.user_metadata?.has_password === true;
 
-        // If user has a password, require verification. Else (Google only), allow access.
         if (isEmailProvider || hasMetadataPass) {
           setIsVerified(false);
         } else {
           setIsVerified(true);
         }
 
-        // 2. Check MFA Status
         const { data, error } = await supabase.auth.mfa.listFactors();
         if (!error) {
           const totpFactor = data.totp.find((f) => f.status === "verified");
@@ -143,7 +135,6 @@ export default function AccountSettingsScreen() {
     }
   };
 
-  // --- GATEKEEPER LOGIC ---
   const verifyIdentity = async () => {
     if (!verificationPassword) return;
     setIsVerifying(true);
@@ -159,7 +150,6 @@ export default function AccountSettingsScreen() {
     }
   };
 
-  // --- PASSWORD LOGIC ---
   const handleChangePassword = async () => {
     if (!newPassword || !confirmPassword) return;
     if (!passAnalysis.isValid || !isMatch) {
@@ -171,7 +161,6 @@ export default function AccountSettingsScreen() {
       return;
     }
 
-    // If 2FA is ON, require elevation
     if (is2FAEnabled) {
       const { data: level } =
         await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
@@ -207,10 +196,8 @@ export default function AccountSettingsScreen() {
     }
   };
 
-  // --- 2FA LOGIC ---
   const handleToggle2FA = () => {
     if (is2FAEnabled) {
-      // Disable needs verification
       setPendingAction("DISABLE_2FA");
       if (!mfaFactorId) {
         supabase.auth.mfa.listFactors().then(({ data }) => {
@@ -250,7 +237,7 @@ export default function AccountSettingsScreen() {
       setMfaFactorId(data.id);
       setMfaSecret(data.totp.secret);
       setMfaCode("");
-      setPendingAction(null); // Normal enrollment
+      setPendingAction(null);
       setMfaModalVisible(true);
     } catch (e) {
       console.log("Enrollment error silenced:", e.message);
@@ -281,7 +268,6 @@ export default function AccountSettingsScreen() {
       } else if (pendingAction === "SAVE_PASSWORD") {
         await updatePassword();
       } else {
-        // Enable Success
         const {
           data: { user },
         } = await supabase.auth.getUser();
@@ -345,7 +331,6 @@ export default function AccountSettingsScreen() {
     setTimeout(() => setIsCopied(false), 2000);
   };
 
-  // --- DEACTIVATION LOGIC ---
   const confirmDeactivate = () => {
     setDeactivateTimer(10);
     setDeactivateAgreed(false);
@@ -436,7 +421,7 @@ export default function AccountSettingsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
+      {}
       <View
         className="flex-row items-center justify-center px-6 py-5 border-b"
         style={{
@@ -463,7 +448,6 @@ export default function AccountSettingsScreen() {
       </View>
 
       {!isVerified ? (
-        // SECURITY GATE VIEW
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -551,7 +535,6 @@ export default function AccountSettingsScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       ) : (
-        // MAIN SETTINGS VIEW (Protected)
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={{ flex: 1 }}
@@ -567,7 +550,7 @@ export default function AccountSettingsScreen() {
               Security
             </Text>
 
-            {/* 1. Change Password */}
+            {}
             <TouchableOpacity
               onPress={togglePasswordExpand}
               className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
@@ -690,7 +673,7 @@ export default function AccountSettingsScreen() {
               </View>
             )}
 
-            {/* 2. Enable 2FA */}
+            {}
             <View
               className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
               style={{
@@ -718,7 +701,7 @@ export default function AccountSettingsScreen() {
               />
             </View>
 
-            {/* 3. Account Ownership */}
+            {}
             <TouchableOpacity
               onPress={toggleAccountControlExpand}
               className="p-4 rounded-xl mb-3 flex-row justify-between items-center border h-[72px]"
@@ -802,9 +785,9 @@ export default function AccountSettingsScreen() {
         </KeyboardAvoidingView>
       )}
 
-      {/* --- MODALS --- */}
+      {}
 
-      {/* DEACTIVATION CONFIRM MODAL */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
@@ -970,7 +953,7 @@ export default function AccountSettingsScreen() {
         </View>
       </Modal>
 
-      {/* 2FA SETUP MODAL */}
+      {}
       <Modal
         animationType="slide"
         transparent={true}
@@ -1136,7 +1119,7 @@ export default function AccountSettingsScreen() {
         </View>
       </Modal>
 
-      {/* ALERT MODAL */}
+      {}
       <CustomModal
         visible={modalConfig.visible}
         type={modalConfig.type}

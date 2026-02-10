@@ -23,12 +23,10 @@ import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../lib/supabase";
 import { decode } from "base64-arraybuffer";
 
-// --- FIREBASE IMPORTS ---
 import FirebaseRecaptcha from "../../components/FirebaseRecaptcha";
 import { PhoneAuthProvider, signInWithCredential } from "firebase/auth";
 import { auth, firebaseConfig } from "../../lib/firebaseConfig";
 
-// Enable LayoutAnimation for Android
 if (
   Platform.OS === "android" &&
   UIManager.setLayoutAnimationEnabledExperimental
@@ -54,10 +52,8 @@ export default function ProfileSettingsScreen() {
   const { theme, isDarkMode, fontScale } = useTheme();
   const scaledSize = (size) => size * (fontScale || 1);
 
-  // --- RECAPTCHA REF ---
   const recaptchaVerifier = useRef(null);
 
-  // --- STATE ---
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -65,7 +61,6 @@ export default function ProfileSettingsScreen() {
 
   const [isPhoneEditable, setIsPhoneEditable] = useState(false);
 
-  // Location State
   const [region, setRegion] = useState("");
   const [city, setCity] = useState("");
   const [zipCode, setZipCode] = useState("");
@@ -85,16 +80,13 @@ export default function ProfileSettingsScreen() {
     avatarUrl: null,
   });
 
-  // Phone OTP
   const [phoneOtpVisible, setPhoneOtpVisible] = useState(false);
   const [phoneOtpCode, setPhoneOtpCode] = useState("");
   const [verificationId, setVerificationId] = useState(null);
 
-  // Modals
   const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
 
-  // Loading State
   const [isLoading, setIsLoading] = useState(true);
 
   const [modalConfig, setModalConfig] = useState({
@@ -239,7 +231,6 @@ export default function ProfileSettingsScreen() {
     }
   };
 
-  // --- SAVE BUTTON HANDLER ---
   const handleSave = async () => {
     if (!firstName.trim()) {
       showModal("error", "Missing Info", "First Name is required.");
@@ -257,19 +248,16 @@ export default function ProfileSettingsScreen() {
       const cleanPhone = phoneNumber.replace(/\s/g, "");
       const initialCleanPhone = initialData.phoneNumber.replace(/\s/g, "");
 
-      // --- CHECK IF PHONE CHANGED & NEEDS VERIFICATION ---
       if (
         isPhoneEditable &&
         cleanPhone !== initialCleanPhone &&
         cleanPhone.length > 9
       ) {
-        // Wait a small tick to ensure UI updates aren't blocking
         await new Promise((resolve) => setTimeout(resolve, 100));
         await startPhoneVerification(cleanPhone);
-        return; // Stop here, wait for OTP
+        return;
       }
 
-      // If phone didn't change, just save profile
       await finalizeProfileUpdate(user.id);
     } catch (error) {
       setIsLoading(false);
@@ -277,7 +265,6 @@ export default function ProfileSettingsScreen() {
     }
   };
 
-  // --- 1. START FIREBASE SMS ---
   const startPhoneVerification = async (phone) => {
     try {
       let formatted = phone.replace(/\s/g, "");
@@ -316,7 +303,6 @@ export default function ProfileSettingsScreen() {
     }
   };
 
-  // --- 2. VERIFY FIREBASE OTP ---
   const verifyPhoneOtp = async () => {
     if (phoneOtpCode.length !== 6) {
       showModal("error", "Invalid Code", "Please enter 6 digits.");
@@ -342,7 +328,6 @@ export default function ProfileSettingsScreen() {
     }
   };
 
-  // --- 3. UPDATE SUPABASE DATABASE ---
   const finalizeProfileUpdate = async (userId) => {
     try {
       let uploadedAvatarUrl = avatarUrl;
@@ -462,13 +447,13 @@ export default function ProfileSettingsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- ALWAYS RENDERED RECAPTCHA --- */}
+      {}
       <FirebaseRecaptcha
         ref={recaptchaVerifier}
         firebaseConfig={firebaseConfig}
       />
 
-      {/* --- LOADING OVERLAY --- */}
+      {}
       {isLoading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#B0B0B0" />
@@ -522,7 +507,7 @@ export default function ProfileSettingsScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View className="p-6 pb-10">
-            {/* AVATAR */}
+            {}
             <View className="items-center mb-8">
               <TouchableOpacity
                 onPress={() => displayImageUri && setIsPreviewVisible(true)}
@@ -594,7 +579,7 @@ export default function ProfileSettingsScreen() {
               </View>
             </View>
 
-            {/* PERSONAL INFO */}
+            {}
             <Text
               className="font-bold uppercase tracking-widest mb-3"
               style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
@@ -643,7 +628,7 @@ export default function ProfileSettingsScreen() {
               disabled
             />
 
-            {/* LOCATION */}
+            {}
             <Text
               className="font-bold uppercase tracking-widest mb-3 mt-5"
               style={{ color: theme.textSecondary, fontSize: scaledSize(10) }}
@@ -699,7 +684,7 @@ export default function ProfileSettingsScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* --- REVERTED GUIDELINES MODAL --- */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
@@ -880,7 +865,7 @@ export default function ProfileSettingsScreen() {
         </View>
       </Modal>
 
-      {/* --- PHONE OTP MODAL --- */}
+      {}
       <Modal
         animationType="slide"
         transparent={true}
@@ -982,7 +967,7 @@ export default function ProfileSettingsScreen() {
         </View>
       </Modal>
 
-      {/* --- IMAGE PREVIEW MODAL --- */}
+      {}
       <Modal
         visible={isPreviewVisible}
         transparent={true}
@@ -1041,7 +1026,6 @@ const styles = StyleSheet.create({
   },
 });
 
-// ... Helper Components ...
 function InputGroup({
   label,
   icon,

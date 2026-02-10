@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // Added
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../../context/ThemeContext";
 
 if (
@@ -22,7 +22,6 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Key for storage
 export const NOTIF_SETTINGS_KEY = "gridwatch_notif_settings";
 
 export default function NotificationSettingsScreen() {
@@ -31,7 +30,6 @@ export default function NotificationSettingsScreen() {
 
   const scaledSize = (size) => size * fontScale;
 
-  // Unified State for easier saving
   const [settings, setSettings] = useState({
     pushEnabled: true,
     budgetAlerts: true,
@@ -40,7 +38,6 @@ export default function NotificationSettingsScreen() {
     emailDigest: true,
   });
 
-  // --- LOAD SETTINGS ON MOUNT ---
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -55,7 +52,6 @@ export default function NotificationSettingsScreen() {
     loadSettings();
   }, []);
 
-  // --- HANDLE TOGGLE & SAVE ---
   const handleToggle = async (key) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
@@ -83,7 +79,7 @@ export default function NotificationSettingsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
+      {}
       <View
         className="flex-row items-center px-6 py-5 border-b"
         style={{ borderBottomColor: theme.cardBorder }}
@@ -105,7 +101,7 @@ export default function NotificationSettingsScreen() {
       </View>
 
       <ScrollView className="flex-1 p-6">
-        {/* TEXT SIZE SECTION */}
+        {}
         <Text
           className="font-bold uppercase tracking-widest mb-3"
           style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -186,7 +182,7 @@ export default function NotificationSettingsScreen() {
           </View>
         </View>
 
-        {/* GENERAL */}
+        {}
         <Text
           className="font-bold uppercase tracking-widest mb-3"
           style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -213,7 +209,7 @@ export default function NotificationSettingsScreen() {
           />
         </View>
 
-        {/* ALERT TYPES */}
+        {}
         <Text
           className="font-bold uppercase tracking-widest mb-3"
           style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -258,7 +254,7 @@ export default function NotificationSettingsScreen() {
           />
         </View>
 
-        {/* OTHER */}
+        {}
         <Text
           className="font-bold uppercase tracking-widest mb-3"
           style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}

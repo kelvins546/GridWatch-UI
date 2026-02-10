@@ -22,7 +22,6 @@ export default function SimpleHomeScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // --- REAL DATA STATE ---
   const [billData, setBillData] = useState({
     currentBill: 0,
     budgetLimit: 0,
@@ -32,10 +31,8 @@ export default function SimpleHomeScreen() {
   const [realHubs, setRealHubs] = useState([]);
   const [userRate, setUserRate] = useState(12.0);
 
-  // Helper for scaling
   const scaledSize = (size) => size * (fontScale || 1);
 
-  // --- FETCH DATA FUNCTION ---
   const fetchData = async () => {
     try {
       const {
@@ -50,7 +47,6 @@ export default function SimpleHomeScreen() {
         1,
       ).toISOString();
 
-      // 1. Fetch User Settings (Rate & Budget)
       const { data: userData } = await supabase
         .from("users")
         .select("monthly_budget, custom_rate, utility_rates(rate_per_kwh)")
@@ -58,10 +54,9 @@ export default function SimpleHomeScreen() {
         .single();
 
       let rate = 12.0;
-      let budget = 2000; // Default fallback if not set in DB
+      let budget = 2000;
 
       if (userData) {
-        // If monthly_budget is null/0, it falls back to 2000
         budget = userData.monthly_budget || 2000;
         if (userData.custom_rate) rate = userData.custom_rate;
         else if (userData.utility_rates?.rate_per_kwh)
@@ -69,7 +64,6 @@ export default function SimpleHomeScreen() {
       }
       setUserRate(rate);
 
-      // 2. Fetch Total Bill (Usage Analytics for this month)
       const { data: usageData } = await supabase
         .from("usage_analytics")
         .select("cost_incurred")
@@ -79,13 +73,11 @@ export default function SimpleHomeScreen() {
       const totalBill =
         usageData?.reduce((sum, row) => sum + (row.cost_incurred || 0), 0) || 0;
 
-      // 3. Fetch Hubs & Devices
       const { data: hubsData } = await supabase
         .from("hubs")
         .select("*, devices(*)")
         .eq("user_id", user.id);
 
-      // Process Hubs
       let totalActiveDevices = 0;
       const processedHubs = (hubsData || []).map((hub) => {
         let isOnline = false;
@@ -142,7 +134,6 @@ export default function SimpleHomeScreen() {
     fetchData();
   };
 
-  // --- UI LOGIC ---
   const percentage =
     billData.budgetLimit > 0
       ? Math.min((billData.currentBill / billData.budgetLimit) * 100, 100)
@@ -159,7 +150,6 @@ export default function SimpleHomeScreen() {
     statusText = "Approaching budget limit.";
   }
 
-  // --- RENDER ---
   if (isLoading) {
     return (
       <View
@@ -193,7 +183,7 @@ export default function SimpleHomeScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- HEADER --- */}
+      {}
       <View
         style={{
           flexDirection: "row",
@@ -246,7 +236,7 @@ export default function SimpleHomeScreen() {
         }
       >
         <View style={{ paddingHorizontal: 24 }}>
-          {/* --- MAIN BILL CARD (Clickable) --- */}
+          {}
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => navigation.navigate("SimpleBudgetManager")}
@@ -359,7 +349,7 @@ export default function SimpleHomeScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* --- ROOM SUMMARY --- */}
+          {}
           <Text
             style={{
               fontWeight: "bold",

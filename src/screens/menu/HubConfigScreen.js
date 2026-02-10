@@ -64,11 +64,9 @@ export default function HubConfigScreen() {
   const [currentSerial, setCurrentSerial] = useState(hubId);
   const [isLoading, setIsLoading] = useState(false);
 
-  // --- EXIT & RESET STATES ---
   const [exitModalVisible, setExitModalVisible] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
 
-  // --- NEW MODAL STATES ---
   const [noInternetModalVisible, setNoInternetModalVisible] = useState(false);
   const [connectionFailedModalVisible, setConnectionFailedModalVisible] =
     useState(false);
@@ -91,9 +89,6 @@ export default function HubConfigScreen() {
     onPress: null,
   });
 
-  // ============================================================
-  // 1. FETCH EXISTING CONFIGURATION (ON LOAD)
-  // ============================================================
   useEffect(() => {
     if (!hubId) return;
 
@@ -160,9 +155,6 @@ export default function HubConfigScreen() {
     fetchConfig();
   }, [hubId]);
 
-  // ============================================================
-  // 2. HARDWARE BACK BUTTON INTERCEPTOR
-  // ============================================================
   useEffect(() => {
     const onBackPress = () => {
       if (fromBudget) {
@@ -181,9 +173,6 @@ export default function HubConfigScreen() {
     return () => subscription.remove();
   }, [fromBudget]);
 
-  // ============================================================
-  // 3. RESET LOGIC
-  // ============================================================
   const handleResetAndExit = async () => {
     setIsResetting(true);
 
@@ -272,9 +261,6 @@ export default function HubConfigScreen() {
     return true;
   };
 
-  // ============================================================
-  // 4. SAVE LOGIC
-  // ============================================================
   const handleFinishSetup = async () => {
     if (!currentSerial)
       return showAlert("Error", "No Hub Serial Number found.");
@@ -634,7 +620,7 @@ export default function HubConfigScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* --- STANDARD ALERT MODAL --- */}
+      {}
       <Modal transparent visible={alertConfig.visible} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -660,7 +646,7 @@ export default function HubConfigScreen() {
         </View>
       </Modal>
 
-      {/* --- NO INTERNET MODAL --- */}
+      {}
       <Modal transparent visible={noInternetModalVisible} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -686,7 +672,7 @@ export default function HubConfigScreen() {
         </View>
       </Modal>
 
-      {/* --- EXIT / RESET MODAL --- */}
+      {}
       <Modal transparent visible={exitModalVisible} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -725,7 +711,6 @@ export default function HubConfigScreen() {
   );
 }
 
-// --- FIXED: MOVED OUTSIDE MAIN COMPONENT TO PREVENT FLICKERING ---
 function ConfigDropdown({
   label,
   options,

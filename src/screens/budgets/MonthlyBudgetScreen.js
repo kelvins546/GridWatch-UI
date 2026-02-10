@@ -40,7 +40,6 @@ export default function SimpleBudgetManagerScreen() {
   const dangerColor = isDarkMode ? theme.buttonDangerText : "#cc0000";
   const warningColor = isDarkMode ? "#ffaa00" : "#ff9900";
 
-  // --- STATE ---
   const [activeHubFilter, setActiveHubFilter] = useState("all");
 
   const [isResetting, setIsResetting] = useState(false);
@@ -48,14 +47,12 @@ export default function SimpleBudgetManagerScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
 
-  // --- BUDGET DATA ---
   const [monthlyBudget, setMonthlyBudget] = useState(1900);
   const [billingDate, setBillingDate] = useState("15th");
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(
-    new Date().getMonth()
+    new Date().getMonth(),
   );
 
-  // --- DATA SOURCES ---
   const HUBS = [
     {
       id: "living",
@@ -77,7 +74,6 @@ export default function SimpleBudgetManagerScreen() {
     },
   ];
 
-  // --- FILTER LOGIC ---
   const displayHubs =
     activeHubFilter === "all"
       ? HUBS
@@ -106,7 +102,6 @@ export default function SimpleBudgetManagerScreen() {
   const percentage = Math.min((currentSpending / monthlyBudget) * 100, 100);
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  // --- ACTIONS ---
   const handleHubSelect = (id) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setActiveHubFilter(id);
@@ -149,7 +144,6 @@ export default function SimpleBudgetManagerScreen() {
     else if (cleanedText === "") setMonthlyBudget(0);
   };
 
-  // --- STYLES ---
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -160,13 +154,12 @@ export default function SimpleBudgetManagerScreen() {
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: 24,
-      paddingVertical: 20, // Matches Home py-5 (20px)
+      paddingVertical: 20,
       backgroundColor: theme.background,
       borderBottomWidth: 1,
       borderBottomColor: theme.cardBorder,
     },
-    // The wrapper ensures the text takes up the same height as the Logo (40px)
-    // preventing layout shifts when navigating between screens.
+
     headerTitleWrapper: {
       minHeight: 40,
       justifyContent: "center",
@@ -232,7 +225,7 @@ export default function SimpleBudgetManagerScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* Header - Aligned with Simple Home */}
+      {}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.navigate("Menu")}
@@ -245,7 +238,7 @@ export default function SimpleBudgetManagerScreen() {
           />
         </TouchableOpacity>
 
-        {/* Wrapper ensures exact height match with Home Logo (40px) */}
+        {}
         <View style={styles.headerTitleWrapper}>
           <Text style={styles.headerText}>My Budget</Text>
         </View>
@@ -286,7 +279,7 @@ export default function SimpleBudgetManagerScreen() {
         showsVerticalScrollIndicator={false}
         stickyHeaderIndices={[0]}
       >
-        {/* --- HUB SELECTION TABS (Sticky) --- */}
+        {}
         <View style={styles.filterWrapper}>
           <ScrollView
             horizontal
@@ -294,7 +287,7 @@ export default function SimpleBudgetManagerScreen() {
             contentContainerStyle={{ paddingBottom: 10 }}
             style={styles.filterContainer}
           >
-            {/* 'All' Chip */}
+            {}
             <TouchableOpacity
               onPress={() => handleHubSelect("all")}
               style={[
@@ -320,7 +313,7 @@ export default function SimpleBudgetManagerScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* Hub Chips */}
+            {}
             {HUBS.map((hub) => {
               const isActive = activeHubFilter === hub.id;
               return (
@@ -350,7 +343,7 @@ export default function SimpleBudgetManagerScreen() {
         </View>
 
         <View style={styles.section}>
-          {/* --- MAIN GOAL CARD --- */}
+          {}
           <TouchableOpacity
             activeOpacity={1}
             style={{ marginBottom: 20 }}
@@ -478,7 +471,7 @@ export default function SimpleBudgetManagerScreen() {
             </Animated.View>
           </TouchableOpacity>
 
-          {/* --- BUDGET HEALTH WARNING (CONDITIONAL) --- */}
+          {}
           {isOverAllocated && (
             <View
               style={[
@@ -523,7 +516,7 @@ export default function SimpleBudgetManagerScreen() {
             </View>
           )}
 
-          {/* --- BILLING DATE SELECTION --- */}
+          {}
           <TouchableOpacity
             style={{
               flexDirection: "row",
@@ -583,7 +576,7 @@ export default function SimpleBudgetManagerScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* --- MANUAL RESET --- */}
+          {}
           <TouchableOpacity
             onPress={() => setShowConfirmModal(true)}
             style={{
@@ -615,7 +608,7 @@ export default function SimpleBudgetManagerScreen() {
             </Text>
           </TouchableOpacity>
 
-          {/* Hub List Header */}
+          {}
           <Text
             style={{
               color: theme.textSecondary,
@@ -629,7 +622,7 @@ export default function SimpleBudgetManagerScreen() {
             Select Room to Manage
           </Text>
 
-          {/* Hub List */}
+          {}
           <View style={{ gap: 12 }}>
             {displayHubs.map((hub) => (
               <HubCard
@@ -648,7 +641,7 @@ export default function SimpleBudgetManagerScreen() {
         </View>
       </ScrollView>
 
-      {/* ... MODALS ... */}
+      {}
       <Modal visible={showConfirmModal} transparent animationType="fade">
         <View
           style={{

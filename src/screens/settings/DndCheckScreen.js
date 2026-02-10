@@ -9,14 +9,13 @@ import {
   Linking,
   Platform,
   StyleSheet,
-  AppState, // <--- 1. Import AppState
+  AppState,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import * as IntentLauncher from "expo-intent-launcher";
 
-// --- 2. IMPORT checkRingerMode ALONG WITH THE HOOK ---
 import {
   useRingerMode,
   RingerModeType,
@@ -30,14 +29,12 @@ export default function DndCheckScreen() {
 
   const [step, setStep] = useState("manual");
 
-  // This hook handles live updates while the app is OPEN
   const { mode } = useRingerMode();
 
   const z1Anim = useRef(new Animated.Value(0)).current;
   const z2Anim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
-  // --- 3. HELPER FUNCTION TO EVALUATE MODE ---
   const evaluateMode = (currentMode) => {
     if (currentMode === RingerModeType.normal) {
       setStep("success");
@@ -46,13 +43,11 @@ export default function DndCheckScreen() {
     }
   };
 
-  // --- 4. LISTENER FOR APP FOCUS (Coming back from Settings) ---
   useEffect(() => {
     const subscription = AppState.addEventListener(
       "change",
       async (nextAppState) => {
         if (nextAppState === "active") {
-          // App has come to the foreground, force a check
           try {
             const currentMode = await checkRingerMode();
             evaluateMode(currentMode);
@@ -63,7 +58,6 @@ export default function DndCheckScreen() {
       },
     );
 
-    // Check once on mount as well
     checkRingerMode().then(evaluateMode);
 
     return () => {
@@ -71,14 +65,12 @@ export default function DndCheckScreen() {
     };
   }, []);
 
-  // --- 5. LISTEN FOR LIVE CHANGES (While app is open) ---
   useEffect(() => {
     if (mode) {
       evaluateMode(mode);
     }
   }, [mode]);
 
-  // --- Animations ---
   useEffect(() => {
     Animated.spring(slideAnim, {
       toValue: 0,
@@ -124,7 +116,6 @@ export default function DndCheckScreen() {
   };
 
   const handleConfirm = async () => {
-    // Optional: Double check before forcing success
     const currentMode = await checkRingerMode();
     if (currentMode === RingerModeType.normal) {
       setStep("success");
@@ -132,8 +123,6 @@ export default function DndCheckScreen() {
         navigation.goBack();
       }, 1500);
     } else {
-      // If they click confirm but it's still silent, maybe let them pass or warn again
-      // For now, assume manual override is okay:
       setStep("success");
       setTimeout(() => {
         navigation.goBack();
@@ -340,7 +329,7 @@ export default function DndCheckScreen() {
             >
               You will now receive safety alerts instantly.
             </Text>
-            {/* Added a close button for better UX in success state */}
+            {}
             <TouchableOpacity
               onPress={() => navigation.goBack()}
               style={{ marginTop: 10 }}

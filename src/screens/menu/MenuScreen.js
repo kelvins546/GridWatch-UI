@@ -12,7 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
-// 1. Import Supabase
+
 import { supabase } from "../../lib/supabase";
 
 export default function MenuScreen() {
@@ -29,10 +29,8 @@ export default function MenuScreen() {
     avatarUrl: null,
   });
 
-  // --- FETCH PROFILE LOGIC ---
   const fetchMenuProfile = async () => {
     try {
-      // 1. Get Auth User
       const {
         data: { user },
         error: authError,
@@ -41,7 +39,6 @@ export default function MenuScreen() {
       if (authError) throw authError;
 
       if (user) {
-        // 2. Get Public Profile
         const { data: profile } = await supabase
           .from("users")
           .select("first_name, last_name, avatar_url, role")
@@ -50,10 +47,9 @@ export default function MenuScreen() {
 
         let fullName = "GridWatch User";
         let avatarUrl = user.user_metadata?.avatar_url;
-        let role = "Resident"; // Default
+        let role = "Resident";
 
         if (profile) {
-          // Construct Name
           const first = profile.first_name || "";
           const last = profile.last_name || "";
           if (first) {
@@ -62,15 +58,12 @@ export default function MenuScreen() {
             fullName = user.user_metadata?.full_name || fullName;
           }
 
-          // Avatar
           if (profile.avatar_url) avatarUrl = profile.avatar_url;
 
-          // Role (Capitalize first letter if exists)
           if (profile.role) {
             role = profile.role.charAt(0).toUpperCase() + profile.role.slice(1);
           }
         } else {
-          // Fallback to metadata if no profile row
           fullName = user.user_metadata?.full_name || fullName;
         }
 
@@ -137,7 +130,7 @@ export default function MenuScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* Close Button */}
+      {}
       <View className="px-6 pt-5 pb-2.5 items-end">
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons
@@ -148,7 +141,7 @@ export default function MenuScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Profile Header */}
+      {}
       <View
         className="flex-row items-center px-6 pb-8 border-b gap-4 mb-4"
         style={{ borderBottomColor: theme.cardBorder }}
@@ -205,7 +198,7 @@ export default function MenuScreen() {
             Device Management
           </Text>
 
-          {/* My Hubs - Always Visible */}
+          {}
           <SettingsRow
             icon="router"
             title="My Hubs"
@@ -215,7 +208,7 @@ export default function MenuScreen() {
             scaledSize={scaledSize}
           />
 
-          {/* Family Access - Hidden in Simple Mode */}
+          {}
           {isAdvancedMode && (
             <SettingsRow
               icon="people"
@@ -227,7 +220,7 @@ export default function MenuScreen() {
             />
           )}
 
-          {/* Invitations - Hidden in Simple Mode */}
+          {}
           {isAdvancedMode && (
             <SettingsRow
               icon="mail-outline"
@@ -239,7 +232,7 @@ export default function MenuScreen() {
             />
           )}
 
-          {/* Add New Device - Always Visible */}
+          {}
           <SettingsRow
             icon="add-circle-outline"
             title="Add New Device"
@@ -263,7 +256,7 @@ export default function MenuScreen() {
             App Settings
           </Text>
 
-          {/* Account Settings */}
+          {}
           <SettingsRow
             icon="settings"
             title="Account Settings"
@@ -273,7 +266,7 @@ export default function MenuScreen() {
             scaledSize={scaledSize}
           />
 
-          {/* Notifications */}
+          {}
           <SettingsRow
             icon="notifications-none"
             title="Notifications"
@@ -283,7 +276,7 @@ export default function MenuScreen() {
             scaledSize={scaledSize}
           />
 
-          {/* Version Info */}
+          {}
           <View
             className="mt-8 border-t pt-6 items-center"
             style={{ borderTopColor: theme.cardBorder }}

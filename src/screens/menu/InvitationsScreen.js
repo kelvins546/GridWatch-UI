@@ -49,7 +49,6 @@ export default function InvitationsScreen() {
   const [showAcceptModal, setShowAcceptModal] = useState(false);
   const [showDeclineModal, setShowDeclineModal] = useState(false);
 
-  // --- REALTIME SUBSCRIPTION (For Incoming Invites) ---
   useEffect(() => {
     let subscription;
 
@@ -92,7 +91,6 @@ export default function InvitationsScreen() {
     };
   }, []);
 
-  // --- FETCH INVITATIONS ---
   const fetchInvitations = async () => {
     setLoading(true);
     try {
@@ -179,7 +177,6 @@ export default function InvitationsScreen() {
     setShowDeclineModal(true);
   };
 
-  // --- LOGIC: ACCEPT & NOTIFY SENDER ---
   const confirmAccept = async () => {
     if (!selectedInvite) return;
     setProcessing(true);
@@ -189,7 +186,6 @@ export default function InvitationsScreen() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      // 1. Give Access
       const accessInserts = selectedInvite.hub_ids.map((hubId) => ({
         hub_id: hubId,
         user_id: user.id,
@@ -204,15 +200,12 @@ export default function InvitationsScreen() {
         throw accessError;
       }
 
-      // 2. NOTIFY THE SENDER
-      // We insert into 'app_notifications' targeting the sender_id
       await supabase.from("app_notifications").insert({
-        user_id: selectedInvite.sender_id, // Target the person who invited us
+        user_id: selectedInvite.sender_id,
         title: "Invitation Accepted ✅",
         body: `${user.email} has accepted your invitation to ${selectedInvite.hubName}.`,
       });
 
-      // 3. Delete Invite
       const { error: deleteError } = await supabase
         .from("hub_invites")
         .delete()
@@ -232,7 +225,6 @@ export default function InvitationsScreen() {
     }
   };
 
-  // --- LOGIC: DECLINE & NOTIFY SENDER ---
   const confirmDecline = async () => {
     if (!selectedInvite) return;
     setProcessing(true);
@@ -242,14 +234,12 @@ export default function InvitationsScreen() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      // 1. NOTIFY THE SENDER
       await supabase.from("app_notifications").insert({
-        user_id: selectedInvite.sender_id, // Target the sender
+        user_id: selectedInvite.sender_id,
         title: "Invitation Declined",
         body: `${user.email} declined your invitation to ${selectedInvite.hubName}.`,
       });
 
-      // 2. Delete Invite
       const { error } = await supabase
         .from("hub_invites")
         .delete()
@@ -279,7 +269,7 @@ export default function InvitationsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* Header */}
+      {}
       <View
         className="flex-row items-center px-6 py-5 border-b"
         style={{ borderBottomColor: theme.cardBorder }}
@@ -460,7 +450,7 @@ export default function InvitationsScreen() {
         </View>
       </ScrollView>
 
-      {/* Accept Modal */}
+      {}
       <Modal visible={showAcceptModal} transparent animationType="fade">
         <View className="flex-1 bg-black/80 justify-center items-center p-6">
           <View
@@ -522,7 +512,7 @@ export default function InvitationsScreen() {
         </View>
       </Modal>
 
-      {/* Decline Modal */}
+      {}
       <Modal visible={showDeclineModal} transparent animationType="fade">
         <View className="flex-1 bg-black/80 justify-center items-center p-6">
           <View

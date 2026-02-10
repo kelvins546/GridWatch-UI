@@ -34,7 +34,6 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Map the DB names (lowercase keys) to local assets
 const PROVIDER_LOGOS = {
   meralco: require("../../../assets/meralco.png"),
   veco: require("../../../assets/visayan.png"),
@@ -44,7 +43,6 @@ const PROVIDER_LOGOS = {
   abreco: require("../../../assets/abreco.png"),
   beneco: require("../../../assets/beneco.png"),
   akelco: require("../../../assets/akelco.png"),
-  // Add more as needed...
 };
 
 export default function SettingsScreen() {
@@ -68,7 +66,6 @@ export default function SettingsScreen() {
     useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // User Profile State
   const [userData, setUserData] = useState({
     fullName: "Guest User",
     unitLocation: "Not Logged In",
@@ -76,7 +73,6 @@ export default function SettingsScreen() {
     avatarUrl: null,
   });
 
-  // Utility Provider State
   const [utilityData, setUtilityData] = useState({
     providerName: "Not Set",
     rate: "0.00",
@@ -113,7 +109,6 @@ export default function SettingsScreen() {
       if (authError) throw authError;
 
       if (user) {
-        // 1. Fetch User Profile (including provider_id)
         const { data: profile } = await supabase
           .from("users")
           .select(
@@ -126,7 +121,6 @@ export default function SettingsScreen() {
         let avatarUrl = user.user_metadata?.avatar_url;
         let location = user.email;
 
-        // Profile Data Logic
         if (profile) {
           const first = profile.first_name || "";
           const last = profile.last_name || "";
@@ -149,7 +143,6 @@ export default function SettingsScreen() {
           avatarUrl: avatarUrl,
         });
 
-        // 2. Fetch Utility Provider Data
         if (profile?.provider_id) {
           const { data: provider } = await supabase
             .from("utility_rates")
@@ -191,7 +184,6 @@ export default function SettingsScreen() {
     }, []),
   );
 
-  // --- LOGO RESOLUTION LOGIC ---
   const normalizedName = utilityData.providerName.toLowerCase();
   let logoSource = PROVIDER_LOGOS[normalizedName];
   if (!logoSource) {
@@ -314,7 +306,7 @@ export default function SettingsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* HEADER */}
+      {}
       {!isAdvancedMode ? (
         <View
           style={{
@@ -402,7 +394,7 @@ export default function SettingsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="p-6 pb-10">
-          {/* PROFILE HEADER */}
+          {}
           <TouchableOpacity
             className="flex-row items-center mb-6"
             onPress={() => navigation.navigate("ProfileSettings")}
@@ -469,7 +461,7 @@ export default function SettingsScreen() {
             scaledSize={scaledSize}
           />
 
-          {/* Utility Section */}
+          {}
           <Text
             className="font-bold uppercase tracking-widest mb-3 mt-4"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -561,7 +553,7 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {/* Preferences Section */}
+          {}
           <Text
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -617,7 +609,7 @@ export default function SettingsScreen() {
             scaledSize={scaledSize}
           />
 
-          {/* --- WIDGETS SECTION --- */}
+          {}
           {isAdvancedMode && (
             <View
               className="rounded-xl border mb-3 overflow-hidden"
@@ -770,7 +762,7 @@ export default function SettingsScreen() {
             </View>
           )}
 
-          {/* Dark Mode Config */}
+          {}
           <View
             className="p-4 rounded-xl mb-6 flex-row justify-between items-center border h-[72px]"
             style={{
@@ -798,7 +790,7 @@ export default function SettingsScreen() {
             />
           </View>
 
-          {/* Support Section */}
+          {}
           <Text
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -822,7 +814,7 @@ export default function SettingsScreen() {
             scaledSize={scaledSize}
           />
 
-          {/* LOGOUT */}
+          {}
           <TouchableOpacity
             className="mt-8 p-4 rounded-xl border items-center"
             style={{
@@ -841,7 +833,7 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
 
-      {/* Advanced Mode Modal */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
@@ -904,7 +896,7 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      {/* Logout Modal */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
@@ -969,7 +961,7 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      {/* Success Modal */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}

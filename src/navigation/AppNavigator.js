@@ -19,7 +19,6 @@ import { supabase } from "../lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 
-// --- IMPORTS ---
 import LandingScreen from "../screens/auth/LandingScreen";
 import AuthSelectionScreen from "../screens/auth/AuthSelectionScreen";
 import LoginScreen from "../screens/auth/LoginScreen";
@@ -70,7 +69,6 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// --- HELPER: Refine Messages for PUSH BANNER ---
 const getRefinedSecurityMessage = (title, body) => {
   const t = title ? title.toLowerCase() : "";
   const b = body ? body.toLowerCase() : "";
@@ -107,7 +105,6 @@ const getRefinedSecurityMessage = (title, body) => {
   return { title, body };
 };
 
-// --- Function to register for push notifications ---
 async function registerForPushNotificationsAsync() {
   let token;
 
@@ -186,7 +183,6 @@ const BounceTabButton = ({ children, onPress }) => {
   );
 };
 
-// ... Routes (HomeRoute, AnalyticsRoute, etc. kept same) ...
 const HomeRoute = () => {
   const { isAdvancedMode } = useTheme();
   return isAdvancedMode ? <HomeScreen /> : <SimpleHomeScreen />;
@@ -311,20 +307,16 @@ export default function AppNavigator() {
   const notifiedIds = useRef(new Set());
   const isJustLoggedIn = useRef(true);
 
-  // --- CHANGED: START AS NULL TO PREVENT ANY RENDER UNTIL DECIDED ---
   const [initialRoute, setInitialRoute] = useState(null);
 
-  // --- LOGIC: CHECK HUBS BEFORE RENDERING ---
   useEffect(() => {
     const determineInitialRoute = async () => {
-      // 1. If not logged in, we are done checking.
       if (!authUser) {
-        setInitialRoute(null); // Ensure reset
+        setInitialRoute(null);
         return;
       }
 
       try {
-        // 2. Logged in? Check DB for Hubs
         const { count, error } = await supabase
           .from("hubs")
           .select("*", { count: "exact", head: true })
@@ -378,7 +370,6 @@ export default function AppNavigator() {
     return () => clearTimeout(timer);
   }, [authUser]);
 
-  // --- CHECK FILTER SETTINGS ---
   const shouldSuppressNotification = async (title, body) => {
     try {
       const savedSettings = await AsyncStorage.getItem(NOTIF_SETTINGS_KEY);
@@ -577,8 +568,6 @@ export default function AppNavigator() {
     };
   }, [authUser]);
 
-  // --- UNIFIED LOADING STATE ---
-  // If we are loading auth OR (we are logged in AND haven't decided route yet)
   if (isLoading || (authUser && initialRoute === null)) {
     return (
       <View
@@ -613,7 +602,6 @@ export default function AppNavigator() {
 
   return (
     <Stack.Navigator
-      // This works now because we DO NOT RENDER until initialRoute is set
       initialRouteName={initialRoute || "Landing"}
       screenOptions={{
         headerShown: false,
@@ -639,7 +627,7 @@ export default function AppNavigator() {
             </>
           )}
 
-          {/* ... all other screens ... */}
+          {}
           <Stack.Screen
             name="ProfileSettings"
             component={ProfileSettingsScreen}

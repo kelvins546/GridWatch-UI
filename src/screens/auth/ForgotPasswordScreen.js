@@ -26,19 +26,16 @@ export default function ForgotPasswordScreen() {
   const { theme, fontScale } = useTheme();
   const scaledSize = (size) => size * fontScale;
 
-  // --- STATE ---
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [touched, setTouched] = useState(false);
   const [emailError, setEmailError] = useState(null);
 
-  // OTP State
   const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [timer, setTimer] = useState(180);
   const [canResend, setCanResend] = useState(false);
 
-  // Alert Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [modalConfig, setModalConfig] = useState({
     type: "error",
@@ -49,7 +46,6 @@ export default function ForgotPasswordScreen() {
 
   const inputRefs = useRef([]);
 
-  // --- EFFECTS ---
   useEffect(() => {
     let interval;
     if (otpModalVisible && timer > 0) {
@@ -62,7 +58,6 @@ export default function ForgotPasswordScreen() {
     return () => clearInterval(interval);
   }, [otpModalVisible, timer]);
 
-  // --- HELPERS ---
   const showModal = (type, title, message, onPress = null) => {
     setModalConfig({ type, title, message, onPress });
     setModalVisible(true);
@@ -82,8 +77,6 @@ export default function ForgotPasswordScreen() {
     return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
 
-  // --- LOGIC ---
-
   const handleSendCode = async () => {
     setTouched(true);
     const error = validateEmail(email);
@@ -93,7 +86,6 @@ export default function ForgotPasswordScreen() {
     setIsLoading(true);
 
     try {
-      // 1. Send OTP via Supabase
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
       });
@@ -112,7 +104,6 @@ export default function ForgotPasswordScreen() {
     }
   };
 
-  // --- FIX: Pass Token, Don't Verify Here ---
   const handleVerify = () => {
     const token = otp.join("");
     if (token.length < 6) {
@@ -120,11 +111,10 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
-    // Close modal and pass token to ResetPasswordScreen
     setOtpModalVisible(false);
     navigation.navigate("ResetPassword", {
       email: email,
-      token: token, // <--- Passing the token to next screen
+      token: token,
     });
   };
 

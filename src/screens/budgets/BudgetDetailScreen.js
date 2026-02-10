@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
-import { supabase } from "../../lib/supabase"; // Import Supabase
+import { supabase } from "../../lib/supabase";
 
 export default function BudgetDetailScreen() {
   const navigation = useNavigation();
@@ -23,8 +23,6 @@ export default function BudgetDetailScreen() {
 
   const scaledSize = (size) => size * fontScale;
 
-  // Expecting deviceName, but ideally deviceId should be passed.
-  // We'll fetch based on name if ID is missing, but safer to use ID.
   const { deviceName, deviceId } = route.params || {
     deviceName: "Air Conditioner",
   };
@@ -35,9 +33,8 @@ export default function BudgetDetailScreen() {
   const [period, setPeriod] = useState("Monthly");
   const [limit, setLimit] = useState("0");
   const [autoCutoff, setAutoCutoff] = useState(false);
-  const [pushNotifications, setPushNotifications] = useState(true); // Mapped to is_monitored
+  const [pushNotifications, setPushNotifications] = useState(true);
 
-  // --- REAL DB DATA STATE ---
   const [globalBudget, setGlobalBudget] = useState(0);
   const [otherDevicesLimit, setOtherDevicesLimit] = useState(0);
   const [usedAmount, setUsedAmount] = useState(0);
@@ -55,7 +52,6 @@ export default function BudgetDetailScreen() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. Get Device Details
       let query = supabase.from("devices").select("*").eq("user_id", user.id);
 
       if (deviceId) {
@@ -69,14 +65,12 @@ export default function BudgetDetailScreen() {
       if (deviceError) throw deviceError;
       setCurrentDbDevice(deviceData);
 
-      // Initialize State from DB
       setLimit(
         deviceData.budget_limit ? deviceData.budget_limit.toString() : "0",
       );
       setAutoCutoff(deviceData.auto_cutoff || false);
       setPushNotifications(deviceData.is_monitored || false);
 
-      // 2. Get Global User Budget
       const { data: userData, error: userError } = await supabase
         .from("users")
         .select("monthly_budget")
@@ -86,12 +80,11 @@ export default function BudgetDetailScreen() {
       if (userError) throw userError;
       setGlobalBudget(userData.monthly_budget || 0);
 
-      // 3. Get Other Devices' Limits
       const { data: allDevices, error: allDevError } = await supabase
         .from("devices")
         .select("id, budget_limit")
         .eq("user_id", user.id)
-        .neq("id", deviceData.id); // Exclude current
+        .neq("id", deviceData.id);
 
       if (allDevError) throw allDevError;
 
@@ -101,7 +94,6 @@ export default function BudgetDetailScreen() {
       );
       setOtherDevicesLimit(othersTotal);
 
-      // 4. Calculate Usage (Current Month)
       const now = new Date();
       const startOfMonth = new Date(
         now.getFullYear(),
@@ -157,7 +149,6 @@ export default function BudgetDetailScreen() {
     }
   };
 
-  // --- CALCULATIONS ---
   const currentDeviceLimit = parseFloat(limit) || 0;
   const totalAllocated = otherDevicesLimit + currentDeviceLimit;
   const isOverAllocated = totalAllocated > globalBudget;
@@ -209,7 +200,7 @@ export default function BudgetDetailScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- UPDATED HEADER --- */}
+      {}
       <View
         style={{
           flexDirection: "row",
@@ -364,7 +355,7 @@ export default function BudgetDetailScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* --- BUDGET HEALTH WARNING --- */}
+          {}
           <View
             className="p-3 rounded-xl border mb-8"
             style={{
@@ -509,7 +500,6 @@ export default function BudgetDetailScreen() {
   );
 }
 
-// ... (Subcomponents remain the same)
 function RuleItem({
   title,
   desc,
@@ -553,7 +543,7 @@ function RuleItem({
         </Text>
       </View>
 
-      {/* Switch */}
+      {}
       <CustomSwitch
         value={value}
         onToggle={disabled ? null : onToggle}

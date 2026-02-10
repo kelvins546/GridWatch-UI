@@ -68,7 +68,6 @@ export default function ResetPasswordScreen() {
     setIsLoading(true);
 
     try {
-      // 1. Verify OTP first
       const { data, error: verifyError } = await supabase.auth.verifyOtp({
         email: userEmail,
         token: userToken,
@@ -77,20 +76,16 @@ export default function ResetPasswordScreen() {
 
       if (verifyError) throw verifyError;
 
-      // --- FIX: EXPLICITLY SET SESSION ---
-      // This ensures updateUser has the auth context immediately
       if (data?.session) {
         await supabase.auth.setSession(data.session);
       }
 
-      // 2. Update Password
       const { error: updateError } = await supabase.auth.updateUser({
         password: password,
       });
 
       if (updateError) throw updateError;
 
-      // 3. Success - Sign out so they can log in with new password
       await supabase.auth.signOut();
 
       setIsLoading(false);

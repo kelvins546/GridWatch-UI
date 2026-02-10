@@ -19,7 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
-import { CameraView, useCameraPermissions } from "expo-camera"; // Added Camera
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { supabase } from "../../lib/supabase";
 
 const { width } = Dimensions.get("window");
@@ -31,7 +31,6 @@ export default function SetupHubScreen() {
 
   const scaledSize = (size) => size * fontScale;
 
-  // Detect if user came from Signup flow
   const fromSignup = route.params?.fromSignup;
 
   useEffect(() => {
@@ -41,19 +40,17 @@ export default function SetupHubScreen() {
     ]);
   }, []);
 
-  // --- STATE (Merged) ---
   const [wifiSSID, setWifiSSID] = useState("");
   const [wifiPass, setWifiPass] = useState("");
   const [showPass, setShowPass] = useState(false);
 
-  const [permission, requestPermission] = useCameraPermissions(); // Camera Permission
+  const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
   const [scanned, setScanned] = useState(false);
 
   const [isPairing, setIsPairing] = useState(false);
   const [statusStep, setStatusStep] = useState("");
 
-  // Generic Alert State
   const [alertConfig, setAlertConfig] = useState({
     visible: false,
     title: "",
@@ -62,10 +59,7 @@ export default function SetupHubScreen() {
     onPress: null,
   });
 
-  // Logout Confirmation Modal State
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
-
-  // --- HANDLERS (Merged Logic) ---
 
   const handleBack = () => {
     if (fromSignup) {
@@ -122,7 +116,6 @@ export default function SetupHubScreen() {
     }
   };
 
-  // --- PAIRING LOGIC (From Functional Code) ---
   const handleStartPairing = async (autoSSID = null, autoPass = null) => {
     const targetSSID = autoSSID !== null ? autoSSID : wifiSSID;
     const targetPass = autoPass !== null ? autoPass : wifiPass;
@@ -149,7 +142,6 @@ export default function SetupHubScreen() {
         )
         .join("&");
 
-      // Artificial delay for UX
       await new Promise((resolve) => setTimeout(resolve, 2000));
       setStatusStep("Sending credentials...");
 
@@ -158,7 +150,6 @@ export default function SetupHubScreen() {
 
       console.log("Attempting fetch to 192.168.4.1...");
 
-      // Actual HTTP Request to the Hub
       const response = await fetch("http://192.168.4.1/connect-hub", {
         method: "POST",
         headers: {
@@ -181,7 +172,6 @@ export default function SetupHubScreen() {
       try {
         data = JSON.parse(text);
       } catch (e) {
-        // Fallback parsing if JSON fails but response looks okay
         if (
           text.toLowerCase().includes("success") ||
           text.includes("Connected")
@@ -196,7 +186,7 @@ export default function SetupHubScreen() {
         setStatusStep("Success! Connected.");
         await new Promise((resolve) => setTimeout(resolve, 500));
         setIsPairing(false);
-        // Navigate to HubConfig with the real ID from the Hub
+
         navigation.navigate("HubConfig", { hubId: data.hub_id });
       } else {
         throw new Error("Hub refused connection");
@@ -204,7 +194,6 @@ export default function SetupHubScreen() {
     } catch (error) {
       console.log("PAIRING ERROR:", error);
 
-      // --- FALLBACK CHECK: Verify via Supabase if direct connection failed ---
       setStatusStep("Verifying with cloud...");
       try {
         await new Promise((resolve) => setTimeout(resolve, 4000));
@@ -224,7 +213,7 @@ export default function SetupHubScreen() {
             hubId: verifiedHub.serial_number,
           });
         } else {
-          throw error; // Re-throw original error if cloud check fails
+          throw error;
         }
       } catch (cloudError) {
         setIsPairing(false);
@@ -237,7 +226,6 @@ export default function SetupHubScreen() {
     }
   };
 
-  // --- QR SCANNER LOGIC (From Functional Code) ---
   const handleOpenScanner = async () => {
     if (!permission) return;
     if (!permission.granted) {
@@ -257,7 +245,6 @@ export default function SetupHubScreen() {
     let ssid = "";
     let password = "";
 
-    // Parse QR formats (WIFI:S:ss;P:pp;;)
     const ssidMatch = raw.match(/S:(.*?)(?:;|$)/i);
     const passMatch = raw.match(/P:(.*?)(?:;|$)/i);
 
@@ -279,7 +266,6 @@ export default function SetupHubScreen() {
     }
 
     if (ssid) {
-      // Auto-start pairing if QR is valid
       setWifiSSID(ssid);
       setWifiPass(password);
       handleStartPairing(ssid, password);
@@ -289,7 +275,6 @@ export default function SetupHubScreen() {
     }
   };
 
-  // --- STANDARD MODAL STYLES ---
   const styles = StyleSheet.create({
     modalOverlay: {
       flex: 1,
@@ -369,7 +354,7 @@ export default function SetupHubScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- HEADER --- */}
+      {}
       <View
         className="flex-row items-center justify-between px-6 py-5 border-b"
         style={{
@@ -614,7 +599,7 @@ export default function SetupHubScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* --- CONFIRM LOGOUT MODAL --- */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
@@ -652,7 +637,7 @@ export default function SetupHubScreen() {
         </View>
       </Modal>
 
-      {/* --- SCANNING MODAL --- */}
+      {}
       <Modal visible={isScanning} animationType="slide">
         <View className="flex-1 bg-black">
           <SafeAreaView edges={["top"]} className="bg-black z-20">
@@ -685,7 +670,7 @@ export default function SetupHubScreen() {
               style={StyleSheet.absoluteFill}
               className="justify-center items-center"
             >
-              {/* Overlay with transparent center for frame effect */}
+              {}
               <View
                 className="w-64 h-64 border-4 rounded-xl justify-center items-center relative"
                 style={{ borderColor: theme.buttonPrimary }}
@@ -723,7 +708,7 @@ export default function SetupHubScreen() {
         </View>
       </Modal>
 
-      {/* --- PAIRING SPINNER (NO CARD - just text/spinner on bg) --- */}
+      {}
       <Modal transparent visible={isPairing}>
         <View className="flex-1 justify-center items-center bg-black/80">
           <ActivityIndicator size="large" color="#B0B0B0" />
@@ -740,7 +725,7 @@ export default function SetupHubScreen() {
         </View>
       </Modal>
 
-      {/* --- STANDARD ALERT MODAL --- */}
+      {}
       <Modal transparent visible={alertConfig.visible} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>

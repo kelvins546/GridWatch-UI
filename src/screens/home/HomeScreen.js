@@ -39,7 +39,6 @@ if (
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// --- STATIC DATA ---
 const SHARED_HUBS = [
   {
     id: "hub3",
@@ -51,12 +50,11 @@ const SHARED_HUBS = [
     icon: "garage",
     totalSpending: 320.0,
     budgetLimit: 5000.0,
-    currentVoltage: 0.0, // FIXED: Default to 0V
+    currentVoltage: 0.0,
     devices: [],
   },
 ];
 
-// --- TOUR STEPS ---
 const TOUR_STEPS = [
   {
     id: "welcome",
@@ -121,30 +119,24 @@ export default function HomeScreen() {
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  // --- LOADING STATES ---
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // --- TOUR STATE ---
   const [tourStepIndex, setTourStepIndex] = useState(-1);
   const [activeLayout, setActiveLayout] = useState(null);
 
-  // --- APP STATE ---
   const [activeTab, setActiveTab] = useState("personal");
   const [activeHubFilter, setActiveHubFilter] = useState("all");
   const [unreadCount, setUnreadCount] = useState(0);
-  const [userRate, setUserRate] = useState(12.0); // Default Rate
+  const [userRate, setUserRate] = useState(12.0);
 
-  // --- DATA STATE ---
   const [rawHubs, setRawHubs] = useState([]);
   const [personalHubs, setPersonalHubs] = useState([]);
   const [now, setNow] = useState(Date.now());
 
-  // --- MODAL STATE FOR UNUSED ---
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedHubId, setSelectedHubId] = useState(null);
 
-  // --- DATA DERIVATION ---
   const sourceData = activeTab === "personal" ? personalHubs : SHARED_HUBS;
   const displayData =
     activeHubFilter === "all"
@@ -153,19 +145,16 @@ export default function HomeScreen() {
 
   const hasRedirected = useRef(false);
 
-  // --- REFS ---
   const menuRef = useRef(null);
   const notifRef = useRef(null);
   const budgetRef = useRef(null);
   const toggleRef = useRef(null);
   const hubsRef = useRef(null);
 
-  // Colors
   const primaryColor = isDarkMode ? theme.buttonPrimary : "#00995e";
   const dangerColor = isDarkMode ? theme.buttonDangerText : "#cc0000";
   const warningColor = isDarkMode ? "#ffaa00" : "#ff9900";
 
-  // --- 1. FETCH DATA ---
   const fetchHubs = async (isRefetch = false) => {
     if (!isRefetch && rawHubs.length === 0) setIsLoading(true);
 
@@ -175,7 +164,6 @@ export default function HomeScreen() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      // A. Fetch User Rate
       const { data: userData } = await supabase
         .from("users")
         .select(
@@ -195,7 +183,6 @@ export default function HomeScreen() {
       }
       setUserRate(finalRate);
 
-      // B. Fetch Hubs & Devices
       const { data, error } = await supabase
         .from("hubs")
         .select(`*, devices (*)`)
@@ -227,10 +214,8 @@ export default function HomeScreen() {
     setRefreshing(false);
   }, []);
 
-  // --- 2. TRANSFORM DATA ---
   useEffect(() => {
     const formattedHubs = rawHubs.map((hub) => {
-      // Check Online Status (90s Buffer)
       let isHubOnline = false;
       if (hub.last_seen) {
         let timeStr = hub.last_seen.replace(" ", "T");
@@ -243,7 +228,6 @@ export default function HomeScreen() {
         }
       }
 
-      // Sort Devices
       const deviceList = (hub.devices || []).sort(
         (a, b) => (a.outlet_number || 0) - (b.outlet_number || 0),
       );
@@ -252,10 +236,8 @@ export default function HomeScreen() {
         (d) => d.status && d.status.toLowerCase() === "on",
       ).length;
 
-      // [FIX] Determine Hub Voltage
-      // 1. Get raw from DB or default to 0 (NOT 220)
       const rawVoltage = hub.current_voltage ? Number(hub.current_voltage) : 0;
-      // 2. Force 0 if Offline
+
       const hubVoltage = isHubOnline ? rawVoltage : 0;
 
       return {
@@ -270,7 +252,6 @@ export default function HomeScreen() {
         budgetLimit: 0,
         currentVoltage: hubVoltage,
         devices: deviceList.map((d) => {
-          // Offline State
           if (!isHubOnline) {
             return {
               id: d.id,
@@ -287,7 +268,6 @@ export default function HomeScreen() {
             };
           }
 
-          // Online State
           const isOn = d.status && d.status.toLowerCase() === "on";
           const isUnused = d.type === "Unused";
           const watts = d.current_power_watts || 0;
@@ -308,7 +288,7 @@ export default function HomeScreen() {
             type: isUnused ? "off" : isOn ? "normal" : "off",
             tag: d.outlet_number ? `Outlet ${d.outlet_number}` : "DEVICE",
             status: d.status,
-            dbType: d.type, // For logic check
+            dbType: d.type,
           };
         }),
       };
@@ -317,7 +297,6 @@ export default function HomeScreen() {
     setPersonalHubs(formattedHubs);
   }, [rawHubs, now, userRate]);
 
-  // --- 3. TIMERS ---
   useEffect(() => {
     if (isFocused) fetchHubs();
     const timer = setInterval(() => setNow(Date.now()), 2000);
@@ -342,7 +321,6 @@ export default function HomeScreen() {
     };
   }, [isFocused]);
 
-  // --- 4. NOTIF COUNT ---
   useEffect(() => {
     let subscription;
     const fetchUnreadCount = async () => {
@@ -385,7 +363,6 @@ export default function HomeScreen() {
     };
   }, [isFocused]);
 
-  // --- 5. TOUR LOGIC ---
   const refMap = { menuRef, notifRef, budgetRef, toggleRef, hubsRef };
 
   useEffect(() => {
@@ -448,7 +425,6 @@ export default function HomeScreen() {
     }
   };
 
-  // --- HANDLERS ---
   const handleHubSelect = (hubId) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setActiveHubFilter(hubId);
@@ -460,7 +436,6 @@ export default function HomeScreen() {
     setActiveHubFilter("all");
   };
 
-  // --- RENDER HELPERS ---
   const renderHubSummary = (hub) => (
     <TouchableOpacity
       key={hub.id}
@@ -515,7 +490,7 @@ export default function HomeScreen() {
           {hub.name} Devices
         </Text>
         <View className="flex-row items-center gap-2">
-          {/* Show Hub Voltage here as well */}
+          {}
           <View
             style={{
               backgroundColor: theme.buttonNeutral,
@@ -568,7 +543,6 @@ export default function HomeScreen() {
     </View>
   );
 
-  // --- BUDGET DATA ---
   const summaryData = useMemo(() => {
     return {
       spending: 850.5,
@@ -599,7 +573,7 @@ export default function HomeScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- HEADER --- */}
+      {}
       <View
         className="flex-row justify-between items-center px-6 py-5"
         style={{ backgroundColor: theme.background }}
@@ -612,7 +586,7 @@ export default function HomeScreen() {
           <MaterialIcons name="menu" size={28} color={theme.textSecondary} />
         </TouchableOpacity>
 
-        {/* TAP LOGO TO RESTART TOUR */}
+        {}
         <TouchableOpacity onPress={handleResetTour}>
           <Image
             source={require("../../../assets/GridWatch-logo.png")}
@@ -659,7 +633,7 @@ export default function HomeScreen() {
       >
         <View className="mb-2" />
 
-        {/* --- 1. PILL SWITCHER --- */}
+        {}
         <View
           ref={toggleRef}
           style={{
@@ -730,7 +704,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* --- 2. BUDGET CARD --- */}
+        {}
         <Animated.View
           ref={budgetRef}
           collapsable={false}
@@ -897,7 +871,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* --- 3. HUB FILTER --- */}
+        {}
         <View ref={hubsRef} style={{ marginBottom: 20 }}>
           <ScrollView
             horizontal
@@ -966,7 +940,7 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
 
-        {/* --- 4. CONTENT LIST --- */}
+        {}
         <View className="px-6 pb-6">
           {isLoading ? (
             <View className="py-12 items-center">
@@ -1058,7 +1032,7 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* FIXED MODAL PLACEMENT - PREVENTS FLICKERING */}
+      {}
       <Modal transparent visible={showConfigModal} animationType="fade">
         <View style={homeStyles.modalOverlay}>
           <View
@@ -1108,7 +1082,6 @@ export default function HomeScreen() {
   );
 }
 
-// ... StatItem (Unchanged)
 function StatItem({ label, value, icon, theme, isDarkMode, scaledSize }) {
   return (
     <View className="flex-1 flex-row items-center gap-3">
@@ -1139,7 +1112,6 @@ function StatItem({ label, value, icon, theme, isDarkMode, scaledSize }) {
   );
 }
 
-// ... DeviceItem (Unchanged)
 const DeviceItem = forwardRef(
   ({ data, theme, isDarkMode, onPress, scaledSize }, ref) => {
     const scale = useRef(new Animated.Value(1)).current;
@@ -1160,7 +1132,7 @@ const DeviceItem = forwardRef(
       }).start();
     };
 
-    let statusColor = "#22c55e"; // Green
+    let statusColor = "#22c55e";
     let bgColor = isDarkMode
       ? "rgba(34, 197, 94, 0.15)"
       : "rgba(0, 153, 94, 0.15)";
@@ -1203,7 +1175,7 @@ const DeviceItem = forwardRef(
             elevation: 2,
           }}
         >
-          {/* ICON BOX */}
+          {}
           <View
             className="w-12 h-12 rounded-2xl items-center justify-center mr-4"
             style={{ backgroundColor: bgColor }}
@@ -1211,9 +1183,9 @@ const DeviceItem = forwardRef(
             <MaterialIcons name={data.icon} size={24} color={statusColor} />
           </View>
 
-          {/* TEXT CONTENT */}
+          {}
           <View className="flex-1 justify-center">
-            {/* ROW 1: Name and Tag */}
+            {}
             <View className="flex-row items-center justify-between mb-1">
               <Text
                 className="font-bold"
@@ -1241,7 +1213,7 @@ const DeviceItem = forwardRef(
               )}
             </View>
 
-            {/* ROW 2: Status, Watts, Volts */}
+            {}
             <View className="flex-row items-center mb-1">
               <Text
                 style={{
@@ -1278,7 +1250,7 @@ const DeviceItem = forwardRef(
               )}
             </View>
 
-            {/* ROW 3: Est Cost */}
+            {}
             {data.costPerHr !== "---" && data.type !== "off" && (
               <Text
                 style={{
@@ -1314,10 +1286,8 @@ const TourOverlay = ({
 }) => {
   if (step.type === "highlight" && !layout) return null;
 
-  // 1. COORDINATE FIX
   const yOffset = Platform.OS === "android" ? StatusBar.currentHeight : 0;
 
-  // 2. MASK GENERATION
   const maskColor = "rgba(0, 0, 0, 0.85)";
   const pad = 4;
 
@@ -1343,9 +1313,6 @@ const TourOverlay = ({
     const targetW = layout.width;
     const targetH = layout.height;
 
-    // --- POSITIONING LOGIC UPDATE ---
-    // 1. Force 'hubs' to be upper.
-    // 2. Increase offset to -250 so the card (height ~200) sits clearly ABOVE the highlight.
     if (targetY > SCREEN_HEIGHT / 2 || step.id === "hubs") {
       topPosition = targetY - 250;
     } else {
@@ -1354,7 +1321,7 @@ const TourOverlay = ({
 
     MaskLayer = (
       <>
-        {/* Top Block */}
+        {}
         <View
           style={{
             position: "absolute",
@@ -1365,7 +1332,7 @@ const TourOverlay = ({
             backgroundColor: maskColor,
           }}
         />
-        {/* Bottom Block */}
+        {}
         <View
           style={{
             position: "absolute",
@@ -1376,7 +1343,7 @@ const TourOverlay = ({
             backgroundColor: maskColor,
           }}
         />
-        {/* Left Block */}
+        {}
         <View
           style={{
             position: "absolute",
@@ -1387,7 +1354,7 @@ const TourOverlay = ({
             backgroundColor: maskColor,
           }}
         />
-        {/* Right Block */}
+        {}
         <View
           style={{
             position: "absolute",
@@ -1406,10 +1373,10 @@ const TourOverlay = ({
 
   return (
     <Modal transparent visible={true} animationType="fade">
-      {/* 1. Render the Mask */}
+      {}
       <View style={{ flex: 1 }}>{MaskLayer}</View>
 
-      {/* 2. Render the Highlight Border */}
+      {}
       {step.type === "highlight" && layout && (
         <View
           style={{
@@ -1425,7 +1392,7 @@ const TourOverlay = ({
         />
       )}
 
-      {/* 3. Render the Card */}
+      {}
       <View
         style={
           step.type === "modal"
@@ -1440,7 +1407,7 @@ const TourOverlay = ({
               }
             : {
                 position: "absolute",
-                top: topPosition, // Uses the new calculated value
+                top: topPosition,
                 left: 24,
                 right: 24,
               }

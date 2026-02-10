@@ -22,13 +22,11 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// --- HUB LISTS (Personal Only) ---
 const PERSONAL_HUBS = [
   { id: "living", name: "Living Room" },
   { id: "kitchen", name: "Kitchen" },
 ];
 
-// --- RAW DATA (Personal Only) ---
 const RAW_DATA = {
   Day: [
     {
@@ -101,7 +99,6 @@ const RAW_DATA = {
   ],
 };
 
-// --- HELPER: Get Icon based on device name ---
 const getCategoryIcon = (name) => {
   const n = name.toLowerCase();
   if (n.includes("air") || n.includes("ac") || n.includes("conditioner"))
@@ -119,10 +116,9 @@ const getCategoryIcon = (name) => {
   if (n.includes("tool") || n.includes("drill")) return "handyman";
   if (n.includes("garage")) return "garage";
   if (n.includes("computer") || n.includes("pc")) return "computer";
-  return "bolt"; // Default fallback
+  return "bolt";
 };
 
-// Mock Bar Heights
 const getBars = (tab) => {
   if (tab === "Day") return [20, 45, 90, 60, 70, 30];
   if (tab === "Week") return [40, 35, 70, 50, 55, 20, 15];
@@ -175,7 +171,7 @@ export default function SimpleAnalyticsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- HEADER --- */}
+      {}
       <View
         style={{
           flexDirection: "row",
@@ -249,7 +245,7 @@ export default function SimpleAnalyticsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
-        {/* --- TIME PERIOD TABS --- */}
+        {}
         <View
           style={{
             flexDirection: "row",
@@ -287,7 +283,7 @@ export default function SimpleAnalyticsScreen() {
           })}
         </View>
 
-        {/* --- HERO: TOTAL COST --- */}
+        {}
         <View style={{ alignItems: "center", marginBottom: 32 }}>
           <Text
             style={{
@@ -313,7 +309,7 @@ export default function SimpleAnalyticsScreen() {
               maximumFractionDigits: 2,
             })}
           </Text>
-          {/* Simple Trend Indicator */}
+          {}
           <View
             style={{
               flexDirection: "row",
@@ -339,7 +335,7 @@ export default function SimpleAnalyticsScreen() {
           </View>
         </View>
 
-        {/* --- UPDATED GRAPH (With Grid Lines) --- */}
+        {}
         <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
           <View
             style={{
@@ -350,7 +346,7 @@ export default function SimpleAnalyticsScreen() {
               paddingTop: 20,
             }}
           >
-            {/* Background Grid Lines */}
+            {}
             <View
               style={[
                 StyleSheet.absoluteFill,
@@ -381,7 +377,7 @@ export default function SimpleAnalyticsScreen() {
                   opacity: 0.5,
                 }}
               />
-              {/* X-Axis Line */}
+              {}
               <View
                 style={{
                   borderBottomWidth: 1,
@@ -391,7 +387,7 @@ export default function SimpleAnalyticsScreen() {
               />
             </View>
 
-            {/* Bars */}
+            {}
             {bars.map((height, idx) => (
               <View
                 key={idx}
@@ -427,7 +423,7 @@ export default function SimpleAnalyticsScreen() {
           </View>
         </View>
 
-        {/* --- FILTER CHIPS --- */}
+        {}
         <View style={{ paddingLeft: 24, marginBottom: 24 }}>
           <Text
             style={{
@@ -501,7 +497,7 @@ export default function SimpleAnalyticsScreen() {
           </ScrollView>
         </View>
 
-        {/* --- BREAKDOWN LIST (Dynamic Icons) --- */}
+        {}
         <View style={{ paddingHorizontal: 24 }}>
           <Text
             style={{
@@ -524,7 +520,7 @@ export default function SimpleAnalyticsScreen() {
                   marginBottom: 16,
                 }}
               >
-                {/* Dynamic Icon Box */}
+                {}
                 <View
                   style={{
                     width: 40,
@@ -537,13 +533,13 @@ export default function SimpleAnalyticsScreen() {
                   }}
                 >
                   <MaterialIcons
-                    name={getCategoryIcon(item.name)} // DYNAMIC ICON HERE
+                    name={getCategoryIcon(item.name)}
                     size={20}
                     color={theme.buttonPrimary}
                   />
                 </View>
 
-                {/* Details */}
+                {}
                 <View style={{ flex: 1 }}>
                   <Text
                     style={{
@@ -564,7 +560,7 @@ export default function SimpleAnalyticsScreen() {
                   </Text>
                 </View>
 
-                {/* Cost & Bar */}
+                {}
                 <View style={{ alignItems: "flex-end" }}>
                   <Text
                     style={{

@@ -61,13 +61,11 @@ export default function BudgetDeviceListScreen() {
     },
   ];
 
-  // --- 1. LOCAL TIMER FOR 'NOW' ---
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000); // Check every second for smoother updates
+    const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // --- 2. REALTIME HUB LISTENER (Keeps Online Status Fresh) ---
   useEffect(() => {
     if (!hubId) return;
 
@@ -94,7 +92,6 @@ export default function BudgetDeviceListScreen() {
     };
   }, [hubId]);
 
-  // --- 3. FETCH DEVICES ---
   const fetchRealData = async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
@@ -154,7 +151,6 @@ export default function BudgetDeviceListScreen() {
     fetchRealData(true);
   }, [hubId]);
 
-  // --- 4. DEVICE PROCESSING WITH FIXED DETECTION LOGIC ---
   const processedRealDevices = realDevices.map((d) => {
     let isHubOnline = false;
 
@@ -164,8 +160,6 @@ export default function BudgetDeviceListScreen() {
       const lastSeenMs = new Date(timeStr).getTime();
       const diffSeconds = (now - lastSeenMs) / 1000;
 
-      // *** FIXED LOGIC HERE (Removed diffInSeconds typo) ***
-      // Checks if last seen was within 8 seconds ago, allowing 5s future clock skew
       isHubOnline = diffSeconds < 8 && diffSeconds > -5;
     }
 
@@ -203,14 +197,12 @@ export default function BudgetDeviceListScreen() {
   const displayList = [...processedRealDevices, ...mockDevices];
 
   const handleDevicePress = (device) => {
-    // 1. If UNUSED -> Show Config Modal
     if (device.dbType === "Unused") {
       setSelectedUnusedDevice(device);
       setShowConfigModal(true);
       return;
     }
 
-    // 2. ALL OTHER STATUSES (Active, Offline, Warning, Critical) -> Go to Budget Detail
     navigation.navigate("BudgetDetail", {
       deviceName: device.name,
       deviceId: device.id,

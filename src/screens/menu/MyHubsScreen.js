@@ -24,7 +24,6 @@ export default function MyHubsScreen() {
 
   const scaledSize = (baseSize) => baseSize * (fontScale || 1);
 
-  // --- 1. FETCH HUBS ---
   const fetchHubs = async () => {
     try {
       const {
@@ -34,9 +33,9 @@ export default function MyHubsScreen() {
 
       const { data, error } = await supabase
         .from("hubs")
-        .select(`*, devices(id, type)`) // Fetch devices to count manually
+        .select(`*, devices(id, type)`)
         .eq("user_id", user.id)
-        .neq("devices.type", "Unused"); // Filter out "Unused" devices
+        .neq("devices.type", "Unused");
 
       if (error) throw error;
       setHubs(data || []);
@@ -48,7 +47,6 @@ export default function MyHubsScreen() {
     }
   };
 
-  // --- 2. AUTO REFRESH ---
   useEffect(() => {
     const autoRefreshInterval = setInterval(() => {
       fetchHubs();
@@ -57,7 +55,6 @@ export default function MyHubsScreen() {
     return () => clearInterval(autoRefreshInterval);
   }, []);
 
-  // --- 3. REALTIME SUBSCRIPTION ---
   useEffect(() => {
     const channel = supabase
       .channel("hubs_realtime_check")
@@ -105,7 +102,7 @@ export default function MyHubsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- HEADER --- */}
+      {}
       <View
         className="flex-row items-center px-6 py-5 border-b"
         style={{
@@ -202,7 +199,6 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
     if (!isNaN(lastSeenMs)) {
       const diffSeconds = (now - lastSeenMs) / 1000;
 
-      // --- FIXED LINE BELOW ---
       isOnline = diffSeconds < 8 && diffSeconds > -5;
 
       if (!isOnline) {
@@ -220,7 +216,6 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
     }
   }
 
-  // Count Real Devices Only (Filtered by query)
   const deviceCount = hub.devices ? hub.devices.length : 0;
 
   const statusColor = isOnline ? theme.buttonPrimary : theme.textSecondary;

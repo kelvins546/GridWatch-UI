@@ -2,20 +2,18 @@ import React from "react";
 import { FlexWidget, TextWidget } from "react-native-android-widget";
 
 export function BudgetWidget({ budget, usage, cost }) {
-  // 1. Calculate Percentage
   const safeUsage = Number(usage) || 0;
   const safeBudget = Number(budget) || 1;
   const rawPercent = (safeUsage / safeBudget) * 100;
   const percentage = Math.min(Math.round(rawPercent), 100);
 
-  // 2. Colors from your App Theme
   const COLORS = {
-    bg: "#18181b", // Dark Card Background
-    track: "#27272a", // Zinc-800
-    primary: "#00A651", // Your Brand Green
-    textMain: "#ffffff", // White
-    textSub: "#71717a", // Zinc-500
-    divider: "#3f3f46", // Zinc-700
+    bg: "#18181b",
+    track: "#27272a",
+    primary: "#00A651",
+    textMain: "#ffffff",
+    textSub: "#71717a",
+    divider: "#3f3f46",
   };
 
   return (
@@ -24,13 +22,13 @@ export function BudgetWidget({ budget, usage, cost }) {
         height: "match_parent",
         width: "match_parent",
         backgroundColor: COLORS.bg,
-        borderRadius: 22, // Match rounded-2xl
+        borderRadius: 22,
         padding: 16,
         flexDirection: "column",
-        justifyContent: "flex-start", // Push items to top, don't stretch them
+        justifyContent: "flex-start",
       }}
     >
-      {/* --- HEADER ROW: "TOTAL SPENDING" & LOGO --- */}
+      {}
       <FlexWidget
         style={{
           flexDirection: "row",
@@ -46,10 +44,10 @@ export function BudgetWidget({ budget, usage, cost }) {
             color: COLORS.textSub,
             fontSize: 11,
             fontWeight: "bold",
-            letterSpacing: 1.5, // tracking-widest
+            letterSpacing: 1.5,
           }}
         />
-        {/* Simulating the Logo with Text because Images require base64 in widgets */}
+        {}
         <TextWidget
           text="GridWatch"
           style={{
@@ -61,18 +59,18 @@ export function BudgetWidget({ budget, usage, cost }) {
         />
       </FlexWidget>
 
-      {/* --- BIG PRICE --- */}
+      {}
       <TextWidget
         text={`₱ ${cost}`}
         style={{
           color: COLORS.textMain,
-          fontSize: 28, // Scaled for widget
+          fontSize: 28,
           fontWeight: "bold",
           marginBottom: 16,
         }}
       />
 
-      {/* --- PROGRESS BAR --- */}
+      {}
       <FlexWidget
         style={{
           flexDirection: "column",
@@ -80,7 +78,7 @@ export function BudgetWidget({ budget, usage, cost }) {
           marginBottom: 16,
         }}
       >
-        {/* Track */}
+        {}
         <FlexWidget
           style={{
             height: 8,
@@ -90,18 +88,18 @@ export function BudgetWidget({ budget, usage, cost }) {
             marginBottom: 6,
           }}
         >
-          {/* Fill */}
+          {}
           <FlexWidget
             style={{
               height: "match_parent",
-              width: `${percentage}%`, // Dynamic Width
+              width: `${percentage}%`,
               backgroundColor: COLORS.primary,
               borderRadius: 4,
             }}
           />
         </FlexWidget>
 
-        {/* "48% of Budget Used" */}
+        {}
         <TextWidget
           text={`${percentage}% of Budget Used`}
           style={{
@@ -112,7 +110,7 @@ export function BudgetWidget({ budget, usage, cost }) {
         />
       </FlexWidget>
 
-      {/* --- DIVIDER LINE --- */}
+      {}
       <FlexWidget
         style={{
           height: 1,
@@ -122,9 +120,9 @@ export function BudgetWidget({ budget, usage, cost }) {
         }}
       />
 
-      {/* --- FOOTER STATS (Daily Avg | Forecast) --- */}
+      {}
       <FlexWidget style={{ flexDirection: "row", alignItems: "center" }}>
-        {/* Stat 1: Daily Avg */}
+        {}
         <FlexWidget style={{ flexDirection: "column", marginRight: 16 }}>
           <TextWidget
             text="DAILY AVG"
@@ -141,7 +139,7 @@ export function BudgetWidget({ budget, usage, cost }) {
           />
         </FlexWidget>
 
-        {/* Vertical Separator */}
+        {}
         <FlexWidget
           style={{
             width: 1,
@@ -151,7 +149,7 @@ export function BudgetWidget({ budget, usage, cost }) {
           }}
         />
 
-        {/* Stat 2: Forecast */}
+        {}
         <FlexWidget style={{ flexDirection: "column" }}>
           <TextWidget
             text="FORECAST"

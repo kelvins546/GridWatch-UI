@@ -22,7 +22,6 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// --- CONSTANTS ---
 const PERSONAL_HUBS = [
   { id: "living", name: "Living Room" },
   { id: "kitchen", name: "Kitchen" },
@@ -171,7 +170,6 @@ const RAW_DATA = {
   },
 };
 
-// --- HELPER: Get Icon based on device name ---
 const getCategoryIcon = (name) => {
   const n = name.toLowerCase();
   if (n.includes("air") || n.includes("ac") || n.includes("conditioner"))
@@ -189,10 +187,9 @@ const getCategoryIcon = (name) => {
   if (n.includes("tool") || n.includes("drill")) return "handyman";
   if (n.includes("garage")) return "garage";
   if (n.includes("computer") || n.includes("pc")) return "computer";
-  return "bolt"; // Default fallback
+  return "bolt";
 };
 
-// Mock Bar Heights
 const getBars = (tab) => {
   if (tab === "Day") return [20, 45, 90, 60, 70, 30];
   if (tab === "Week") return [40, 35, 70, 50, 55, 20, 15];
@@ -248,7 +245,7 @@ export default function AnalyticsScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- HEADER --- */}
+      {}
       <View
         style={{
           flexDirection: "row",
@@ -268,7 +265,7 @@ export default function AnalyticsScreen() {
           Analytics
         </Text>
 
-        {/* --- PILL SWITCHER --- */}
+        {}
         <View
           style={{
             flexDirection: "row",
@@ -334,7 +331,7 @@ export default function AnalyticsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
-        {/* --- TIME PERIOD TABS --- */}
+        {}
         <View
           style={{
             flexDirection: "row",
@@ -372,7 +369,7 @@ export default function AnalyticsScreen() {
           })}
         </View>
 
-        {/* --- HERO: TOTAL COST --- */}
+        {}
         <View style={{ alignItems: "center", marginBottom: 32 }}>
           <Text
             style={{
@@ -398,7 +395,7 @@ export default function AnalyticsScreen() {
               maximumFractionDigits: 2,
             })}
           </Text>
-          {/* Simple Trend Indicator */}
+          {}
           <View
             style={{
               flexDirection: "row",
@@ -424,7 +421,7 @@ export default function AnalyticsScreen() {
           </View>
         </View>
 
-        {/* --- UPDATED GRAPH (With Grid Lines) --- */}
+        {}
         <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
           <View
             style={{
@@ -435,7 +432,7 @@ export default function AnalyticsScreen() {
               paddingTop: 20,
             }}
           >
-            {/* Background Grid Lines */}
+            {}
             <View
               style={[
                 StyleSheet.absoluteFill,
@@ -466,7 +463,7 @@ export default function AnalyticsScreen() {
                   opacity: 0.5,
                 }}
               />
-              {/* X-Axis Line */}
+              {}
               <View
                 style={{
                   borderBottomWidth: 1,
@@ -476,7 +473,7 @@ export default function AnalyticsScreen() {
               />
             </View>
 
-            {/* Bars */}
+            {}
             {bars.map((height, idx) => (
               <View
                 key={idx}
@@ -512,7 +509,7 @@ export default function AnalyticsScreen() {
           </View>
         </View>
 
-        {/* --- FILTER CHIPS --- */}
+        {}
         <View style={{ paddingLeft: 24, marginBottom: 24 }}>
           <Text
             style={{
@@ -586,7 +583,7 @@ export default function AnalyticsScreen() {
           </ScrollView>
         </View>
 
-        {/* --- BREAKDOWN LIST (Dynamic Icons) --- */}
+        {}
         <View style={{ paddingHorizontal: 24 }}>
           <Text
             style={{
@@ -609,7 +606,7 @@ export default function AnalyticsScreen() {
                   marginBottom: 16,
                 }}
               >
-                {/* Dynamic Icon Box */}
+                {}
                 <View
                   style={{
                     width: 40,
@@ -622,13 +619,13 @@ export default function AnalyticsScreen() {
                   }}
                 >
                   <MaterialIcons
-                    name={getCategoryIcon(item.name)} // DYNAMIC ICON HERE
+                    name={getCategoryIcon(item.name)}
                     size={20}
                     color={theme.buttonPrimary}
                   />
                 </View>
 
-                {/* Details */}
+                {}
                 <View style={{ flex: 1 }}>
                   <Text
                     style={{
@@ -649,7 +646,7 @@ export default function AnalyticsScreen() {
                   </Text>
                 </View>
 
-                {/* Cost & Bar */}
+                {}
                 <View style={{ alignItems: "flex-end" }}>
                   <Text
                     style={{

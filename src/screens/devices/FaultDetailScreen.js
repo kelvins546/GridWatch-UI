@@ -57,7 +57,7 @@ export default function FaultDetailScreen() {
       flex: 1,
       backgroundColor: theme.background,
     },
-    // --- UPDATED HEADER OVERLAY (Matches DeviceControlScreen) ---
+
     headerOverlay: {
       position: "absolute",
       top: Platform.OS === "android" ? 60 : 60,
@@ -115,7 +115,7 @@ export default function FaultDetailScreen() {
       marginTop: 10,
       flexDirection: "row",
     },
-    // --- MODAL STYLES ---
+
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.8)",
@@ -152,7 +152,7 @@ export default function FaultDetailScreen() {
         backgroundColor="transparent"
       />
 
-      {/* --- HEADER OVERLAY --- */}
+      {}
       <View style={styles.headerOverlay}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -165,13 +165,13 @@ export default function FaultDetailScreen() {
           <MaterialIcons name="arrow-back" size={scaledSize(24)} color="#fff" />
         </TouchableOpacity>
 
-        {/* Optional Right Icon (Settings) if needed, otherwise empty view or hidden */}
+        {}
         <TouchableOpacity
           style={{
             padding: 4,
             backgroundColor: "rgba(0,0,0,0.2)",
             borderRadius: 20,
-            opacity: 0, // Hidden but keeps spacing if needed, or remove completely
+            opacity: 0,
           }}
           disabled={true}
         >
@@ -179,10 +179,9 @@ export default function FaultDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* --- HERO SECTION (Adjusted Spacing) --- */}
+      {}
       <LinearGradient
         colors={["#ff4444", theme.background]}
-        // REDUCED PADDING TOP/BOTTOM HERE
         style={{ paddingTop: 110, paddingBottom: 25, alignItems: "center" }}
       >
         <View
@@ -195,7 +194,7 @@ export default function FaultDetailScreen() {
             justifyContent: "center",
             borderWidth: 2,
             borderColor: "rgba(255,255,255,0.2)",
-            marginBottom: 10, // Reduced from 16
+            marginBottom: 10,
           }}
         >
           <MaterialIcons name="flash-off" size={40} color="#fff" />
@@ -205,7 +204,7 @@ export default function FaultDetailScreen() {
             fontSize: scaledSize(24),
             fontWeight: "900",
             color: "#fff",
-            marginBottom: 2, // Reduced from 6
+            marginBottom: 2,
           }}
         >
           Power Cutoff Active
@@ -221,7 +220,7 @@ export default function FaultDetailScreen() {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={{ padding: 24 }}>
-        {/* --- MAIN INCIDENT BOX --- */}
+        {}
         <View style={styles.card}>
           <Text style={[styles.detailLabel, { marginBottom: 12 }]}>
             Incident Report
@@ -265,7 +264,7 @@ export default function FaultDetailScreen() {
           </View>
         </View>
 
-        {/* --- SMALLER BOXES --- */}
+        {}
         <View style={{ flexDirection: "row", gap: 12, marginBottom: 20 }}>
           <View
             style={[

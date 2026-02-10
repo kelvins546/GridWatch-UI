@@ -30,10 +30,8 @@ export default function DeviceConfigScreen() {
 
   const { hubName, hubId } = route.params || {};
 
-  // --- ANIMATION REFS ---
   const pulseAnim = useRef(new Animated.Value(0)).current;
 
-  // --- STATE ---
   const [hubData, setHubData] = useState({
     wifi_ssid: "Loading...",
     ip_address: "---",
@@ -48,7 +46,6 @@ export default function DeviceConfigScreen() {
   const [isRestarting, setIsRestarting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // --- MODAL STATE ---
   const [modalState, setModalState] = useState({
     visible: false,
     type: null,
@@ -57,17 +54,14 @@ export default function DeviceConfigScreen() {
     loading: false,
   });
 
-  // --- SAFE BACK NAVIGATION ---
   const handleBack = () => {
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      // Fallback if stack is empty
       navigation.navigate("MainApp", { screen: "Home" });
     }
   };
 
-  // --- ANIMATION LOOP ---
   useEffect(() => {
     const animation = Animated.loop(
       Animated.sequence([
@@ -98,7 +92,6 @@ export default function DeviceConfigScreen() {
     outputRange: [0.3, 0],
   });
 
-  // --- FETCH FUNCTION ---
   const fetchHubInfo = async (showLoader = false) => {
     if (showLoader) setIsRefreshing(true);
 
@@ -117,7 +110,6 @@ export default function DeviceConfigScreen() {
     setLoading(false);
   };
 
-  // --- SUPABASE DATA & APP STATE LISTENER ---
   useEffect(() => {
     let mounted = true;
     fetchHubInfo();
@@ -163,7 +155,6 @@ export default function DeviceConfigScreen() {
     };
   }, [hubId]);
 
-  // --- STATUS LOGIC ---
   let isOnline = false;
   let diffInSeconds = 0;
 
@@ -178,7 +169,6 @@ export default function DeviceConfigScreen() {
     }
   }
 
-  // --- UI VARIABLES ---
   let statusDetailText = "Offline • Check Connection";
   let statusIcon = "wifi-off";
   const iconColor = "#fff";
@@ -203,15 +193,13 @@ export default function DeviceConfigScreen() {
     statusIcon = "router";
   }
 
-  // --- GRADIENT COLORS ---
   const gradientColors =
     isOnline && !isRestarting
-      ? [theme.buttonPrimary, theme.background] // Green
+      ? [theme.buttonPrimary, theme.background]
       : isDarkMode
-        ? ["#2c3e50", theme.background] // Dark Blue-Grey
-        : ["#94a3b8", theme.background]; // Light Grey
+        ? ["#2c3e50", theme.background]
+        : ["#94a3b8", theme.background];
 
-  // --- MODAL ACTIONS ---
   const openModal = (type) => {
     let config = { visible: true, type, loading: false };
     if (type === "wifi") {
@@ -272,7 +260,6 @@ export default function DeviceConfigScreen() {
   };
 
   const handleConfirm = async () => {
-    // --- RESTART LOGIC (NO SIMULATION) ---
     if (modalState.type === "restart") {
       setModalState((prev) => ({
         ...prev,
@@ -282,9 +269,8 @@ export default function DeviceConfigScreen() {
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s Timeout
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-        // Attempt to hit the reboot endpoint
         const response = await fetch(`http://${hubData.ip_address}/reboot`, {
           method: "POST",
           signal: controller.signal,
@@ -296,14 +282,11 @@ export default function DeviceConfigScreen() {
           throw new Error("Failed to reach hub");
         }
 
-        // --- SUCCESS: Hub received command ---
-        setIsRestarting(true); // Changes status text to "System Rebooting..." (Amber)
-        closeModal(); // Close modal immediately, no countdown
+        setIsRestarting(true);
+        closeModal();
 
-        // Reset restarting status after 15s (approx time for ESP32 to boot back up)
         setTimeout(() => setIsRestarting(false), 15000);
       } catch (e) {
-        // --- FAIL: Hub Unreachable -> Disconnected Screen ---
         closeModal();
         navigation.navigate("Disconnected", {
           hubName: hubName || "Hub",
@@ -344,7 +327,6 @@ export default function DeviceConfigScreen() {
     ? "rgba(255, 68, 68, 0.3)"
     : "rgba(198, 40, 40, 0.2)";
 
-  // --- STYLES ---
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
     headerOverlay: {
@@ -411,48 +393,48 @@ export default function DeviceConfigScreen() {
       gap: 10,
       borderWidth: 1,
     },
-    // --- EXACT MODAL STYLES AS REQUESTED ---
+
     modalOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.8)", // bg-black/80
+      backgroundColor: "rgba(0,0,0,0.8)",
       justifyContent: "center",
       alignItems: "center",
     },
     modalContent: {
-      width: 288, // w-72 (72 * 4 = 288)
+      width: 288,
       backgroundColor: theme.card,
-      borderRadius: 16, // rounded-2xl
-      padding: 20, // p-5
+      borderRadius: 16,
+      padding: 20,
       alignItems: "center",
-      borderWidth: 1, // border
+      borderWidth: 1,
       borderColor: theme.cardBorder,
     },
     modalTitle: {
-      fontSize: 18, // fontSize: 18
-      fontWeight: "bold", // font-bold
+      fontSize: 18,
+      fontWeight: "bold",
       color: theme.text,
-      marginBottom: 8, // mb-2
-      textAlign: "center", // text-center
+      marginBottom: 8,
+      textAlign: "center",
     },
     modalMsg: {
-      fontSize: 12, // fontSize: 12
+      fontSize: 12,
       color: theme.textSecondary,
-      textAlign: "center", // text-center
-      marginBottom: 24, // mb-6
-      lineHeight: 20, // leading-5
+      textAlign: "center",
+      marginBottom: 24,
+      lineHeight: 20,
     },
     modalBtnRow: {
-      flexDirection: "row", // flex-row
-      gap: 10, // gap-2.5
-      width: "100%", // w-full
+      flexDirection: "row",
+      gap: 10,
+      width: "100%",
     },
     modalBtn: {
-      flex: 1, // flex-1
-      height: 40, // h-10
-      borderRadius: 12, // rounded-xl
+      flex: 1,
+      height: 40,
+      borderRadius: 12,
       alignItems: "center",
-      justifyContent: "center", // justify-center
-      borderWidth: 1, // border
+      justifyContent: "center",
+      borderWidth: 1,
     },
   });
 
@@ -481,7 +463,7 @@ export default function DeviceConfigScreen() {
 
       <View style={styles.headerOverlay}>
         <TouchableOpacity
-          onPress={handleBack} // USE THE SAFE BACK HANDLER HERE
+          onPress={handleBack}
           style={{
             padding: 4,
             backgroundColor: "rgba(0,0,0,0.2)",
@@ -520,7 +502,7 @@ export default function DeviceConfigScreen() {
         </LinearGradient>
 
         <View style={{ padding: 24 }}>
-          {/* SYSTEM INFO */}
+          {}
           <Text style={styles.sectionTitle}>System Information</Text>
           <View style={styles.card}>
             <InfoItem
@@ -568,7 +550,7 @@ export default function DeviceConfigScreen() {
             </View>
           </View>
 
-          {/* NETWORK CONNECTION */}
+          {}
           <Text style={styles.sectionTitle}>Network Connection</Text>
           <View
             style={[
@@ -635,7 +617,7 @@ export default function DeviceConfigScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* OUTLET CONFIGURATION */}
+          {}
           <Text style={styles.sectionTitle}>Outlet Configuration</Text>
           <TouchableOpacity
             style={[
@@ -651,8 +633,8 @@ export default function DeviceConfigScreen() {
             disabled={isRestarting}
             onPress={() =>
               navigation.navigate("HubConfig", {
-                hubId: hubData.serial_number || hubId, // Ensure ID is passed
-                fromBudget: true, // Mark as coming from an internal screen
+                hubId: hubData.serial_number || hubId,
+                fromBudget: true,
                 status: isOnline ? "Online" : "Offline",
               })
             }
@@ -705,7 +687,7 @@ export default function DeviceConfigScreen() {
             />
           </TouchableOpacity>
 
-          {/* ADVANCED ACTIONS */}
+          {}
           <Text style={styles.sectionTitle}>Advanced Actions</Text>
           <TouchableOpacity
             activeOpacity={0.7}
@@ -767,7 +749,7 @@ export default function DeviceConfigScreen() {
         </View>
       </ScrollView>
 
-      {/* --- FIXED MODAL --- */}
+      {}
       <Modal
         transparent
         visible={modalState.visible}
@@ -796,7 +778,7 @@ export default function DeviceConfigScreen() {
               <Text style={styles.modalMsg}>{modalState.msg}</Text>
 
               <View style={styles.modalBtnRow}>
-                {/* Cancel Button */}
+                {}
                 {(modalState.type === "restart" ||
                   modalState.type === "unpair" ||
                   modalState.type === "force_unpair" ||
@@ -811,7 +793,7 @@ export default function DeviceConfigScreen() {
                   </TouchableOpacity>
                 )}
 
-                {/* Confirm Button */}
+                {}
                 <TouchableOpacity
                   style={[
                     styles.modalBtn,
@@ -822,7 +804,7 @@ export default function DeviceConfigScreen() {
                         modalState.type === "error"
                           ? theme.buttonDangerText
                           : theme.buttonPrimary,
-                      borderWidth: 0, // Remove border for solid button
+                      borderWidth: 0,
                     },
                   ]}
                   onPress={

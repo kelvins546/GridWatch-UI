@@ -88,23 +88,22 @@ export default function LimitDetailScreen() {
     }
   };
 
-  // --- STYLES ---
   const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: theme.background,
     },
-    // --- UPDATED BACK BUTTON ---
+
     backButton: {
       position: "absolute",
-      top: 60, // Standardized top position
-      left: 24, // Standardized left margin
+      top: 60,
+      left: 24,
       zIndex: 10,
       padding: 4,
       backgroundColor: "rgba(0,0,0,0.2)",
       borderRadius: 20,
     },
-    // Standard Card Style
+
     card: {
       backgroundColor: theme.card,
       borderColor: theme.cardBorder,
@@ -121,7 +120,7 @@ export default function LimitDetailScreen() {
       marginBottom: 10,
       letterSpacing: 1,
     },
-    // Input Style
+
     inputContainer: {
       flexDirection: "row",
       gap: 8,
@@ -167,7 +166,7 @@ export default function LimitDetailScreen() {
       justifyContent: "center",
       marginTop: 10,
     },
-    // --- MODAL STYLES ---
+
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.8)",
@@ -222,7 +221,7 @@ export default function LimitDetailScreen() {
         <MaterialIcons name="arrow-back" size={scaledSize(24)} color="#fff" />
       </TouchableOpacity>
 
-      {/* Hero Section */}
+      {}
       <LinearGradient
         colors={["#ffaa00", theme.background]}
         style={{ paddingTop: 120, paddingBottom: 40, alignItems: "center" }}
@@ -263,7 +262,7 @@ export default function LimitDetailScreen() {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={{ padding: 24 }}>
-        {/* --- DAILY CONSUMPTION CARD --- */}
+        {}
         <View style={styles.card}>
           <Text style={styles.detailLabel}>Daily Consumption</Text>
 
@@ -353,7 +352,7 @@ export default function LimitDetailScreen() {
           </View>
         </View>
 
-        {/* --- AUTO OFF TOGGLE CARD --- */}
+        {}
         <View
           style={[
             styles.card,
@@ -395,7 +394,7 @@ export default function LimitDetailScreen() {
           />
         </View>
 
-        {/* --- EXTEND BUDGET CARD --- */}
+        {}
         <View style={styles.card}>
           <Text style={[styles.detailLabel, { color: "#ffaa00" }]}>
             Extend Budget (Pesos)
@@ -419,7 +418,7 @@ export default function LimitDetailScreen() {
           </View>
         </View>
 
-        {/* --- TURN OFF BUTTON --- */}
+        {}
         <TouchableOpacity style={styles.turnOffButton} onPress={handleTurnOff}>
           <MaterialIcons
             name="power-settings-new"
@@ -456,7 +455,7 @@ export default function LimitDetailScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* --- SUCCESS MODAL --- */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
@@ -490,7 +489,6 @@ export default function LimitDetailScreen() {
   );
 }
 
-// Reused CustomSwitch Component
 function CustomSwitch({ value, onToggle, theme }) {
   return (
     <TouchableOpacity

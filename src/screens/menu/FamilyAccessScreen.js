@@ -35,13 +35,11 @@ export default function FamilyAccessScreen() {
 
   const [email, setEmail] = useState("");
 
-  // --- UPDATED: Initial state is empty, no mocks ---
   const [myHubs, setMyHubs] = useState([]);
 
   const [familyMembers, setFamilyMembers] = useState([]);
   const [pendingInvites, setPendingInvites] = useState([]);
 
-  // --- AUTOCOMPLETE STATE ---
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchTimer, setSearchTimer] = useState(null);
@@ -57,15 +55,12 @@ export default function FamilyAccessScreen() {
   const [selectedHubs, setSelectedHubs] = useState([]);
   const [grantAllAccess, setGrantAllAccess] = useState(true);
 
-  // --- HUB DROPDOWN STATE ---
   const [isHubDropdownOpen, setIsHubDropdownOpen] = useState(false);
 
-  // Modals
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showRevokeModal, setShowRevokeModal] = useState(false);
   const [showRemoveMemberModal, setShowRemoveMemberModal] = useState(false);
 
-  // Alerts
   const [alertModalVisible, setAlertModalVisible] = useState(false);
   const [alertConfig, setAlertConfig] = useState({
     type: "success",
@@ -82,7 +77,6 @@ export default function FamilyAccessScreen() {
     setAlertModalVisible(true);
   };
 
-  // --- FETCH DATA (REAL IMPLEMENTATION) ---
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -91,7 +85,6 @@ export default function FamilyAccessScreen() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. FETCH REAL HUBS FIRST
       const { data: realHubs, error: hubsError } = await supabase
         .from("hubs")
         .select("id, name")
@@ -102,10 +95,8 @@ export default function FamilyAccessScreen() {
       const hubsList = realHubs || [];
       setMyHubs(hubsList);
 
-      // We need these IDs for the next queries
       const realHubIds = hubsList.map((h) => h.id);
 
-      // 2. Fetch Pending Invites
       const { data: invites, error: inviteError } = await supabase
         .from("hub_invites")
         .select("*")
@@ -131,7 +122,6 @@ export default function FamilyAccessScreen() {
       });
       setPendingInvites(formattedInvites);
 
-      // 3. Fetch Members (Only if we have hubs)
       if (realHubIds.length > 0) {
         const { data: accessRecords, error: accessError } = await supabase
           .from("hub_access")
@@ -188,7 +178,6 @@ export default function FamilyAccessScreen() {
     }, []),
   );
 
-  // --- GMAIL STYLE SEARCH LOGIC ---
   const handleTextChange = (text) => {
     setEmail(text);
 
@@ -229,8 +218,6 @@ export default function FamilyAccessScreen() {
     setShowSuggestions(false);
     Keyboard.dismiss();
   };
-
-  // --- ACTIONS ---
 
   const handlePreInvite = async () => {
     const trimmedEmail = email.trim().toLowerCase();
@@ -286,7 +273,7 @@ export default function FamilyAccessScreen() {
       } = await supabase.auth.getUser();
 
       let hubIdsToGrant = selectedHubs;
-      // UPDATED: Use myHubs (state) instead of MOCK_HUBS
+
       if (grantAllAccess) {
         hubIdsToGrant = myHubs.map((h) => h.id);
       }
@@ -348,7 +335,6 @@ export default function FamilyAccessScreen() {
     if (!selectedMember) return;
     setProcessing(true);
     try {
-      // UPDATED: Use myHubs (state) instead of MOCK_HUBS
       const realHubIds = myHubs.map((h) => h.id);
 
       const { error } = await supabase
@@ -379,7 +365,7 @@ export default function FamilyAccessScreen() {
     } else {
       const newSelection = [...selectedHubs, hubId];
       setSelectedHubs(newSelection);
-      // UPDATED: Compare with myHubs.length
+
       if (newSelection.length === myHubs.length) {
         setGrantAllAccess(true);
       }
@@ -389,7 +375,7 @@ export default function FamilyAccessScreen() {
   const getAccessSummary = () => {
     if (grantAllAccess) return "Full Access (All Hubs)";
     if (selectedHubs.length === 0) return "No Access Selected";
-    // UPDATED: Compare with myHubs.length
+
     if (selectedHubs.length === myHubs.length) return "Full Access (All Hubs)";
     return `${selectedHubs.length} Hub(s) Selected`;
   };
@@ -403,7 +389,7 @@ export default function FamilyAccessScreen() {
     if (!selectedMember) return;
     const currentHubIds = selectedMember.hubIds || [];
     setSelectedHubs(currentHubIds);
-    // UPDATED: Compare with myHubs.length
+
     setGrantAllAccess(currentHubIds.length === myHubs.length);
     setShowMemberOptions(false);
     setTimeout(() => setShowHubModal(true), 200);
@@ -419,9 +405,7 @@ export default function FamilyAccessScreen() {
       setShowHubModal(false);
       return;
     }
-    // Note: To implement "Update Access Rights", you would need a new Supabase query here
-    // to delete old access and insert new access for this user.
-    // For now, this just closes the modal as per your original code structure.
+
     setShowHubModal(false);
   };
 
@@ -468,7 +452,7 @@ export default function FamilyAccessScreen() {
             Invite New User
           </Text>
 
-          {/* --- INVITE CONTAINER --- */}
+          {}
           <View
             className="p-5 rounded-2xl border mb-8 z-50"
             style={{
@@ -483,7 +467,7 @@ export default function FamilyAccessScreen() {
               Email Address
             </Text>
 
-            {/* INPUT FIELD CONTAINER */}
+            {}
             <View className="relative z-50">
               <View
                 className="flex-row items-center border rounded-xl px-3 mb-4"
@@ -510,7 +494,7 @@ export default function FamilyAccessScreen() {
                 />
               </View>
 
-              {/* --- GMAIL STYLE SUGGESTIONS DROPDOWN --- */}
+              {}
               {showSuggestions && suggestions.length > 0 && (
                 <View
                   className="absolute top-[50px] left-0 right-0 rounded-xl border shadow-lg overflow-hidden"
@@ -596,12 +580,11 @@ export default function FamilyAccessScreen() {
               Access Rights
             </Text>
 
-            {/* FULL ACCESS TOGGLE BUTTON */}
+            {}
             <TouchableOpacity
               onPress={() => {
                 setGrantAllAccess(!grantAllAccess);
                 if (!grantAllAccess) {
-                  // UPDATED: Use myHubs
                   setSelectedHubs(myHubs.map((h) => h.id));
                 } else {
                   setSelectedHubs([]);
@@ -649,7 +632,7 @@ export default function FamilyAccessScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* --- HUB DROPDOWN SELECTOR --- */}
+            {}
             <View>
               <TouchableOpacity
                 onPress={() => {
@@ -689,7 +672,7 @@ export default function FamilyAccessScreen() {
                 />
               </TouchableOpacity>
 
-              {/* Dropdown Content - UPDATED to use myHubs */}
+              {}
               {isHubDropdownOpen && (
                 <View className="mb-4 pl-2">
                   {myHubs.length === 0 ? (
@@ -989,7 +972,7 @@ export default function FamilyAccessScreen() {
         </View>
       </ScrollView>
 
-      {/* Hub Selection Modal - UPDATED to use myHubs */}
+      {}
       <Modal visible={showHubModal} transparent animationType="slide">
         <View
           className="flex-1 justify-end"
@@ -1169,7 +1152,7 @@ export default function FamilyAccessScreen() {
         </View>
       </Modal>
 
-      {/* Member Options Modal */}
+      {}
       <Modal visible={showMemberOptions} transparent animationType="slide">
         <View
           className="flex-1 justify-end"
@@ -1261,7 +1244,7 @@ export default function FamilyAccessScreen() {
         </View>
       </Modal>
 
-      {/* Confirm Invite Modal */}
+      {}
       <Modal visible={showConfirmModal} transparent animationType="fade">
         <View
           className="flex-1 justify-center items-center p-6"
@@ -1324,7 +1307,7 @@ export default function FamilyAccessScreen() {
         </View>
       </Modal>
 
-      {/* Revoke Modal */}
+      {}
       <Modal visible={showRevokeModal} transparent animationType="fade">
         <View
           className="flex-1 justify-center items-center p-6"
@@ -1385,7 +1368,7 @@ export default function FamilyAccessScreen() {
         </View>
       </Modal>
 
-      {/* Remove Member Modal */}
+      {}
       <Modal visible={showRemoveMemberModal} transparent animationType="fade">
         <View
           className="flex-1 justify-center items-center p-6"
@@ -1450,7 +1433,7 @@ export default function FamilyAccessScreen() {
         </View>
       </Modal>
 
-      {/* UNIFIED STATUS MODAL */}
+      {}
       <Modal visible={alertModalVisible} transparent animationType="fade">
         <View
           className="flex-1 justify-center items-center p-6"
@@ -1463,21 +1446,21 @@ export default function FamilyAccessScreen() {
               borderColor: theme.cardBorder,
             }}
           >
-            {/* Title */}
+            {}
             <Text
               className="font-bold mb-2 text-center"
               style={{ color: theme.text, fontSize: scaledSize(18) }}
             >
               {alertConfig.title}
             </Text>
-            {/* Message */}
+            {}
             <Text
               className="text-center mb-6 leading-5"
               style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
             >
               {alertConfig.message}
             </Text>
-            {/* OK Button */}
+            {}
             <TouchableOpacity
               onPress={() => setAlertModalVisible(false)}
               className="w-[50%] self-center py-3 rounded-xl items-center"

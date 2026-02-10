@@ -16,7 +16,7 @@ import {
   Image,
   Animated,
   StyleSheet,
-  Linking, // ✅ Added for Email
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -24,10 +24,9 @@ import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
-// ✅ LEGACY IMPORT for Expo 52+
+
 import * as FileSystem from "expo-file-system/legacy";
 
-// --- CONFIGURATION ---
 const GEMINI_API_KEY = "AIzaSyD0wyF9A1_kzm5timBCT52DPYH-ofaFC9w";
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -68,7 +67,6 @@ if (Platform.OS === "android") {
   }
 }
 
-// ✅ DATE HELPER FUNCTION
 const getDayLabel = (timestamp) => {
   const date = new Date(timestamp);
   const now = new Date();
@@ -95,17 +93,14 @@ export default function HelpSupportScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState(null);
 
-  // --- CHAT STATE ---
   const [chatModalVisible, setChatModalVisible] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
 
-  // --- MEDIA STATE ---
   const recordingRef = useRef(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
 
-  // PLAYBACK STATE
   const [currentSound, setCurrentSound] = useState(null);
   const [playingMsgId, setPlayingMsgId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -114,7 +109,6 @@ export default function HelpSupportScreen() {
   const [voiceDraft, setVoiceDraft] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // --- IMAGE MODAL STATE ---
   const [fullImageVisible, setFullImageVisible] = useState(false);
   const [selectedImageUri, setSelectedImageUri] = useState(null);
 
@@ -155,7 +149,6 @@ export default function HelpSupportScreen() {
     issue.title.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  // --- ANIMATIONS & TIMER ---
   useEffect(() => {
     let animation;
     let timerInterval;
@@ -192,7 +185,6 @@ export default function HelpSupportScreen() {
     };
   }, [isRecording]);
 
-  // --- CLEANUP ---
   useEffect(() => {
     return () => {
       if (recordingRef.current) {
@@ -216,7 +208,6 @@ export default function HelpSupportScreen() {
     return `${min}:${sec < 10 ? `0${sec}` : sec}`;
   };
 
-  // --- HANDLERS ---
   const handleEmailSupport = () => {
     Linking.openURL(
       "mailto:support@gridwatch.com?subject=GridWatch Support Request",
@@ -604,7 +595,7 @@ export default function HelpSupportScreen() {
           />
         </View>
 
-        {/* --- START LIVE CHAT BUTTON --- */}
+        {}
         <TouchableOpacity
           style={[
             styles.chatCard,
@@ -639,7 +630,7 @@ export default function HelpSupportScreen() {
           />
         </TouchableOpacity>
 
-        {/* --- ✅ NEW: EMAIL US BUTTON --- */}
+        {}
         <TouchableOpacity
           style={[
             styles.chatCard,
@@ -674,7 +665,7 @@ export default function HelpSupportScreen() {
           />
         </TouchableOpacity>
 
-        {/* --- COMMON ISSUES SECTION --- */}
+        {}
         <Text
           style={{
             fontSize: 12,
@@ -746,7 +737,7 @@ export default function HelpSupportScreen() {
         </View>
       </ScrollView>
 
-      {/* --- CHAT MODAL --- */}
+      {}
       <Modal
         animationType="slide"
         visible={chatModalVisible}
@@ -891,7 +882,7 @@ export default function HelpSupportScreen() {
               }}
             />
 
-            {/* --- BOTTOM INPUT BAR --- */}
+            {}
             <View
               style={[
                 styles.inputContainer,

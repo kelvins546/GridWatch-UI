@@ -8,7 +8,7 @@ import {
   Animated,
   Modal,
   ActivityIndicator,
-  FlatList, // <--- ADDED THIS IMPORT
+  FlatList,
   TextInput,
   StyleSheet,
   Dimensions,
@@ -42,7 +42,6 @@ export default function SimpleBudgetManagerScreen() {
   const dangerColor = isDarkMode ? theme.buttonDangerText : "#cc0000";
   const warningColor = isDarkMode ? "#ffaa00" : "#ff9900";
 
-  // --- STATE ---
   const [activeHubFilter, setActiveHubFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
 
@@ -51,12 +50,10 @@ export default function SimpleBudgetManagerScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
 
-  // --- REAL DATA STATE ---
   const [hubs, setHubs] = useState([]);
   const [monthlyBudget, setMonthlyBudget] = useState(2000);
   const [billingDate, setBillingDate] = useState("1");
 
-  // --- FETCH DATA ---
   const loadData = async () => {
     setIsLoading(true);
     try {
@@ -65,7 +62,6 @@ export default function SimpleBudgetManagerScreen() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. Get User Settings
       const { data: userData } = await supabase
         .from("users")
         .select("monthly_budget, bill_cycle_day")
@@ -77,7 +73,6 @@ export default function SimpleBudgetManagerScreen() {
         setBillingDate(String(userData.bill_cycle_day || 1));
       }
 
-      // 2. Calculate Date Range for Current Month
       const now = new Date();
       const startOfMonth = new Date(
         now.getFullYear(),
@@ -85,13 +80,11 @@ export default function SimpleBudgetManagerScreen() {
         1,
       ).toISOString();
 
-      // 3. Fetch Hubs & Usage
       const { data: hubsData } = await supabase
         .from("hubs")
         .select("id, name, status, devices(id)");
 
       if (hubsData) {
-        // Fetch usage for all devices in bulk
         const allDeviceIds = hubsData.flatMap((h) =>
           h.devices.map((d) => d.id),
         );
@@ -102,7 +95,6 @@ export default function SimpleBudgetManagerScreen() {
           .in("device_id", allDeviceIds)
           .gte("date", startOfMonth);
 
-        // Map usage back to hubs
         const processedHubs = hubsData.map((hub) => {
           const hubDeviceIds = hub.devices.map((d) => d.id);
           const totalSpent = (usageLogs || [])
@@ -133,7 +125,6 @@ export default function SimpleBudgetManagerScreen() {
     loadData();
   }, []);
 
-  // --- HELPER: ORDINAL SUFFIX ---
   const getOrdinalSuffix = (day) => {
     const d = parseInt(day);
     if (d > 3 && d < 21) return "th";
@@ -149,7 +140,6 @@ export default function SimpleBudgetManagerScreen() {
     }
   };
 
-  // --- CALENDAR LOGIC ---
   const today = new Date();
   const currentMonthName = today.toLocaleString("default", { month: "long" });
   const currentYear = today.getFullYear();
@@ -164,7 +154,6 @@ export default function SimpleBudgetManagerScreen() {
 
   const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-  // --- FILTER LOGIC ---
   const displayList =
     activeHubFilter === "all"
       ? hubs
@@ -194,7 +183,6 @@ export default function SimpleBudgetManagerScreen() {
     activeLimit > 0 ? Math.min((currentSpending / activeLimit) * 100, 100) : 0;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  // --- ACTIONS ---
   const handleFilterChange = (id) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setActiveHubFilter(id);
@@ -216,7 +204,6 @@ export default function SimpleBudgetManagerScreen() {
   };
 
   const handleSaveBudget = async () => {
-    // 1. VALIDATION
     const totalHubLimits = hubs.reduce((acc, h) => acc + (h.limit || 0), 0);
 
     if (totalHubLimits > 0 && monthlyBudget < totalHubLimits) {
@@ -227,7 +214,6 @@ export default function SimpleBudgetManagerScreen() {
       return;
     }
 
-    // 2. PROCEED SAVE
     setShowBudgetModal(false);
     setIsResetting(true);
     try {
@@ -276,7 +262,6 @@ export default function SimpleBudgetManagerScreen() {
     else if (cleanedText === "") setMonthlyBudget(0);
   };
 
-  // --- STYLES ---
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -396,7 +381,7 @@ export default function SimpleBudgetManagerScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* Header */}
+      {}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.navigate("Menu")}
@@ -429,7 +414,7 @@ export default function SimpleBudgetManagerScreen() {
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* --- HERO CARD --- */}
+        {}
         <View style={{ paddingHorizontal: 24 }}>
           <TouchableOpacity
             activeOpacity={1}
@@ -560,7 +545,7 @@ export default function SimpleBudgetManagerScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* --- HUB FILTER CHIPS --- */}
+        {}
         <View style={{ paddingLeft: 24, marginBottom: 20 }}>
           <Text
             style={{
@@ -634,7 +619,7 @@ export default function SimpleBudgetManagerScreen() {
           </ScrollView>
         </View>
 
-        {/* --- ACTIONS ROW --- */}
+        {}
         <View
           style={{
             flexDirection: "row",
@@ -747,7 +732,7 @@ export default function SimpleBudgetManagerScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* --- HUB LIST --- */}
+        {}
         <View style={{ paddingHorizontal: 24 }}>
           <Text
             style={{
@@ -784,7 +769,7 @@ export default function SimpleBudgetManagerScreen() {
         </View>
       </ScrollView>
 
-      {/* --- MODALS --- */}
+      {}
       <Modal visible={showConfirmModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -888,7 +873,7 @@ export default function SimpleBudgetManagerScreen() {
         </View>
       </Modal>
 
-      {/* --- DATE PICKER MODAL --- */}
+      {}
       <Modal visible={showDatePicker} transparent animationType="slide">
         <View
           style={{
@@ -931,7 +916,7 @@ export default function SimpleBudgetManagerScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* DAY HEADERS */}
+            {}
             <View
               style={{
                 flexDirection: "row",
@@ -960,7 +945,7 @@ export default function SimpleBudgetManagerScreen() {
               ))}
             </View>
 
-            {/* CALENDAR GRID */}
+            {}
             <FlatList
               data={calendarData}
               numColumns={7}
@@ -1004,7 +989,7 @@ export default function SimpleBudgetManagerScreen() {
         </View>
       </Modal>
 
-      {/* LOADING OVERLAY */}
+      {}
       {isResetting && (
         <View
           style={{
@@ -1022,8 +1007,6 @@ export default function SimpleBudgetManagerScreen() {
     </SafeAreaView>
   );
 }
-
-// --- SUB-COMPONENTS ---
 
 function StatItem({ label, value, icon, theme, scaledSize }) {
   return (

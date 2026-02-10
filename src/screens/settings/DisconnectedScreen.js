@@ -25,7 +25,6 @@ export default function DisconnectedScreen() {
 
   const pulseAnim = useRef(new Animated.Value(0)).current;
 
-  // --- COLORS ---
   const offlineColor = theme.textSecondary;
   const offlineBg = theme.buttonNeutral;
   const offlineBorder = theme.cardBorder;
@@ -76,7 +75,7 @@ export default function DisconnectedScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* --- HEADER (Copied & Adapted from MyHubsScreen) --- */}
+      {}
       <View
         className="flex-row items-center px-6 py-5 border-b"
         style={{
@@ -97,13 +96,13 @@ export default function DisconnectedScreen() {
         >
           Status
         </Text>
-        {/* Spacer to balance the Left Icon (20px) so Title is centered */}
+        {}
         <View style={{ width: scaledSize(20) }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.content}>
-          {/* --- GRAY OFFLINE ICON --- */}
+          {}
           <View style={styles.iconContainer}>
             <Animated.View
               style={[
@@ -141,7 +140,7 @@ export default function DisconnectedScreen() {
             Last Connection: {lastSeen || "Unknown"}
           </Text>
 
-          {/* --- SAFETY NOTE --- */}
+          {}
           <View
             style={[
               styles.safetyNote,

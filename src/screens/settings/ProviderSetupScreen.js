@@ -19,7 +19,6 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import { supabase } from "../../lib/supabase";
 
-// --- STATIC IMAGE MAPPING ---
 const PROVIDER_LOGOS = {
   meralco: require("../../../assets/meralco.png"),
   veco: require("../../../assets/visayan.png"),
@@ -139,17 +138,14 @@ export default function ProviderSetupScreen() {
   const { theme, isDarkMode, fontScale } = useTheme();
   const scaledSize = (size) => size * fontScale;
 
-  // Colors
   const activeColor = theme.buttonPrimary;
   const dangerColor = isDarkMode ? "#ff4444" : "#c62828";
 
-  // State
   const [loading, setLoading] = useState(true);
   const [providers, setProviders] = useState([]);
-  const [selectedId, setSelectedId] = useState(null); // DB ID
+  const [selectedId, setSelectedId] = useState(null);
   const [selectedRateType, setSelectedRateType] = useState("Residential");
 
-  // Manual State
   const [customRate, setCustomRate] = useState("");
   const [realtimeError, setRealtimeError] = useState(null);
   const [errorModalVisible, setErrorModalVisible] = useState(false);
@@ -158,7 +154,6 @@ export default function ProviderSetupScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  // --- 1. INITIALIZE DATA (User & Rates) ---
   useEffect(() => {
     initData();
   }, []);
@@ -170,7 +165,6 @@ export default function ProviderSetupScreen() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      // 1. Fetch All Active Providers
       const { data: ratesData, error: ratesError } = await supabase
         .from("utility_rates")
         .select("*")
@@ -180,7 +174,6 @@ export default function ProviderSetupScreen() {
       if (ratesError) throw ratesError;
       setProviders(ratesData || []);
 
-      // 2. Fetch User's Current Selection
       if (user) {
         const { data: userData, error: userError } = await supabase
           .from("users")
@@ -190,9 +183,8 @@ export default function ProviderSetupScreen() {
 
         if (userData) {
           if (userData.provider_id) {
-            // Case A: User has a specific provider
             setSelectedId(userData.provider_id);
-            // IMPORTANT: Switch the tab to match the selected provider's type
+
             const selectedProvider = ratesData.find(
               (p) => p.id === userData.provider_id,
             );
@@ -200,7 +192,6 @@ export default function ProviderSetupScreen() {
               setSelectedRateType(selectedProvider.rate_type);
             }
           } else if (userData.custom_rate) {
-            // Case B: User has a custom rate
             setSelectedId("manual");
             setCustomRate(userData.custom_rate.toString());
           }
@@ -213,7 +204,6 @@ export default function ProviderSetupScreen() {
     }
   };
 
-  // --- 2. FILTER LOGIC ---
   const filteredProviders = useMemo(() => {
     return providers.filter((p) => {
       const matchesSearch = p.provider_name
@@ -224,7 +214,6 @@ export default function ProviderSetupScreen() {
     });
   }, [providers, searchQuery, selectedRateType]);
 
-  // --- HANDLERS ---
   const handleSelect = (id) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSelectedId(id);
@@ -233,7 +222,7 @@ export default function ProviderSetupScreen() {
   const handleRateTypeChange = (type) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSelectedRateType(type);
-    setSelectedId(null); // Reset selection when type changes
+    setSelectedId(null);
   };
 
   const handleManualRateChange = (text) => {
@@ -254,7 +243,6 @@ export default function ProviderSetupScreen() {
     let finalProviderId = null;
     let finalCustomRate = null;
 
-    // VALIDATION
     if (selectedId === "manual") {
       const rateValue = parseFloat(customRate);
       if (!customRate || isNaN(rateValue) || rateValue <= 0 || rateValue > 50) {
@@ -274,13 +262,11 @@ export default function ProviderSetupScreen() {
     setIsSaving(true);
 
     try {
-      // 1. Get User
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not logged in");
 
-      // 2. Update User Profile in DB
       const updatePayload = {
         provider_id: finalProviderId,
         custom_rate: finalCustomRate,
@@ -294,7 +280,6 @@ export default function ProviderSetupScreen() {
 
       if (error) throw error;
 
-      // 3. Navigation (Onboarding Flow Logic)
       if (route.params?.fromOnboarding) {
         navigation.navigate("MainApp", {
           screen: "Budgets",
@@ -330,7 +315,7 @@ export default function ProviderSetupScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* ERROR MODAL */}
+      {}
       <Modal transparent visible={errorModalVisible} animationType="fade">
         <View className="flex-1 justify-center items-center bg-black/80">
           <View
@@ -376,7 +361,7 @@ export default function ProviderSetupScreen() {
         </View>
       </Modal>
 
-      {/* HEADER */}
+      {}
       <View
         className="flex-row items-center px-6 py-5 border-b"
         style={{ borderBottomColor: theme.cardBorder }}
@@ -402,7 +387,7 @@ export default function ProviderSetupScreen() {
         style={{ flex: 1 }}
       >
         <View className="px-6 py-4 space-y-4">
-          {/* SEARCH BAR */}
+          {}
           <View
             className="flex-row items-center px-4 h-12 rounded-xl border"
             style={{
@@ -436,7 +421,7 @@ export default function ProviderSetupScreen() {
             )}
           </View>
 
-          {/* RATE TYPE SELECTOR */}
+          {}
           <View className="flex-row gap-2">
             {RATE_TYPES.map((type) => {
               const isActive = selectedRateType === type;
@@ -476,7 +461,7 @@ export default function ProviderSetupScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View className="px-6">
-            {/* LOADING STATE - Now using GRAY color */}
+            {}
             {loading ? (
               <ActivityIndicator
                 size="large"
@@ -513,7 +498,7 @@ export default function ProviderSetupScreen() {
               </>
             )}
 
-            {/* MANUAL CONFIG */}
+            {}
             <Text
               className="text-xs font-bold uppercase tracking-widest mb-3 mt-8"
               style={{ color: theme.textSecondary }}
@@ -640,7 +625,6 @@ export default function ProviderSetupScreen() {
   );
 }
 
-// --- HELPER COMPONENT ---
 function ProviderCard({
   item,
   isSelected,
@@ -650,10 +634,8 @@ function ProviderCard({
   activeColor,
   scaledSize,
 }) {
-  // Attempt to match provider name to local image
   const normalizedName = item.provider_name.toLowerCase();
 
-  // Try full name key first, then first word key
   let localImage = PROVIDER_LOGOS[normalizedName];
   if (!localImage) {
     const firstWord = normalizedName.split(/[\s(]/)[0];

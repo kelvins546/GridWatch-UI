@@ -53,7 +53,7 @@ export default function LandingScreen() {
           duration: 2000,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     ).start();
   }, []);
 

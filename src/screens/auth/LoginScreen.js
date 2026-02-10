@@ -22,10 +22,8 @@ import { useTheme } from "../../context/ThemeContext";
 import { supabase } from "../../lib/supabase";
 import { createClient } from "@supabase/supabase-js";
 
-// --- CUSTOM LOCAL COMPONENT ---
 import FirebaseRecaptcha from "../../components/FirebaseRecaptcha";
 
-// --- FIREBASE IMPORTS ---
 import { PhoneAuthProvider, signInWithCredential } from "firebase/auth";
 import { auth, firebaseConfig } from "../../lib/firebaseConfig";
 
@@ -41,7 +39,6 @@ import {
 const ALLOWED_EMAIL_REGEX =
   /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
 
-// EmailJS Config
 const EMAILJS_SERVICE_ID = "service_ah3k0xc";
 const EMAILJS_TEMPLATE_ID = "template_xz7agxi";
 const EMAILJS_PUBLIC_KEY = "pdso3GRtCqLn7fVTs";
@@ -86,17 +83,14 @@ export default function LoginScreen() {
   const [errorMessage, setErrorMessage] = useState("");
   const [redirectOnClose, setRedirectOnClose] = useState(false);
 
-  // --- 2FA & Reactivation STATE ---
   const [mfaVisible, setMfaVisible] = useState(false);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaFactorId, setMfaFactorId] = useState(null);
   const [googleIdToken, setGoogleIdToken] = useState(null);
 
-  // Reactivation Modal
   const [reactivateModalVisible, setReactivateModalVisible] = useState(false);
   const [pendingReactivation, setPendingReactivation] = useState(null);
 
-  // --- RE-VERIFICATION STATE ---
   const [reverifyPhoneVisible, setReverifyPhoneVisible] = useState(false);
   const [reverifyEmailVisible, setReverifyEmailVisible] = useState(false);
   const [reverifySuccessVisible, setReverifySuccessVisible] = useState(false);
@@ -109,7 +103,6 @@ export default function LoginScreen() {
 
   const floatAnim = useRef(new Animated.Value(0)).current;
 
-  // --- 1. INITIAL SESSION CHECK ---
   useEffect(() => {
     const checkUserSession = async () => {
       try {
@@ -140,7 +133,6 @@ export default function LoginScreen() {
     checkUserSession();
   }, []);
 
-  // --- CONFIG ---
   useEffect(() => {
     GoogleSignin.configure({
       scopes: ["email", "profile"],
@@ -193,7 +185,6 @@ export default function LoginScreen() {
     }
   };
 
-  // --- 2. HANDLE EMAIL LOGIN ---
   const handleLogin = async () => {
     const formValues = { email, password };
     let isValid = true;
@@ -237,7 +228,6 @@ export default function LoginScreen() {
         return;
       }
 
-      // CHECK ARCHIVED
       const { data: profile } = await tempClient
         .from("users")
         .select("status, phone_number")
@@ -255,7 +245,6 @@ export default function LoginScreen() {
         return;
       }
 
-      // Check 2FA
       const { data: factors } = await tempClient.auth.mfa.listFactors();
       const totpFactor = factors?.totp?.find((f) => f.status === "verified");
 
@@ -293,7 +282,6 @@ export default function LoginScreen() {
     setIsLoading(false);
   };
 
-  // --- 3. HANDLE GOOGLE LOGIN ---
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setRedirectOnClose(false);
@@ -356,7 +344,6 @@ export default function LoginScreen() {
         return;
       }
 
-      // CHECK ARCHIVED & FETCH PHONE
       const { data: profile } = await tempClient
         .from("users")
         .select("status, phone_number")
@@ -408,7 +395,6 @@ export default function LoginScreen() {
     }
   };
 
-  // --- 4. CONFIRM REACTIVATION ---
   const handleConfirmReactivation = async () => {
     if (!pendingReactivation) return;
     setIsLoading(true);
@@ -427,7 +413,6 @@ export default function LoginScreen() {
         },
       );
 
-      // 1. Sign in temp to get permission
       let signInError;
       if (pendingReactivation.type === "email") {
         const res = await tempClient.auth.signInWithPassword({
@@ -449,7 +434,6 @@ export default function LoginScreen() {
         data: { user },
       } = await tempClient.auth.getUser();
 
-      // 2. Update Status to Active
       const { error: updateError } = await tempClient
         .from("users")
         .update({ status: "active", archived_at: null })
@@ -457,12 +441,9 @@ export default function LoginScreen() {
 
       if (updateError) throw updateError;
 
-      // 3. DECIDE NEXT STEP
       if (pendingReactivation.type === "google") {
-        // --- GOOGLE USERS: SKIP OTPs ---
         setReverifySuccessVisible(true);
       } else {
-        // --- EMAIL USERS: FORCE OTPs ---
         if (pendingReactivation.phone) {
           startPhoneVerification(pendingReactivation.phone);
         } else {
@@ -476,7 +457,6 @@ export default function LoginScreen() {
     }
   };
 
-  // --- 5. RE-VERIFICATION LOGIC ---
   const startPhoneVerification = async (phone) => {
     try {
       if (!phone) throw new Error("Phone number required for verification.");
@@ -556,7 +536,7 @@ export default function LoginScreen() {
 
   const finishReactivation = () => {
     setReverifySuccessVisible(false);
-    // Finalize Login
+
     if (pendingReactivation.type === "email") {
       performRealEmailLogin();
     } else {
@@ -572,7 +552,6 @@ export default function LoginScreen() {
     if (text.length === 0 && index > 0) refs.current[index - 1]?.focus();
   };
 
-  // --- 6. EXISTING 2FA LOGIC ---
   const verifyMfaAndLogin = async () => {
     if (mfaCode.length !== 6) {
       setErrorMessage("Please enter a valid 6-digit code.");
@@ -739,7 +718,7 @@ export default function LoginScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* RECAPTCHA */}
+      {}
       <FirebaseRecaptcha
         ref={recaptchaVerifier}
         firebaseConfig={firebaseConfig}
@@ -770,7 +749,7 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View className="p-[30px]">
-            {/* Logo Section */}
+            {}
             <View className="items-center mb-10">
               <Animated.View
                 style={{
@@ -810,7 +789,7 @@ export default function LoginScreen() {
               </Text>
             </View>
 
-            {/* Inputs */}
+            {}
             <InputGroup
               label="Email Address"
               icon="email"
@@ -891,7 +870,7 @@ export default function LoginScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* Login Button */}
+            {}
             <TouchableOpacity onPress={handleLogin} activeOpacity={0.8}>
               <View
                 className="p-4 rounded-2xl items-center shadow-sm"
@@ -906,7 +885,7 @@ export default function LoginScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* --- GOOGLE SIGN IN BUTTON --- */}
+            {}
             <View className="flex-row items-center my-6">
               <View
                 className="flex-1 h-[1px]"
@@ -974,7 +953,7 @@ export default function LoginScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ERROR MODAL */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
@@ -1000,7 +979,7 @@ export default function LoginScreen() {
         </View>
       </Modal>
 
-      {/* REACTIVATION MODAL */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
@@ -1061,7 +1040,7 @@ export default function LoginScreen() {
         </View>
       </Modal>
 
-      {/* --- RE-VERIFY PHONE MODAL --- */}
+      {}
       <Modal transparent visible={reverifyPhoneVisible} animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -1104,7 +1083,7 @@ export default function LoginScreen() {
         </View>
       </Modal>
 
-      {/* --- RE-VERIFY EMAIL MODAL --- */}
+      {}
       <Modal transparent visible={reverifyEmailVisible} animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -1147,7 +1126,7 @@ export default function LoginScreen() {
         </View>
       </Modal>
 
-      {/* --- SUCCESS MODAL --- */}
+      {}
       <Modal transparent visible={reverifySuccessVisible} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -1168,7 +1147,7 @@ export default function LoginScreen() {
         </View>
       </Modal>
 
-      {/* --- MFA VERIFICATION MODAL --- */}
+      {}
       <Modal
         animationType="slide"
         transparent={true}

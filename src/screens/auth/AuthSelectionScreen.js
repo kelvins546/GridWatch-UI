@@ -20,11 +20,9 @@ import { useNavigation } from "@react-navigation/native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
 
-// 1. Import Supabase & createClient
 import { supabase } from "../../lib/supabase";
 import { createClient } from "@supabase/supabase-js";
 
-// 2. Import Notifications to trigger manual push on login
 import * as Notifications from "expo-notifications";
 
 import {
@@ -39,7 +37,6 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// --- EMAILJS CONFIGURATION ---
 const EMAILJS_SERVICE_ID = "service_ah3k0xc";
 const EMAILJS_TEMPLATE_ID = "template_8hzregb";
 const EMAILJS_PUBLIC_KEY = "pdso3GRtCqLn7fVTs";
@@ -52,7 +49,6 @@ export default function AuthSelectionScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Processing...");
 
-  // --- MODAL STATE ---
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [termsModalVisible, setTermsModalVisible] = useState(false);
   const [existingAccountModalVisible, setExistingAccountModalVisible] =
@@ -66,16 +62,13 @@ export default function AuthSelectionScreen() {
     onPress: null,
   });
 
-  // STORE PENDING DATA
   const [pendingIdToken, setPendingIdToken] = useState(null);
   const [pendingGoogleUser, setPendingGoogleUser] = useState(null);
 
-  // --- 2FA STATE ---
   const [mfaVisible, setMfaVisible] = useState(false);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaFactorId, setMfaFactorId] = useState(null);
 
-  // --- REACTIVATION STATE ---
   const [reactivateModalVisible, setReactivateModalVisible] = useState(false);
   const [pendingReactivationToken, setPendingReactivationToken] =
     useState(null);
@@ -85,7 +78,6 @@ export default function AuthSelectionScreen() {
     setAlertModalVisible(true);
   };
 
-  // --- CONFIG ---
   useEffect(() => {
     GoogleSignin.configure({
       scopes: ["email", "profile"],
@@ -111,7 +103,6 @@ export default function AuthSelectionScreen() {
     ).start();
   }, []);
 
-  // --- EMAILJS SENDER ---
   const sendWelcomeEmail = async (email, name) => {
     const data = {
       service_id: EMAILJS_SERVICE_ID,
@@ -134,64 +125,56 @@ export default function AuthSelectionScreen() {
     }
   };
 
-  // --- LOG HELPER (UPDATED) ---
   const logLoginSuccess = async (userId, method) => {
     try {
       const title = "Login Successful";
       const body = `${method} Login • ${Platform.OS.toUpperCase()} • ${new Date().toLocaleTimeString()}`;
 
-      // 1. Insert into Database (So it shows in Logs)
       const { error } = await supabase.from("app_notifications").insert({
         user_id: userId,
         title: title,
         body: body,
-        is_read: false, // Explicitly set unread
+        is_read: false,
       });
 
       if (error) {
         console.log("DB Insert Error:", error.message);
       }
 
-      // 2. Manually Trigger Push Notification (So it shows Banner)
       await Notifications.scheduleNotificationAsync({
         content: {
           title: title,
           body: body,
           sound: true,
         },
-        trigger: null, // Immediate
+        trigger: null,
       });
     } catch (err) {
       console.log("Log error", err);
     }
   };
 
-  // --- HELPER: RESUME GOOGLE LOGIN (Used by main flow & reactivation) ---
   const proceedWithGoogleLogin = async (tempClient, idToken, googleUser) => {
-    // 1. Check 2FA Factors
     const { data: factors } = await tempClient.auth.mfa.listFactors();
     const totpFactor = factors?.totp?.find((f) => f.status === "verified");
 
     if (totpFactor) {
-      // --- 2FA ENABLED: SHOW MODAL ---
       setMfaFactorId(totpFactor.id);
       setPendingIdToken(idToken);
       setIsLoading(false);
       setMfaVisible(true);
     } else {
-      // --- 2FA DISABLED: LOGIN IMMEDIATELY ---
       const { data: realData } = await supabase.auth.signInWithIdToken({
         provider: "google",
         token: idToken,
       });
 
-      // Log success before navigation
       if (realData?.user) {
         await logLoginSuccess(realData.user.id, "Google");
       }
 
       setIsLoading(false);
-      // Double check profile existence logic
+
       const { data: profile } = await supabase
         .from("users")
         .select("id")
@@ -201,7 +184,6 @@ export default function AuthSelectionScreen() {
       if (profile) {
         navigation.reset({ index: 0, routes: [{ name: "MainApp" }] });
       } else {
-        // Fallback if profile missing but auth exists
         setPendingIdToken(idToken);
         setPendingGoogleUser(googleUser);
         setTermsModalVisible(true);
@@ -209,7 +191,6 @@ export default function AuthSelectionScreen() {
     }
   };
 
-  // --- STEP 1: GOOGLE SIGN IN & PRE-CHECK ---
   const handleGoogleSignIn = async () => {
     setLoadingMessage("Checking Account...");
     setIsLoading(true);
@@ -228,7 +209,6 @@ export default function AuthSelectionScreen() {
         throw new Error("Could not retrieve user details. Please try again.");
       }
 
-      // --- SHADOW CHECK (Does not persist session) ---
       const tempClient = createClient(
         supabase.supabaseUrl,
         supabase.supabaseKey,
@@ -255,17 +235,12 @@ export default function AuthSelectionScreen() {
       const isNewUser = lastSignIn - createdAt < 5000;
 
       if (isNewUser) {
-        // --- NEW USER FLOW ---
-        // We delete the 'shadow' account immediately so we can re-register properly with profile data
         await tempClient.rpc("delete_own_account");
         setIsLoading(false);
         setPendingIdToken(idToken);
         setPendingGoogleUser(userObj);
         setTermsModalVisible(true);
       } else {
-        // --- EXISTING USER FLOW ---
-
-        // 1. CHECK STATUS (Active/Archived)
         const { data: profile } = await tempClient
           .from("users")
           .select("status")
@@ -273,14 +248,12 @@ export default function AuthSelectionScreen() {
           .single();
 
         if (profile && profile.status === "archived") {
-          // INTERCEPT: Show Reactivation Modal
           setPendingReactivationToken(idToken);
           setIsLoading(false);
           setReactivateModalVisible(true);
           return;
         }
 
-        // 2. Proceed if Active
         await proceedWithGoogleLogin(tempClient, idToken, userObj);
       }
     } catch (error) {
@@ -291,7 +264,6 @@ export default function AuthSelectionScreen() {
     }
   };
 
-  // --- STEP 1.5: REACTIVATE ACCOUNT ---
   const handleConfirmReactivation = async () => {
     if (!pendingReactivationToken) return;
     setIsLoading(true);
@@ -310,7 +282,6 @@ export default function AuthSelectionScreen() {
         },
       );
 
-      // Sign in again with token to get permission
       const { error: signInError } = await tempClient.auth.signInWithIdToken({
         provider: "google",
         token: pendingReactivationToken,
@@ -321,7 +292,6 @@ export default function AuthSelectionScreen() {
         data: { user },
       } = await tempClient.auth.getUser();
 
-      // Update status to Active
       const { error: updateError } = await tempClient
         .from("users")
         .update({ status: "active", archived_at: null })
@@ -329,7 +299,6 @@ export default function AuthSelectionScreen() {
 
       if (updateError) throw updateError;
 
-      // Resume Login Flow
       await proceedWithGoogleLogin(tempClient, pendingReactivationToken, null);
     } catch (error) {
       setIsLoading(false);
@@ -341,7 +310,6 @@ export default function AuthSelectionScreen() {
     }
   };
 
-  // --- STEP 2: VERIFY 2FA (Shadow Client Pattern) ---
   const verifyMfaAndLogin = async () => {
     if (mfaCode.length !== 6) {
       showModal("error", "Invalid Code", "Please enter 6 digits.");
@@ -393,14 +361,12 @@ export default function AuthSelectionScreen() {
           refresh_token: session.refresh_token,
         });
 
-        // Log login success (2FA)
         await logLoginSuccess(session.user.id, "Google + 2FA");
 
         setMfaVisible(false);
         setPendingIdToken(null);
         setIsLoading(false);
 
-        // Navigation
         navigation.reset({ index: 0, routes: [{ name: "MainApp" }] });
       } else {
         throw new Error("Failed to transfer session.");
@@ -461,7 +427,6 @@ export default function AuthSelectionScreen() {
 
       if (!firstName) firstName = "Member";
 
-      // --- CRITICAL FIX HERE: Added Placeholder Data ---
       const { error: dbError } = await supabase.from("users").upsert(
         [
           {
@@ -472,7 +437,7 @@ export default function AuthSelectionScreen() {
             role: "resident",
             status: "active",
             avatar_url: meta.photo || null,
-            // ADDED TO SATISFY DB "NOT NULL" CONSTRAINT:
+
             region: "Not Set",
             city: "Not Set",
             zip_code: "0000",
@@ -489,7 +454,6 @@ export default function AuthSelectionScreen() {
 
       await sendWelcomeEmail(user.email, firstName);
 
-      // Log login success (Signup)
       await logLoginSuccess(user.id, "Google Signup");
 
       setIsLoading(false);
@@ -522,7 +486,7 @@ export default function AuthSelectionScreen() {
         backgroundColor={theme.background}
       />
 
-      {/* LOADING OVERLAY */}
+      {}
       {isLoading && (
         <View className="absolute z-50 w-full h-full bg-black/70 justify-center items-center">
           <ActivityIndicator size="large" color="#B0B0B0" />
@@ -660,7 +624,7 @@ export default function AuthSelectionScreen() {
         </Text>
       </View>
 
-      {/* --- REACTIVATION MODAL --- */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
@@ -740,7 +704,7 @@ export default function AuthSelectionScreen() {
         </View>
       </Modal>
 
-      {/* --- EXISTING ACCOUNT MODAL --- */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
@@ -814,7 +778,7 @@ export default function AuthSelectionScreen() {
         </View>
       </Modal>
 
-      {/* --- SUCCESS MODAL --- */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
@@ -861,7 +825,7 @@ export default function AuthSelectionScreen() {
         </View>
       </Modal>
 
-      {/* --- ALERT MODAL --- */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
@@ -916,7 +880,7 @@ export default function AuthSelectionScreen() {
         </View>
       </Modal>
 
-      {/* --- TERMS MODAL --- */}
+      {}
       <Modal
         animationType="slide"
         transparent={true}
@@ -953,7 +917,7 @@ export default function AuthSelectionScreen() {
               >
                 Last Updated: January 2026
               </Text>
-              {/* Terms Content */}
+              {}
               <Text className="font-bold mb-2" style={{ color: theme.text }}>
                 1. Service Usage & Monitoring
               </Text>
@@ -1052,7 +1016,7 @@ export default function AuthSelectionScreen() {
         </View>
       </Modal>
 
-      {/* --- NEW: 2FA VERIFICATION MODAL --- */}
+      {}
       <Modal
         animationType="slide"
         transparent={true}

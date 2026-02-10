@@ -18,20 +18,16 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import { supabase } from "../../lib/supabase";
-import { createClient } from "@supabase/supabase-js"; // Shadow Client
+import { createClient } from "@supabase/supabase-js";
 
-// --- CUSTOM LOCAL COMPONENT ---
-// (Kept incase you add it back later, or remove if unused)
 import FirebaseRecaptcha from "../../components/FirebaseRecaptcha";
 
-// --- FIREBASE IMPORTS ---
 import { auth, firebaseConfig } from "../../lib/firebaseConfig";
 
 const ALLOWED_EMAIL_REGEX =
   /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|hotmail|icloud)\.com$/;
 const ZIP_REGEX = /^[0-9]{4}$/;
 
-// EmailJS Config
 const EMAILJS_SERVICE_ID = "service_ah3k0xc";
 const EMAILJS_TEMPLATE_ID = "template_xz7agxi";
 const EMAILJS_PUBLIC_KEY = "pdso3GRtCqLn7fVTs";
@@ -54,10 +50,9 @@ export default function SignupScreen() {
   const recaptchaVerifier = useRef(null);
   const [currentStep, setCurrentStep] = useState(0);
 
-  // Form State
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  // Removed phoneNumber
+
   const [region, setRegion] = useState("");
   const [city, setCity] = useState("");
   const [zipCode, setZipCode] = useState("");
@@ -68,14 +63,12 @@ export default function SignupScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // Validation
   const [touched, setTouched] = useState({});
   const [errors, setErrors] = useState({});
   const [emailChecking, setEmailChecking] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsVisible, setTermsVisible] = useState(false);
 
-  // --- EMAIL OTP STATE ---
   const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [generatedOtp, setGeneratedOtp] = useState(null);
@@ -84,9 +77,8 @@ export default function SignupScreen() {
   const inputRefs = useRef([]);
 
   const [isLoading, setIsLoading] = useState(false);
-  const [tempSession, setTempSession] = useState(null); // Store session
+  const [tempSession, setTempSession] = useState(null);
 
-  // General Alert Modal
   const [modalVisible, setModalVisible] = useState(false);
   const [modalConfig, setModalConfig] = useState({
     type: "success",
@@ -97,7 +89,6 @@ export default function SignupScreen() {
     onSecondaryPress: null,
   });
 
-  // --- CLEAN GHOST SESSIONS ---
   useEffect(() => {
     const cleanGhostSession = async () => {
       await supabase.auth.signOut();
@@ -108,7 +99,6 @@ export default function SignupScreen() {
   const passAnalysis = checkPasswordStrength(password);
   const isMatch = password === confirmPassword && password.length > 0;
 
-  // --- TIMER ---
   useEffect(() => {
     let interval;
     if (otpModalVisible && timer > 0) {
@@ -138,7 +128,6 @@ export default function SignupScreen() {
     setModalVisible(true);
   };
 
-  // --- VALIDATION ---
   const validateField = (field, value) => {
     let error = null;
     switch (field) {
@@ -148,7 +137,7 @@ export default function SignupScreen() {
       case "lastName":
         if (!value) error = "Required";
         break;
-      // Removed phoneNumber case
+
       case "region":
       case "city":
       case "fullAddress":
@@ -432,7 +421,6 @@ export default function SignupScreen() {
 
     const userId = authData.user?.id;
     if (userId) {
-      // FIX: Removed phone_number from DB insert since we removed the input
       const { error: dbError } = await tempClient.from("users").upsert([
         {
           id: userId,
@@ -464,7 +452,7 @@ export default function SignupScreen() {
             "success",
             "Account Successfully Created",
             "Account has been verified and created.",
-            handleFinalSignup, // Pass the handler here
+            handleFinalSignup,
           );
         }, 400);
       }
@@ -506,18 +494,14 @@ export default function SignupScreen() {
     if (text.length === 0 && index > 0) refs.current[index - 1]?.focus();
   };
 
-  // --- MODIFIED FINAL REDIRECT HANDLER ---
   const handleFinalSignup = async () => {
     setModalVisible(false);
     setIsLoading(true);
 
     try {
       if (tempSession) {
-        // This triggers the global Auth Listener in your App.js
-        // The app will detect the session and automatically switch screens.
         await supabase.auth.setSession(tempSession);
       } else {
-        // Fallback login
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -528,8 +512,6 @@ export default function SignupScreen() {
       console.log("Session error:", e);
     } finally {
       setIsLoading(false);
-      // NOTE: Removed navigation.navigate() / navigation.reset()
-      // because the Auth Listener handles the screen switch.
     }
   };
 
@@ -548,7 +530,6 @@ export default function SignupScreen() {
   const acceptTermsFromModal = () => setTermsAccepted(!termsAccepted);
   const closeTermsModal = () => setTermsVisible(false);
 
-  // --- STYLES ---
   const styles = StyleSheet.create({
     modalOverlay: {
       flex: 1,
@@ -638,7 +619,7 @@ export default function SignupScreen() {
         </View>
       )}
 
-      {/* Header */}
+      {}
       <View
         style={{
           flexDirection: "row",
@@ -713,7 +694,7 @@ export default function SignupScreen() {
               </View>
             </View>
 
-            {/* STEP 1: PROFILE */}
+            {}
             {currentStep === 0 && (
               <View>
                 <InputGroup
@@ -758,7 +739,7 @@ export default function SignupScreen() {
               </View>
             )}
 
-            {/* STEP 2: LOCATION */}
+            {}
             {currentStep === 1 && (
               <View>
                 <InputGroup
@@ -851,7 +832,7 @@ export default function SignupScreen() {
               </View>
             )}
 
-            {/* STEP 3: CREDENTIALS */}
+            {}
             {currentStep === 2 && (
               <View>
                 <InputGroup
@@ -865,7 +846,7 @@ export default function SignupScreen() {
                   theme={theme}
                   scaledSize={scaledSize}
                 />
-                {/* REMOVED PHONE INPUT */}
+                {}
                 <InputGroup
                   label="Password"
                   icon="lock"
@@ -1078,7 +1059,7 @@ export default function SignupScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* --- EMAIL OTP MODAL --- */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
@@ -1181,7 +1162,7 @@ export default function SignupScreen() {
         </View>
       </Modal>
 
-      {/* TERMS MODAL */}
+      {}
       <Modal
         animationType="slide"
         transparent={true}
@@ -1219,7 +1200,7 @@ export default function SignupScreen() {
                 Last Updated: January 2026
               </Text>
 
-              {/* --- RESTORED TERMS CONTENT --- */}
+              {}
               <Text className="font-bold mb-2" style={{ color: theme.text }}>
                 1. Service Usage & Monitoring
               </Text>
@@ -1321,7 +1302,7 @@ export default function SignupScreen() {
         </View>
       </Modal>
 
-      {/* ALERT MODAL */}
+      {}
       <Modal
         animationType="fade"
         transparent={true}
@@ -1413,7 +1394,6 @@ export default function SignupScreen() {
   );
 }
 
-// --- UPDATED INPUT GROUP WITH ONBLUR SUPPORT ---
 function InputGroup({
   label,
   icon,
