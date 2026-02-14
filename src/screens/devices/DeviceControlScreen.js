@@ -16,6 +16,7 @@ import {
   Easing,
   RefreshControl,
   Image,
+  Alert,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -197,15 +198,7 @@ export default function DeviceControlScreen() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
 
-  const [schedules, setSchedules] = useState([
-    {
-      id: "1",
-      time: "22:00",
-      days: [true, true, true, true, true, true, true],
-      action: false,
-      active: true,
-    },
-  ]);
+  const [schedules, setSchedules] = useState([]);
 
   const [schedHour, setSchedHour] = useState("07");
   const [schedMinute, setSchedMinute] = useState("00");
@@ -213,6 +206,8 @@ export default function DeviceControlScreen() {
 
   const [selectedDays, setSelectedDays] = useState(Array(7).fill(true));
   const [isActionOn, setIsActionOn] = useState(true);
+
+  const lastTriggeredRef = useRef(null);
 
   const checkHubOnline = () => {
     if (!hubLastSeen) return false;
@@ -387,6 +382,32 @@ export default function DeviceControlScreen() {
     }
   };
 
+  const fetchSchedules = async () => {
+    if (!deviceId) return;
+    try {
+      const { data, error } = await supabase
+        .from("device_schedules")
+        .select("*")
+        .eq("device_id", deviceId)
+        .order("time", { ascending: true });
+
+      if (error) throw error;
+
+      if (data) {
+        const formatted = data.map((s) => ({
+          id: s.id,
+          time: s.time.slice(0, 5),
+          days: s.days,
+          action: s.action === "on",
+          active: s.is_active,
+        }));
+        setSchedules(formatted);
+      }
+    } catch (err) {
+      console.log("Error fetching schedules:", err.message);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchDeviceData();
@@ -509,6 +530,56 @@ export default function DeviceControlScreen() {
       if (usageSub) supabase.removeChannel(usageSub);
     };
   }, [deviceId, hubId]);
+
+  useEffect(() => {
+    if (deviceId) fetchSchedules();
+  }, [deviceId]);
+
+  useEffect(() => {
+    if (!deviceId || schedules.length === 0) return;
+
+    const checkSchedules = async () => {
+      const date = new Date();
+      const hours = date.getHours().toString().padStart(2, "0");
+      const minutes = date.getMinutes().toString().padStart(2, "0");
+      const currentTime = `${hours}:${minutes}`;
+
+      // Prevent multiple triggers in the same minute
+      if (lastTriggeredRef.current === currentTime) return;
+
+      // Map JS Day (0=Sun, 1=Mon) to UI Array (0=Mon, ... 6=Sun)
+      const dayIndex = date.getDay();
+      const mappedDayIndex = (dayIndex + 6) % 7;
+
+      const matchingSchedule = schedules.find(
+        (s) =>
+          s.active && s.time === currentTime && s.days[mappedDayIndex] === true,
+      );
+
+      if (matchingSchedule) {
+        lastTriggeredRef.current = currentTime;
+        const shouldBeOn = matchingSchedule.action; // true = ON, false = OFF
+
+        if (isPowered !== shouldBeOn) {
+          // Optimistic update
+          setIsPowered(shouldBeOn);
+          if (!shouldBeOn) setCurrentWatts(0);
+
+          try {
+            await supabase
+              .from("devices")
+              .update({ status: shouldBeOn ? "on" : "off" })
+              .eq("id", deviceId);
+          } catch (err) {
+            console.error("Schedule execution failed", err);
+          }
+        }
+      }
+    };
+
+    const timer = setInterval(checkSchedules, 2000);
+    return () => clearInterval(timer);
+  }, [schedules, isPowered, deviceId]);
 
   const confirmToggle = async () => {
     if (!deviceId) return;
@@ -680,7 +751,7 @@ export default function DeviceControlScreen() {
     setSelectedDays(newDays);
   };
 
-  const saveSchedule = () => {
+  const saveSchedule = async () => {
     let h = parseInt(schedHour, 10);
     const m = schedMinute;
     if (schedAmPm === "PM" && h < 12) h += 12;
@@ -688,21 +759,93 @@ export default function DeviceControlScreen() {
     const hStr = h.toString().padStart(2, "0");
     const mStr = m.toString().padStart(2, "0");
     const time24 = `${hStr}:${mStr}`;
-    const newSchedule = {
-      id: Date.now().toString(),
-      time: time24,
-      days: selectedDays,
-      action: isActionOn,
-      active: true,
-    };
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setSchedules([...schedules, newSchedule]);
-    setShowSchedule(false);
+
+    try {
+      const { data, error } = await supabase
+        .from("device_schedules")
+        .insert({
+          device_id: deviceId,
+          time: time24,
+          days: selectedDays,
+          action: isActionOn ? "on" : "off",
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        const newSchedule = {
+          id: data.id,
+          time: data.time.slice(0, 5),
+          days: data.days,
+          action: data.action === "on",
+          active: data.is_active,
+        };
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setSchedules([...schedules, newSchedule]);
+        setShowSchedule(false);
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to save schedule");
+      console.log(err);
+    }
   };
 
-  const toggleScheduleActive = (id) => {
+  const toggleScheduleActive = async (id) => {
+    const schedule = schedules.find((s) => s.id === id);
+    if (!schedule) return;
+
+    const newActive = !schedule.active;
+
+    // Optimistic update
     setSchedules((current) =>
-      current.map((s) => (s.id === id ? { ...s, active: !s.active } : s)),
+      current.map((s) => (s.id === id ? { ...s, active: newActive } : s)),
+    );
+
+    try {
+      const { error } = await supabase
+        .from("device_schedules")
+        .update({ is_active: newActive })
+        .eq("id", id);
+
+      if (error) throw error;
+    } catch (err) {
+      console.log("Error toggling schedule:", err);
+      Alert.alert("Error", "Failed to update schedule");
+      // Revert
+      setSchedules((current) =>
+        current.map((s) => (s.id === id ? { ...s, active: !newActive } : s)),
+      );
+    }
+  };
+
+  const deleteSchedule = async (id) => {
+    Alert.alert(
+      "Delete Schedule",
+      "Are you sure you want to remove this schedule?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from("device_schedules")
+                .delete()
+                .eq("id", id);
+
+              if (error) throw error;
+              setSchedules((prev) => prev.filter((s) => s.id !== id));
+            } catch (err) {
+              console.log("Error deleting schedule:", err);
+              Alert.alert("Error", "Failed to delete schedule");
+            }
+          },
+        },
+      ],
     );
   };
 
@@ -1074,11 +1217,23 @@ export default function DeviceControlScreen() {
                   {item.days.every((d) => d) ? "Everyday" : "Custom"}
                 </Text>
               </View>
-              <CustomSwitch
-                value={item.active}
-                onToggle={() => toggleScheduleActive(item.id)}
-                theme={theme}
-              />
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <CustomSwitch
+                  value={item.active}
+                  onToggle={() => toggleScheduleActive(item.id)}
+                  theme={theme}
+                />
+                <TouchableOpacity
+                  onPress={() => deleteSchedule(item.id)}
+                  style={{ marginLeft: 12, padding: 4 }}
+                >
+                  <MaterialIcons
+                    name="delete-outline"
+                    size={24}
+                    color={isDarkMode ? "#ff4444" : "#cc0000"}
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
           ))}
           <View style={{ height: 40 }} />

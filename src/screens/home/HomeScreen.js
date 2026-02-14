@@ -39,22 +39,6 @@ if (
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-const SHARED_HUBS = [
-  {
-    id: "hub3",
-    name: "Francis' Garage",
-    owner: "Francis Gian",
-    permission: "Admin",
-    active: 1,
-    total: 3,
-    icon: "garage",
-    totalSpending: 320.0,
-    budgetLimit: 5000.0,
-    currentVoltage: 0.0,
-    devices: [],
-  },
-];
-
 const TOUR_STEPS = [
   {
     id: "welcome",
@@ -131,13 +115,15 @@ export default function HomeScreen() {
   const [userRate, setUserRate] = useState(12.0);
 
   const [rawHubs, setRawHubs] = useState([]);
+  const [rawSharedHubs, setRawSharedHubs] = useState([]);
   const [personalHubs, setPersonalHubs] = useState([]);
+  const [sharedHubs, setSharedHubs] = useState([]);
   const [now, setNow] = useState(Date.now());
 
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedHubId, setSelectedHubId] = useState(null);
 
-  const sourceData = activeTab === "personal" ? personalHubs : SHARED_HUBS;
+  const sourceData = activeTab === "personal" ? personalHubs : sharedHubs;
   const displayData =
     activeHubFilter === "all"
       ? sourceData
@@ -156,7 +142,7 @@ export default function HomeScreen() {
   const warningColor = isDarkMode ? "#ffaa00" : "#ff9900";
 
   const fetchHubs = async (isRefetch = false) => {
-    if (!isRefetch && rawHubs.length === 0) setIsLoading(true);
+    if (!isRefetch && rawHubs.length === 0 && rawSharedHubs.length === 0) setIsLoading(true);
 
     try {
       const {
@@ -190,7 +176,31 @@ export default function HomeScreen() {
 
       if (error) throw error;
 
-      if (!data || data.length === 0) {
+      // Fetch Shared Hubs
+      const { data: sharedData, error: sharedError } = await supabase
+        .from("hub_access")
+        .select(`
+          role,
+          hubs (
+            *,
+            devices (*),
+            users ( email )
+          )
+        `)
+        .eq("user_id", user.id);
+
+      if (!sharedError && sharedData) {
+        const validShared = sharedData
+          .filter((item) => item.hubs)
+          .map((item) => ({
+            ...item.hubs,
+            permission: item.role,
+            owner_email: item.hubs.users?.email,
+          }));
+        setRawSharedHubs(validShared);
+      }
+
+      if ((!data || data.length === 0) && (!sharedData || sharedData.length === 0)) {
         setIsLoading(false);
         if (!hasRedirected.current) {
           hasRedirected.current = true;
@@ -215,7 +225,7 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    const formattedHubs = rawHubs.map((hub) => {
+    const formatHubData = (hubList, isPersonal) => hubList.map((hub) => {
       let isHubOnline = false;
       if (hub.last_seen) {
         let timeStr = hub.last_seen.replace(" ", "T");
@@ -245,6 +255,8 @@ export default function HomeScreen() {
         serial: hub.serial_number,
         name: hub.name,
         owner: "Me",
+        owner: isPersonal ? "Me" : (hub.owner_email || "Shared Hub"),
+        permission: isPersonal ? "Owner" : (hub.permission || "View"),
         total: deviceList.length,
         active: isHubOnline ? activeCount : 0,
         icon: hub.icon || "router",
@@ -294,30 +306,45 @@ export default function HomeScreen() {
       };
     });
 
-    setPersonalHubs(formattedHubs);
-  }, [rawHubs, now, userRate]);
+    setPersonalHubs(formatHubData(rawHubs, true));
+    setSharedHubs(formatHubData(rawSharedHubs, false));
+  }, [rawHubs, rawSharedHubs, now, userRate]);
 
   useEffect(() => {
     if (isFocused) fetchHubs();
-    const timer = setInterval(() => setNow(Date.now()), 2000);
+    let channel;
+    const setupRealtime = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const channel = supabase
-      .channel("home_combined_realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "hubs" },
-        () => fetchHubs(true),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "devices" },
-        () => fetchHubs(true),
-      )
-      .subscribe();
+      if (isFocused) fetchHubs();
+
+      channel = supabase
+        .channel("home_combined_realtime")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "hubs" },
+          () => fetchHubs(true),
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "devices" },
+          () => fetchHubs(true),
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "hub_access", filter: `user_id=eq.${user.id}` },
+          () => fetchHubs(true),
+        )
+        .subscribe();
+    };
+
+    setupRealtime();
+    const timer = setInterval(() => setNow(Date.now()), 2000);
 
     return () => {
       clearInterval(timer);
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [isFocused]);
 
@@ -957,7 +984,7 @@ export default function HomeScreen() {
             </View>
           ) : (
             <>
-              {activeTab === "personal" && activeHubFilter === "all" ? (
+              {activeHubFilter === "all" ? (
                 <View>
                   <Text
                     className="font-bold uppercase tracking-widest mb-4"
@@ -966,7 +993,7 @@ export default function HomeScreen() {
                       fontSize: theme.font.sm,
                     }}
                   >
-                    Your Hubs
+                    {activeTab === "personal" ? "Your Hubs" : "Shared With You"}
                   </Text>
                   {displayData.length === 0 ? (
                     <View className="items-center py-4">
@@ -978,7 +1005,9 @@ export default function HomeScreen() {
                       <Text
                         style={{ color: theme.textSecondary, marginTop: 8 }}
                       >
-                        No hubs connected.
+                        {activeTab === "personal"
+                          ? "No hubs connected."
+                          : "No hubs shared with you."}
                       </Text>
                     </View>
                   ) : (
