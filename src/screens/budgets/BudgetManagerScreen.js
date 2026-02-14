@@ -65,6 +65,7 @@ export default function BudgetManagerScreen() {
   });
 
   const [monthlyBudget, setMonthlyBudget] = useState(0);
+  const [editingBudget, setEditingBudget] = useState(0);
   const [billingDate, setBillingDate] = useState("1");
   const [personalHubs, setPersonalHubs] = useState([]);
   const [sharedHubs, setSharedHubs] = useState([]);
@@ -88,25 +89,34 @@ export default function BudgetManagerScreen() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: rpcData, error: rpcError } = await supabase.rpc(
-        "get_current_cycle_usage",
-        { target_user_id: user.id },
-      );
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("monthly_budget, bill_cycle_day")
+        .eq("id", user.id)
+        .single();
 
-      if (rpcError) throw rpcError;
+      if (userError) throw userError;
 
-      if (rpcData) {
-        setMonthlyBudget(rpcData.budget_limit);
-        setDaysRemaining(rpcData.days_remaining);
-        const startDay = new Date(rpcData.cycle_start).getDate();
-        setBillingDate(startDay.toString());
+      const budget = userData?.monthly_budget || 0;
+      const cycleDay = userData?.bill_cycle_day || 1;
 
-        await fetchHubsBreakdown(
-          user.id,
-          rpcData.cycle_start,
-          rpcData.cycle_end,
-        );
+      setMonthlyBudget(budget);
+      setBillingDate(cycleDay.toString());
+
+      const now = new Date();
+      let startDate = new Date(now.getFullYear(), now.getMonth(), cycleDay);
+      if (now.getDate() < cycleDay) {
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, cycleDay);
       }
+
+      const endDate = new Date(startDate);
+      endDate.setMonth(endDate.getMonth() + 1);
+
+      const diffTime = endDate - now;
+      const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      setDaysRemaining(daysLeft > 0 ? daysLeft : 0);
+
+      await fetchHubsBreakdown(user.id, startDate.toISOString(), endDate.toISOString());
     } catch (error) {
       console.error("Fetch error:", error);
     } finally {
@@ -119,7 +129,7 @@ export default function BudgetManagerScreen() {
     try {
       const { data: ownedHubs, error: ownedError } = await supabase
         .from("hubs")
-        .select("id, name, status, last_seen, devices(id)")
+        .select("id, name, status, last_seen, hub_budget, devices(id, budget_limit)")
         .eq("user_id", userId);
 
       if (ownedError) throw ownedError;
@@ -136,7 +146,7 @@ export default function BudgetManagerScreen() {
         const sharedIds = sharedAccess.map((row) => row.hub_id);
         const { data: sharedHubData, error: sharedError } = await supabase
           .from("hubs")
-          .select("id, name, status, last_seen, devices(id)")
+          .select("id, name, status, last_seen, hub_budget, devices(id, budget_limit)")
           .in("id", sharedIds);
 
         if (sharedError) throw sharedError;
@@ -167,6 +177,8 @@ export default function BudgetManagerScreen() {
           const totalSpent = logs
             .filter((log) => hubDeviceIds.includes(log.device_id))
             .reduce((sum, log) => sum + (log.cost_incurred || 0), 0);
+          
+          const totalLimit = hub.hub_budget || 0;
 
           return {
             id: hub.id,
@@ -175,7 +187,7 @@ export default function BudgetManagerScreen() {
             devices: hub.devices?.length || 0,
             icon: "router",
             totalSpending: totalSpent,
-            limit: 0,
+            limit: totalLimit,
           };
         });
       };
@@ -253,12 +265,20 @@ export default function BudgetManagerScreen() {
         (acc, hub) => acc + (hub.totalSpending || 0),
         0,
       );
-      hardLimitTotal = monthlyBudget;
+      if (activeTab === "personal") {
+        hardLimitTotal = monthlyBudget;
+      } else {
+        hardLimitTotal = sourceData.reduce((acc, hub) => acc + (hub.limit || 0), 0);
+      }
     } else {
       const hub = sourceData.find((h) => h.id === activeHubFilter);
       if (hub) {
         current = hub.totalSpending || 0;
-        hardLimitTotal = hub.limit || monthlyBudget;
+        if (activeTab === "personal") {
+          hardLimitTotal = hub.limit;
+        } else {
+          hardLimitTotal = hub.limit || 0;
+        }
       }
     }
     return { current, hardLimitTotal };
@@ -266,8 +286,8 @@ export default function BudgetManagerScreen() {
 
   const currentSpending = budgetStats.current;
   const activeLimit = budgetStats.hardLimitTotal;
-  const percentage =
-    activeLimit > 0 ? Math.min((currentSpending / activeLimit) * 100, 100) : 0;
+  const rawPercentage = activeLimit > 0 ? (currentSpending / activeLimit) * 100 : 0;
+  const percentage = Math.min(rawPercentage, 100);
 
   const getOrdinalSuffix = (day) => {
     const d = parseInt(day);
@@ -365,10 +385,21 @@ export default function BudgetManagerScreen() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      const { error } = await supabase
-        .from("users")
-        .update({ monthly_budget: monthlyBudget })
-        .eq("id", user.id);
+
+      let error;
+      if (activeHubFilter === "all") {
+        const { error: userError } = await supabase
+          .from("users")
+          .update({ monthly_budget: editingBudget })
+          .eq("id", user.id);
+        error = userError;
+      } else {
+        const { error: hubError } = await supabase
+          .from("hubs")
+          .update({ hub_budget: editingBudget })
+          .eq("id", activeHubFilter);
+        error = hubError;
+      }
 
       if (error) throw error;
       await fetchData(true);
@@ -427,8 +458,8 @@ export default function BudgetManagerScreen() {
   const handleBudgetChange = (text) => {
     const cleanedText = text.replace(/[^0-9]/g, "");
     const number = parseInt(cleanedText);
-    if (!isNaN(number)) setMonthlyBudget(number);
-    else if (cleanedText === "") setMonthlyBudget(0);
+    if (!isNaN(number)) setEditingBudget(number);
+    else if (cleanedText === "") setEditingBudget(0);
   };
 
   const styles = StyleSheet.create({
@@ -636,7 +667,10 @@ export default function BudgetManagerScreen() {
         <View style={{ paddingHorizontal: 24 }}>
           <TouchableOpacity
             activeOpacity={1}
-            onPress={() => setShowBudgetModal(true)}
+            onPress={() => {
+              setEditingBudget(activeLimit);
+              setShowBudgetModal(true);
+            }}
             onPressIn={() => animateButton(0.98)}
             onPressOut={() => animateButton(1)}
           >
@@ -695,12 +729,12 @@ export default function BudgetManagerScreen() {
                 >
                   <Text
                     style={{
-                      color: percentage >= 90 ? dangerColor : primaryColor,
+                      color: activeLimit > 0 ? (rawPercentage >= 90 ? dangerColor : primaryColor) : theme.textSecondary,
                       fontWeight: "600",
                       fontSize: scaledSize(12),
                     }}
                   >
-                    {percentage.toFixed(0)}% Used
+                    {activeLimit > 0 ? `${rawPercentage.toFixed(2)}% Used` : "No Limit Set"}
                   </Text>
                   <Text
                     style={{
@@ -721,7 +755,7 @@ export default function BudgetManagerScreen() {
                 >
                   <LinearGradient
                     colors={
-                      percentage >= 90
+                      rawPercentage >= 90
                         ? [warningColor, dangerColor]
                         : [primaryColor, isDarkMode ? "#00cc7a" : "#34d399"]
                     }
@@ -1040,7 +1074,7 @@ export default function BudgetManagerScreen() {
               }}
             >
               <TouchableOpacity
-                onPress={() => setMonthlyBudget((b) => Math.max(0, b - 100))}
+                onPress={() => setEditingBudget((b) => Math.max(0, b - 100))}
                 style={{
                   padding: 10,
                   backgroundColor: theme.buttonNeutral,
@@ -1050,7 +1084,7 @@ export default function BudgetManagerScreen() {
                 <MaterialIcons name="remove" size={24} color={theme.text} />
               </TouchableOpacity>
               <TextInput
-                value={monthlyBudget.toString()}
+                value={editingBudget.toString()}
                 onChangeText={handleBudgetChange}
                 keyboardType="numeric"
                 style={{
@@ -1062,7 +1096,7 @@ export default function BudgetManagerScreen() {
                 }}
               />
               <TouchableOpacity
-                onPress={() => setMonthlyBudget((b) => b + 100)}
+                onPress={() => setEditingBudget((b) => b + 100)}
                 style={{
                   padding: 10,
                   backgroundColor: theme.buttonNeutral,

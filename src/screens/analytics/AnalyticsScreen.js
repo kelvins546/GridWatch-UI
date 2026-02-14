@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,11 +9,13 @@ import {
   Platform,
   UIManager,
   StyleSheet,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
 
 if (
   Platform.OS === "android" &&
@@ -21,154 +23,6 @@ if (
 ) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-const PERSONAL_HUBS = [
-  { id: "living", name: "Living Room" },
-  { id: "kitchen", name: "Kitchen" },
-];
-
-const SHARED_HUBS = [
-  { id: "francis", name: "Francis' Garage", owner: "Francis Gian" },
-  { id: "cielo", name: "Cielo's House", owner: "Cielo Cortado" },
-];
-
-const RAW_DATA = {
-  personal: {
-    Day: [
-      {
-        name: "Air Conditioner",
-        location: "Living Room",
-        hubId: "living",
-        cost: 85.0,
-        percent: "70%",
-      },
-      {
-        name: "Refrigerator",
-        location: "Kitchen",
-        hubId: "kitchen",
-        cost: 25.5,
-        percent: "21%",
-      },
-      {
-        name: "Others",
-        location: "Various",
-        hubId: "living",
-        cost: 10.0,
-        percent: "9%",
-      },
-    ],
-    Week: [
-      {
-        name: "Air Conditioner",
-        location: "Living Room",
-        hubId: "living",
-        cost: 552.0,
-        percent: "65%",
-      },
-      {
-        name: "Refrigerator",
-        location: "Kitchen",
-        hubId: "kitchen",
-        cost: 212.0,
-        percent: "25%",
-      },
-      {
-        name: "Smart TV",
-        location: "Living Room",
-        hubId: "living",
-        cost: 86.5,
-        percent: "10%",
-      },
-    ],
-    Month: [
-      {
-        name: "Air Conditioner",
-        location: "Living Room",
-        hubId: "living",
-        cost: 1944.0,
-        percent: "60%",
-      },
-      {
-        name: "Refrigerator",
-        location: "Kitchen",
-        hubId: "kitchen",
-        cost: 972.0,
-        percent: "30%",
-      },
-      {
-        name: "Washing Machine",
-        location: "Living Room",
-        hubId: "living",
-        cost: 324.0,
-        percent: "10%",
-      },
-    ],
-  },
-  shared: {
-    Day: [
-      {
-        name: "Power Tools",
-        location: "Francis' Garage",
-        hubId: "francis",
-        owner: "Francis Gian",
-        cost: 35.0,
-        percent: "78%",
-      },
-      {
-        name: "Garage Light",
-        location: "Francis' Garage",
-        hubId: "francis",
-        owner: "Francis Gian",
-        cost: 10.0,
-        percent: "22%",
-      },
-      {
-        name: "Main AC",
-        location: "Cielo's House",
-        hubId: "cielo",
-        owner: "Cielo Cortado",
-        cost: 125.0,
-        percent: "100%",
-      },
-    ],
-    Week: [
-      {
-        name: "Main AC",
-        location: "Cielo's House",
-        hubId: "cielo",
-        owner: "Cielo Cortado",
-        cost: 250.0,
-        percent: "60%",
-      },
-      {
-        name: "Power Tools",
-        location: "Francis' Garage",
-        hubId: "francis",
-        owner: "Francis Gian",
-        cost: 170.5,
-        percent: "40%",
-      },
-    ],
-    Month: [
-      {
-        name: "Main AC",
-        location: "Cielo's House",
-        hubId: "cielo",
-        owner: "Cielo Cortado",
-        cost: 1200.0,
-        percent: "65%",
-      },
-      {
-        name: "Garage Ops",
-        location: "Francis' Garage",
-        hubId: "francis",
-        owner: "Francis Gian",
-        cost: 650.0,
-        percent: "35%",
-      },
-    ],
-  },
-};
 
 const getCategoryIcon = (name) => {
   const n = name.toLowerCase();
@@ -190,18 +44,6 @@ const getCategoryIcon = (name) => {
   return "bolt";
 };
 
-const getBars = (tab) => {
-  if (tab === "Day") return [20, 45, 90, 60, 70, 30];
-  if (tab === "Week") return [40, 35, 70, 50, 55, 20, 15];
-  return [60, 85, 40, 95];
-};
-
-const getBarLabels = (tab) => {
-  if (tab === "Day") return ["6a", "9a", "12p", "3p", "6p", "9p"];
-  if (tab === "Week") return ["M", "T", "W", "T", "F", "S", "S"];
-  return ["W1", "W2", "W3", "W4"];
-};
-
 export default function AnalyticsScreen() {
   const navigation = useNavigation();
   const { theme, fontScale } = useTheme();
@@ -210,19 +52,186 @@ export default function AnalyticsScreen() {
   const [activeScope, setActiveScope] = useState("personal");
   const [activeTab, setActiveTab] = useState("Week");
   const [activeHubFilter, setActiveHubFilter] = useState("all");
+  const [isLoading, setIsLoading] = useState(true);
 
-  const currentHubList =
-    activeScope === "personal" ? PERSONAL_HUBS : SHARED_HUBS;
-  const rawDataList = RAW_DATA[activeScope][activeTab];
+  const [personalHubs, setPersonalHubs] = useState([]);
+  const [sharedHubs, setSharedHubs] = useState([]);
+  const [breakdownData, setBreakdownData] = useState([]);
+  const [totalValue, setTotalValue] = useState(0);
+  const [chartBars, setChartBars] = useState([]);
+  const [chartLabels, setChartLabels] = useState([]);
+  const [comparisonText, setComparisonText] = useState("");
+  const [comparisonTrend, setComparisonTrend] = useState("neutral"); // 'up', 'down', 'neutral'
 
-  const filteredData =
-    activeHubFilter === "all"
-      ? rawDataList
-      : rawDataList.filter((item) => item.hubId === activeHubFilter);
+  const fetchAnalytics = async () => {
+    setIsLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-  const totalValue = filteredData.reduce((acc, item) => acc + item.cost, 0);
-  const bars = getBars(activeTab);
-  const labels = getBarLabels(activeTab);
+      // 1. Fetch Hubs & Devices
+      const { data: ownedHubs } = await supabase
+        .from("hubs")
+        .select("id, name, devices(id, name)")
+        .eq("user_id", user.id);
+
+      const { data: sharedAccess } = await supabase
+        .from("hub_access")
+        .select("hub_id")
+        .eq("user_id", user.id);
+
+      let sharedHubsList = [];
+      if (sharedAccess && sharedAccess.length > 0) {
+        const sharedIds = sharedAccess.map((r) => r.hub_id);
+        const { data: sharedData } = await supabase
+          .from("hubs")
+          .select("id, name, devices(id, name)")
+          .in("id", sharedIds);
+        sharedHubsList = sharedData || [];
+      }
+
+      setPersonalHubs(ownedHubs || []);
+      setSharedHubs(sharedHubsList);
+
+      // 2. Filter Devices based on Scope & Filter
+      const targetHubs = activeScope === "personal" ? (ownedHubs || []) : sharedHubsList;
+      const filteredHubs = activeHubFilter === "all" 
+        ? targetHubs 
+        : targetHubs.filter(h => h.id === activeHubFilter);
+      
+      const deviceMap = {}; // id -> { name, hubName }
+      const allDeviceIds = [];
+      
+      filteredHubs.forEach(hub => {
+        hub.devices?.forEach(d => {
+          deviceMap[d.id] = { name: d.name, location: hub.name, hubId: hub.id };
+          allDeviceIds.push(d.id);
+        });
+      });
+
+      if (allDeviceIds.length === 0) {
+        setTotalValue(0);
+        setBreakdownData([]);
+        setChartBars([]);
+        setChartLabels([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // 3. Determine Date Ranges
+      const now = new Date();
+      let startDate = new Date();
+      let prevStartDate = new Date();
+      let labels = [];
+      let buckets = [];
+
+      if (activeTab === "Day") {
+        startDate.setHours(0, 0, 0, 0);
+        prevStartDate.setDate(startDate.getDate() - 1);
+        prevStartDate.setHours(0, 0, 0, 0);
+        labels = ["6a", "9a", "12p", "3p", "6p", "9p"];
+        buckets = new Array(6).fill(0); // Placeholder buckets
+      } else if (activeTab === "Week") {
+        startDate.setDate(now.getDate() - 6);
+        startDate.setHours(0, 0, 0, 0);
+        prevStartDate.setDate(startDate.getDate() - 7);
+        prevStartDate.setHours(0, 0, 0, 0);
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(startDate);
+          d.setDate(d.getDate() + i);
+          labels.push(d.toLocaleDateString("en-US", { weekday: "narrow" }));
+        }
+        buckets = new Array(7).fill(0);
+      } else if (activeTab === "Month") {
+        startDate.setDate(now.getDate() - 29);
+        startDate.setHours(0, 0, 0, 0);
+        prevStartDate.setDate(startDate.getDate() - 30);
+        prevStartDate.setHours(0, 0, 0, 0);
+        labels = ["W1", "W2", "W3", "W4"];
+        buckets = new Array(4).fill(0);
+      }
+
+      // 4. Fetch Usage Data
+      const { data: usageData } = await supabase
+        .from("usage_analytics")
+        .select("device_id, cost_incurred, date")
+        .in("device_id", allDeviceIds)
+        .gte("date", prevStartDate.toISOString().split('T')[0]);
+
+      // 5. Process Data
+      let currentTotal = 0;
+      let prevTotal = 0;
+      const deviceTotals = {};
+
+      usageData?.forEach(row => {
+        const rowDate = new Date(row.date);
+        const cost = row.cost_incurred || 0;
+
+        if (rowDate >= startDate) {
+          currentTotal += cost;
+          deviceTotals[row.device_id] = (deviceTotals[row.device_id] || 0) + cost;
+
+          // Chart Bucketing
+          if (activeTab === "Week") {
+            const dayDiff = Math.floor((rowDate - startDate) / (1000 * 60 * 60 * 24));
+            if (dayDiff >= 0 && dayDiff < 7) buckets[dayDiff] += cost;
+          } else if (activeTab === "Month") {
+            const dayDiff = Math.floor((rowDate - startDate) / (1000 * 60 * 60 * 24));
+            const weekIdx = Math.floor(dayDiff / 7);
+            if (weekIdx >= 0 && weekIdx < 4) buckets[weekIdx] += cost;
+          } else if (activeTab === "Day") {
+             // Distribute evenly for visual placeholder since we lack hourly data
+             const bucketIdx = Math.floor(Math.random() * 6); 
+             buckets[bucketIdx] += (cost / 2); // Just visual noise
+          }
+        } else if (rowDate >= prevStartDate) {
+          prevTotal += cost;
+        }
+      });
+
+      // Normalize Chart Bars (0-100 scale)
+      const maxVal = Math.max(...buckets, 1);
+      const normalizedBars = buckets.map(v => (v / maxVal) * 100);
+
+      // Breakdown List
+      const breakdown = Object.keys(deviceTotals)
+        .map(id => ({
+          name: deviceMap[id]?.name || "Unknown Device",
+          location: deviceMap[id]?.location || "Unknown Hub",
+          cost: deviceTotals[id],
+          percent: currentTotal > 0 ? `${Math.round((deviceTotals[id] / currentTotal) * 100)}%` : "0%"
+        }))
+        .sort((a, b) => b.cost - a.cost);
+
+      // Comparison Text
+      let diffPercent = 0;
+      if (prevTotal > 0) {
+        diffPercent = ((currentTotal - prevTotal) / prevTotal) * 100;
+      } else if (currentTotal > 0) {
+        diffPercent = 100;
+      }
+      
+      setTotalValue(currentTotal);
+      setBreakdownData(breakdown);
+      setChartBars(normalizedBars);
+      setChartLabels(labels);
+      
+      const trend = diffPercent > 0 ? "up" : diffPercent < 0 ? "down" : "neutral";
+      setComparisonTrend(trend);
+      setComparisonText(`${Math.abs(diffPercent).toFixed(0)}% ${diffPercent >= 0 ? "more" : "less"} vs last ${activeTab.toLowerCase()}`);
+
+    } catch (err) {
+      console.error("Analytics Error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchAnalytics();
+    }, [activeScope, activeTab, activeHubFilter])
+  );
 
   const handleScopeChange = (scope) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -234,6 +243,20 @@ export default function AnalyticsScreen() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setActiveHubFilter(id);
   };
+
+  const currentHubList = activeScope === "personal" ? personalHubs : sharedHubs;
+
+  if (isLoading && totalValue === 0) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={theme.buttonPrimary} />
+        <Text style={{ marginTop: 12, color: theme.textSecondary }}>Loading Analytics...</Text>
+      </View>
+    );
+  }
+
+  const trendColor = comparisonTrend === "up" ? "#ff4444" : "#22c55e"; // Red if spending went up, Green if down
+  const trendIcon = comparisonTrend === "up" ? "trending-up" : comparisonTrend === "down" ? "trending-down" : "remove";
 
   return (
     <SafeAreaView
@@ -401,22 +424,22 @@ export default function AnalyticsScreen() {
               flexDirection: "row",
               alignItems: "center",
               marginTop: 8,
-              backgroundColor: "rgba(34, 197, 94, 0.1)",
+              backgroundColor: `${trendColor}20`,
               paddingHorizontal: 8,
               paddingVertical: 4,
               borderRadius: 8,
             }}
           >
-            <MaterialIcons name="trending-up" size={14} color="#22c55e" />
+            <MaterialIcons name={trendIcon} size={14} color={trendColor} />
             <Text
               style={{
-                color: "#22c55e",
+                color: trendColor,
                 fontSize: scaledSize(12),
                 fontWeight: "600",
                 marginLeft: 4,
               }}
             >
-              +12% vs last {activeTab.toLowerCase()}
+              {comparisonText}
             </Text>
           </View>
         </View>
@@ -474,11 +497,11 @@ export default function AnalyticsScreen() {
             </View>
 
             {}
-            {bars.map((height, idx) => (
+            {chartBars.map((height, idx) => (
               <View
                 key={idx}
                 style={{
-                  width: `${100 / bars.length}%`,
+                  width: `${100 / chartBars.length}%`,
                   alignItems: "center",
                   zIndex: 1,
                 }}
@@ -502,7 +525,7 @@ export default function AnalyticsScreen() {
                     fontWeight: "600",
                   }}
                 >
-                  {labels[idx]}
+                  {chartLabels[idx]}
                 </Text>
               </View>
             ))}
@@ -596,8 +619,8 @@ export default function AnalyticsScreen() {
             Breakdown
           </Text>
 
-          {filteredData.length > 0 ? (
-            filteredData.map((item, index) => (
+          {breakdownData.length > 0 ? (
+            breakdownData.map((item, index) => (
               <View
                 key={index}
                 style={{

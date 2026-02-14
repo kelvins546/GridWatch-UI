@@ -113,6 +113,9 @@ export default function HomeScreen() {
   const [activeHubFilter, setActiveHubFilter] = useState("all");
   const [unreadCount, setUnreadCount] = useState(0);
   const [userRate, setUserRate] = useState(12.0);
+  const [monthlyBudget, setMonthlyBudget] = useState(0);
+  const [billingDay, setBillingDay] = useState(1);
+  const [deviceUsage, setDeviceUsage] = useState({});
 
   const [rawHubs, setRawHubs] = useState([]);
   const [rawSharedHubs, setRawSharedHubs] = useState([]);
@@ -150,24 +153,45 @@ export default function HomeScreen() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: userData } = await supabase
+      const { data: userSettings } = await supabase
         .from("users")
-        .select(
-          `
+        .select("monthly_budget, bill_cycle_day")
+        .eq("id", user.id)
+        .single();
+
+      const { data: rateData } = await supabase
+        .from("users")
+        .select(`
           custom_rate,
           utility_rates ( rate_per_kwh )
-        `,
-        )
+        `)
         .eq("id", user.id)
         .single();
 
       let finalRate = 12.0;
-      if (userData) {
-        if (userData.custom_rate) finalRate = userData.custom_rate;
-        else if (userData.utility_rates?.rate_per_kwh)
-          finalRate = userData.utility_rates.rate_per_kwh;
+      let budget = 0;
+      let cycleDay = 1;
+
+      if (userSettings) {
+        budget = userSettings.monthly_budget || 0;
+        cycleDay = userSettings.bill_cycle_day || 1;
+      }
+
+      if (rateData) {
+        if (rateData.custom_rate) finalRate = rateData.custom_rate;
+        else if (rateData.utility_rates?.rate_per_kwh)
+          finalRate = rateData.utility_rates.rate_per_kwh;
       }
       setUserRate(finalRate);
+      setMonthlyBudget(budget);
+      setBillingDay(cycleDay);
+
+      const dateNow = new Date();
+      let startDate = new Date(dateNow.getFullYear(), dateNow.getMonth(), cycleDay);
+      if (dateNow.getDate() < cycleDay) {
+        startDate = new Date(dateNow.getFullYear(), dateNow.getMonth() - 1, cycleDay);
+      }
+      const startDateStr = startDate.toISOString().split("T")[0];
 
       const { data, error } = await supabase
         .from("hubs")
@@ -189,8 +213,9 @@ export default function HomeScreen() {
         `)
         .eq("user_id", user.id);
 
+      let validShared = [];
       if (!sharedError && sharedData) {
-        const validShared = sharedData
+        validShared = sharedData
           .filter((item) => item.hubs)
           .map((item) => ({
             ...item.hubs,
@@ -199,6 +224,23 @@ export default function HomeScreen() {
           }));
         setRawSharedHubs(validShared);
       }
+
+      const allHubs = [...(data || []), ...validShared];
+      const allDeviceIds = allHubs.flatMap((h) => h.devices?.map((d) => d.id) || []);
+
+      let usageObj = {};
+      if (allDeviceIds.length > 0) {
+        const { data: usageData } = await supabase
+          .from("usage_analytics")
+          .select("device_id, cost_incurred")
+          .in("device_id", allDeviceIds)
+          .gte("date", startDateStr);
+
+        usageData?.forEach((row) => {
+          usageObj[row.device_id] = (usageObj[row.device_id] || 0) + (row.cost_incurred || 0);
+        });
+      }
+      setDeviceUsage(usageObj);
 
       if ((!data || data.length === 0) && (!sharedData || sharedData.length === 0)) {
         setIsLoading(false);
@@ -246,6 +288,9 @@ export default function HomeScreen() {
         (d) => d.status && d.status.toLowerCase() === "on",
       ).length;
 
+      const hubSpending = deviceList.reduce((sum, d) => sum + (deviceUsage[d.id] || 0), 0);
+      const hubLimit = hub.hub_budget || 0;
+
       const rawVoltage = hub.current_voltage ? Number(hub.current_voltage) : 0;
 
       const hubVoltage = isHubOnline ? rawVoltage : 0;
@@ -260,8 +305,8 @@ export default function HomeScreen() {
         total: deviceList.length,
         active: isHubOnline ? activeCount : 0,
         icon: hub.icon || "router",
-        totalSpending: 0,
-        budgetLimit: 0,
+        totalSpending: hubSpending,
+        budgetLimit: hubLimit,
         currentVoltage: hubVoltage,
         devices: deviceList.map((d) => {
           if (!isHubOnline) {
@@ -308,7 +353,7 @@ export default function HomeScreen() {
 
     setPersonalHubs(formatHubData(rawHubs, true));
     setSharedHubs(formatHubData(rawSharedHubs, false));
-  }, [rawHubs, rawSharedHubs, now, userRate]);
+  }, [rawHubs, rawSharedHubs, now, userRate, deviceUsage]);
 
   useEffect(() => {
     if (isFocused) fetchHubs();
@@ -517,7 +562,7 @@ export default function HomeScreen() {
           {hub.name} Devices
         </Text>
         <View className="flex-row items-center gap-2">
-          {}
+          { }
           <View
             style={{
               backgroundColor: theme.buttonNeutral,
@@ -571,23 +616,81 @@ export default function HomeScreen() {
   );
 
   const summaryData = useMemo(() => {
-    return {
-      spending: 850.5,
-      limit: 1200.0,
-      title: "Total Spending",
-      indicator: "All Hubs",
-    };
-  }, []);
+    let spending = 0;
+    let limit = 0;
+    let title = "Total Spending";
+    let indicator = "All Hubs";
 
-  const percentage = Math.min(
+    if (activeHubFilter === "all") {
+      spending = sourceData.reduce(
+        (acc, hub) => acc + Number(hub.totalSpending || 0),
+        0
+      );
+
+      limit = Number(monthlyBudget || 0);
+
+      indicator =
+        activeTab === "personal"
+          ? "All Personal Hubs"
+          : "All Shared Hubs";
+    } else {
+      const hub = sourceData.find(
+        (h) => String(h.id) === String(activeHubFilter)
+      );
+
+      if (hub) {
+        spending = Number(hub.totalSpending || 0);
+
+        // 🔥 CHECK YOUR ACTUAL FIELD NAME HERE
+        limit = Number(
+          hub.budgetLimit ||
+          hub.hub_budget ||
+          hub.budget ||
+          0
+        );
+
+        title = hub.name;
+        indicator = "Single Hub";
+      }
+    }
+
+    return { spending, limit, title, indicator };
+  }, [sourceData, monthlyBudget, activeHubFilter, activeTab]);
+
+  const getOrdinalSuffix = (day) => {
+    const d = parseInt(day);
+    if (d > 3 && d < 21) return "th";
+    switch (d % 10) {
+      case 1: return "st";
+      case 2: return "nd";
+      case 3: return "rd";
+      default: return "th";
+    }
+  };
+
+  const daysElapsed = useMemo(() => {
+    const dateNow = new Date();
+    let startDate = new Date(dateNow.getFullYear(), dateNow.getMonth(), billingDay);
+    if (dateNow.getDate() < billingDay) {
+      startDate = new Date(dateNow.getFullYear(), dateNow.getMonth() - 1, billingDay);
+    }
+    const diffTime = Math.abs(dateNow - startDate);
+    const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.max(1, days);
+  }, [billingDay]);
+
+  const rawPercentage =
     summaryData.limit > 0
       ? (summaryData.spending / summaryData.limit) * 100
-      : 0,
-    100,
-  );
+      : 0;
+
+  // Clamp between 0–100 for UI bar
+  const percentage = Math.max(0, Math.min(rawPercentage, 100));
+
+
   let progressBarColor = primaryColor;
-  if (percentage >= 90) progressBarColor = dangerColor;
-  else if (percentage >= 75) progressBarColor = warningColor;
+  if (rawPercentage >= 90) progressBarColor = dangerColor;
+  else if (rawPercentage >= 75) progressBarColor = warningColor;
 
   return (
     <SafeAreaView
@@ -600,7 +703,7 @@ export default function HomeScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
+      { }
       <View
         className="flex-row justify-between items-center px-6 py-5"
         style={{ backgroundColor: theme.background }}
@@ -613,7 +716,7 @@ export default function HomeScreen() {
           <MaterialIcons name="menu" size={28} color={theme.textSecondary} />
         </TouchableOpacity>
 
-        {}
+        { }
         <TouchableOpacity onPress={handleResetTour}>
           <Image
             source={require("../../../assets/GridWatch-logo.png")}
@@ -660,7 +763,7 @@ export default function HomeScreen() {
       >
         <View className="mb-2" />
 
-        {}
+        { }
         <View
           ref={toggleRef}
           style={{
@@ -731,7 +834,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {}
+        { }
         <Animated.View
           ref={budgetRef}
           collapsable={false}
@@ -833,24 +936,26 @@ export default function HomeScreen() {
                 <View className="flex-row justify-between mb-1.5">
                   <Text
                     className="font-medium"
-                    style={{ color: progressBarColor, fontSize: theme.font.xs }}
+                    style={{ color: summaryData.limit > 0 ? progressBarColor : theme.textSecondary, fontSize: theme.font.xs }}
                   >
-                    {percentage.toFixed(0)}% Used
+                    {summaryData.limit > 0 ? `${rawPercentage.toFixed(2)}% Used` : "No Limit Set"}
                   </Text>
-                  <Text
-                    className="font-medium"
-                    style={{
-                      color: theme.textSecondary,
-                      fontSize: theme.font.xs,
-                    }}
-                  >
-                    ₱{" "}
-                    {(summaryData.limit - summaryData.spending).toLocaleString(
-                      undefined,
-                      { minimumFractionDigits: 2, maximumFractionDigits: 2 },
-                    )}{" "}
-                    Remaining
-                  </Text>
+                  {summaryData.limit > 0 && (
+                    <Text
+                      className="font-medium"
+                      style={{
+                        color: theme.textSecondary,
+                        fontSize: theme.font.xs,
+                      }}
+                    >
+                      ₱{" "}
+                      {(summaryData.limit - summaryData.spending).toLocaleString(
+                        undefined,
+                        { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                      )}{" "}
+                      Remaining
+                    </Text>
+                  )}
                 </View>
                 <View
                   className="h-3 rounded-full w-full overflow-hidden"
@@ -875,7 +980,7 @@ export default function HomeScreen() {
               >
                 <StatItem
                   label="Daily Avg"
-                  value="₱ 120.50"
+                  value={`₱ ${(summaryData.spending / daysElapsed).toFixed(2)}`}
                   icon="trending-up"
                   theme={theme}
                   isDarkMode={isDarkMode}
@@ -887,7 +992,7 @@ export default function HomeScreen() {
                 />
                 <StatItem
                   label="Reset Date"
-                  value="Every 15th"
+                  value={`Every ${billingDay}${getOrdinalSuffix(billingDay)}`}
                   icon="event-repeat"
                   theme={theme}
                   isDarkMode={isDarkMode}
@@ -898,7 +1003,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Animated.View>
 
-        {}
+        { }
         <View ref={hubsRef} style={{ marginBottom: 20 }}>
           <ScrollView
             horizontal
@@ -967,7 +1072,7 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
 
-        {}
+        { }
         <View className="px-6 pb-6">
           {isLoading ? (
             <View className="py-12 items-center">
@@ -1061,7 +1166,7 @@ export default function HomeScreen() {
         />
       )}
 
-      {}
+      { }
       <Modal transparent visible={showConfigModal} animationType="fade">
         <View style={homeStyles.modalOverlay}>
           <View
@@ -1204,7 +1309,7 @@ const DeviceItem = forwardRef(
             elevation: 2,
           }}
         >
-          {}
+          { }
           <View
             className="w-12 h-12 rounded-2xl items-center justify-center mr-4"
             style={{ backgroundColor: bgColor }}
@@ -1212,9 +1317,9 @@ const DeviceItem = forwardRef(
             <MaterialIcons name={data.icon} size={24} color={statusColor} />
           </View>
 
-          {}
+          { }
           <View className="flex-1 justify-center">
-            {}
+            { }
             <View className="flex-row items-center justify-between mb-1">
               <Text
                 className="font-bold"
@@ -1242,7 +1347,7 @@ const DeviceItem = forwardRef(
               )}
             </View>
 
-            {}
+            { }
             <View className="flex-row items-center mb-1">
               <Text
                 style={{
@@ -1279,7 +1384,7 @@ const DeviceItem = forwardRef(
               )}
             </View>
 
-            {}
+            { }
             {data.costPerHr !== "---" && data.type !== "off" && (
               <Text
                 style={{
@@ -1350,7 +1455,7 @@ const TourOverlay = ({
 
     MaskLayer = (
       <>
-        {}
+        { }
         <View
           style={{
             position: "absolute",
@@ -1361,7 +1466,7 @@ const TourOverlay = ({
             backgroundColor: maskColor,
           }}
         />
-        {}
+        { }
         <View
           style={{
             position: "absolute",
@@ -1372,7 +1477,7 @@ const TourOverlay = ({
             backgroundColor: maskColor,
           }}
         />
-        {}
+        { }
         <View
           style={{
             position: "absolute",
@@ -1383,7 +1488,7 @@ const TourOverlay = ({
             backgroundColor: maskColor,
           }}
         />
-        {}
+        { }
         <View
           style={{
             position: "absolute",
@@ -1402,10 +1507,10 @@ const TourOverlay = ({
 
   return (
     <Modal transparent visible={true} animationType="fade">
-      {}
+      { }
       <View style={{ flex: 1 }}>{MaskLayer}</View>
 
-      {}
+      { }
       {step.type === "highlight" && layout && (
         <View
           style={{
@@ -1421,25 +1526,25 @@ const TourOverlay = ({
         />
       )}
 
-      {}
+      { }
       <View
         style={
           step.type === "modal"
             ? {
-                position: "absolute",
-                top: 0,
-                bottom: 0,
-                left: 0,
-                right: 0,
-                justifyContent: "center",
-                alignItems: "center",
-              }
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
+              justifyContent: "center",
+              alignItems: "center",
+            }
             : {
-                position: "absolute",
-                top: topPosition,
-                left: 24,
-                right: 24,
-              }
+              position: "absolute",
+              top: topPosition,
+              left: 24,
+              right: 24,
+            }
         }
       >
         <View

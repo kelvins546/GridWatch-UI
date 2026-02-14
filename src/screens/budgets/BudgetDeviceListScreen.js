@@ -186,7 +186,7 @@ export default function BudgetDeviceListScreen() {
       icon: "power",
       currentLoad:
         d.type === "Unused" ? "---" : `₱ ${(d.totalCost || 0).toFixed(2)}`,
-      limit: d.type === "Unused" ? "---" : "No Limit",
+      limit: d.type === "Unused" ? "---" : (d.budget_limit ? `₱ ${d.budget_limit.toFixed(2)}` : "No Limit"),
       statusText: statusText,
       type: type,
       isReal: true,
