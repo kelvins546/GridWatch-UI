@@ -14,6 +14,7 @@ import {
   Platform,
   StyleSheet,
   Alert,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -91,6 +92,10 @@ export default function LoginScreen() {
   const [reactivateModalVisible, setReactivateModalVisible] = useState(false);
   const [pendingReactivation, setPendingReactivation] = useState(null);
 
+  const [adminArchivedModalVisible, setAdminArchivedModalVisible] = useState(false);
+  const [adminArchivedReason, setAdminArchivedReason] = useState("");
+  const [restorationAgreementModalVisible, setRestorationAgreementModalVisible] = useState(false);
+
   const [reverifyPhoneVisible, setReverifyPhoneVisible] = useState(false);
   const [reverifyEmailVisible, setReverifyEmailVisible] = useState(false);
   const [reverifySuccessVisible, setReverifySuccessVisible] = useState(false);
@@ -101,6 +106,7 @@ export default function LoginScreen() {
   const phoneInputRefs = useRef([]);
   const emailInputRefs = useRef([]);
 
+  const [pendingLoginMethod, setPendingLoginMethod] = useState(null); // 'email' or 'google'
   const floatAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -228,21 +234,50 @@ export default function LoginScreen() {
         return;
       }
 
-      const { data: profile } = await tempClient
+      const { data: profile, error: profileError } = await tempClient
         .from("users")
-        .select("status, phone_number")
+        .select("status, phone_number, role, archived_reason, restore_reason")
         .eq("id", tempData.user.id)
         .single();
 
-      if (profile && profile.status === "archived") {
-        setPendingReactivation({
-          type: "email",
-          userId: tempData.user.id,
-          phone: profile.phone_number,
-        });
+      if (profileError) throw profileError;
+
+      if (profile && (profile.role === "admin" || profile.role === "super_admin")) {
+        await tempClient.auth.signOut();
         setIsLoading(false);
-        setReactivateModalVisible(true);
+        setErrorMessage("Admin accounts cannot login here.");
+        setErrorModalVisible(true);
         return;
+      }
+
+      if (profile && profile.status === "archived") {
+        if (profile.archived_reason === "Deactivated by user") {
+          setPendingReactivation({
+            type: "email",
+            userId: tempData.user.id,
+            phone: profile.phone_number,
+          });
+          setIsLoading(false);
+          setReactivateModalVisible(true);
+          return;
+        } else {
+          await tempClient.auth.signOut();
+          setIsLoading(false);
+          setAdminArchivedReason(profile.archived_reason || "No reason provided.");
+          setAdminArchivedModalVisible(true);
+          return;
+        }
+      }
+
+      if (profile && profile.status === 'active') {
+        const rReason = profile.restore_reason;
+        if (rReason !== 'Restored by user' && rReason !== 'Restored by user-association agreement') {
+           await tempClient.auth.signOut();
+           setIsLoading(false);
+           setPendingLoginMethod('email');
+           setRestorationAgreementModalVisible(true);
+           return;
+        }
       }
 
       const { data: factors } = await tempClient.auth.mfa.listFactors();
@@ -344,22 +379,59 @@ export default function LoginScreen() {
         return;
       }
 
-      const { data: profile } = await tempClient
+      const { data: profile, error: profileError } = await tempClient
         .from("users")
-        .select("status, phone_number")
+        .select("status, phone_number, role, archived_reason, restore_reason")
         .eq("id", user.id)
         .maybeSingle();
 
-      if (!profile || profile.status === "archived") {
-        setPendingReactivation({
-          type: "google",
-          idToken: idToken,
-          userId: user.id,
-          phone: profile?.phone_number || "",
-        });
+      if (profileError) throw profileError;
+
+      if (profile && (profile.role === "admin" || profile.role === "super_admin")) {
+        await tempClient.auth.signOut();
         setIsLoading(false);
-        setReactivateModalVisible(true);
+        setErrorMessage("Admin accounts cannot login here.");
+        setErrorModalVisible(true);
         return;
+      }
+
+      if (!profile) {
+        setIsLoading(false);
+        setErrorMessage("User profile not found.");
+        setErrorModalVisible(true);
+        return;
+      }
+
+      if (profile.status === "archived") {
+        if (profile.archived_reason === "Deactivated by user") {
+          setPendingReactivation({
+            type: "google",
+            idToken: idToken,
+            userId: user.id,
+            phone: profile?.phone_number || "",
+          });
+          setIsLoading(false);
+          setReactivateModalVisible(true);
+          return;
+        } else {
+          await tempClient.auth.signOut();
+          setIsLoading(false);
+          setAdminArchivedReason(profile.archived_reason || "No reason provided.");
+          setAdminArchivedModalVisible(true);
+          return;
+        }
+      }
+
+      if (profile && profile.status === 'active') {
+        const rReason = profile.restore_reason;
+        if (rReason !== 'Restored by user' && rReason !== 'Restored by user-association agreement') {
+           await tempClient.auth.signOut();
+           setIsLoading(false);
+           setPendingLoginMethod('google');
+           setGoogleIdToken(idToken);
+           setRestorationAgreementModalVisible(true);
+           return;
+        }
       }
 
       const { data: factors } = await tempClient.auth.mfa.listFactors();
@@ -436,7 +508,12 @@ export default function LoginScreen() {
 
       const { error: updateError } = await tempClient
         .from("users")
-        .update({ status: "active", archived_at: null })
+        .update({
+          status: "active",
+          archived_at: null,
+          archived_reason: null,
+          restore_reason: "Restored by user",
+        })
         .eq("id", user.id);
 
       if (updateError) throw updateError;
@@ -454,6 +531,46 @@ export default function LoginScreen() {
       setIsLoading(false);
       setErrorMessage("Failed to reactivate account: " + error.message);
       setErrorModalVisible(true);
+    }
+  };
+
+  const handleAgreeRestoration = async () => {
+    setIsLoading(true);
+    setRestorationAgreementModalVisible(false);
+    
+    try {
+        const tempClient = createClient(supabase.supabaseUrl, supabase.supabaseKey, {
+            auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+        });
+
+        let userId;
+
+        if (pendingLoginMethod === 'email') {
+            const { data, error } = await tempClient.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            userId = data.user.id;
+        } else {
+            const { data, error } = await tempClient.auth.signInWithIdToken({ provider: 'google', token: googleIdToken });
+            if (error) throw error;
+            userId = data.user.id;
+        }
+
+        const { error: updateError } = await tempClient
+            .from('users')
+            .update({ restore_reason: 'Restored by user-association agreement' })
+            .eq('id', userId);
+        
+        if (updateError) throw updateError;
+
+        if (pendingLoginMethod === 'email') {
+            handleLogin();
+        } else {
+            processGoogleAuth(googleIdToken);
+        }
+    } catch (error) {
+        setIsLoading(false);
+        setErrorMessage("Failed to update agreement: " + error.message);
+        setErrorModalVisible(true);
     }
   };
 
@@ -974,6 +1091,94 @@ export default function LoginScreen() {
               <Text style={styles.modalButtonText}>
                 {redirectOnClose ? "GO TO SIGNUP" : "TRY AGAIN"}
               </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={adminArchivedModalVisible}
+        onRequestClose={() => setAdminArchivedModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Account Archived</Text>
+            <Text style={styles.modalBody}>
+              Your account was deactivated by the admins.{"\n\n"}
+              <Text style={{ fontWeight: "bold" }}>Reason:</Text> {adminArchivedReason}{"\n\n"}
+              Contact us by email to activate your account.
+            </Text>
+            <TouchableOpacity
+              style={{ width: "100%", marginBottom: 10 }}
+              onPress={() => Linking.openURL("mailto:support@gridwatch.com")}
+            >
+              <View style={[styles.modalButton, { backgroundColor: theme.buttonPrimary }]}>
+                <Text style={styles.modalButtonText}>CONTACT SUPPORT</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ width: "100%" }}
+              onPress={() => setAdminArchivedModalVisible(false)}
+            >
+              <View
+                style={[
+                  styles.modalButton,
+                  {
+                    backgroundColor: "transparent",
+                    borderWidth: 1,
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+              >
+                <Text style={[styles.modalButtonText, { color: theme.textSecondary }]}>CLOSE</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={restorationAgreementModalVisible}
+        onRequestClose={() => {}}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Account Restored</Text>
+            <Text style={styles.modalBody}>
+              Your account was restored by an administrator.{"\n\n"}
+              By continuing, you agree to adhere to the community guidelines and not repeat the actions that led to deactivation.
+            </Text>
+            <TouchableOpacity
+              style={{ width: "100%", marginBottom: 10 }}
+              onPress={handleAgreeRestoration}
+            >
+              <View style={[styles.modalButton, { backgroundColor: theme.buttonPrimary }]}>
+                <Text style={styles.modalButtonText}>I AGREE</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ width: "100%" }}
+              onPress={() => {
+                setRestorationAgreementModalVisible(false);
+                setIsLoading(false);
+              }}
+            >
+              <View
+                style={[
+                  styles.modalButton,
+                  {
+                    backgroundColor: "transparent",
+                    borderWidth: 1,
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+              >
+                <Text style={[styles.modalButtonText, { color: theme.textSecondary }]}>CANCEL</Text>
+              </View>
             </TouchableOpacity>
           </View>
         </View>

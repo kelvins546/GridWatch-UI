@@ -14,6 +14,7 @@ import {
   TextInput,
   Platform,
   UIManager,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -72,6 +73,10 @@ export default function AuthSelectionScreen() {
   const [reactivateModalVisible, setReactivateModalVisible] = useState(false);
   const [pendingReactivationToken, setPendingReactivationToken] =
     useState(null);
+
+  const [adminArchivedModalVisible, setAdminArchivedModalVisible] = useState(false);
+  const [adminArchivedReason, setAdminArchivedReason] = useState("");
+  const [restorationAgreementModalVisible, setRestorationAgreementModalVisible] = useState(false);
 
   const showModal = (type, title, message, onPress = null) => {
     setAlertConfig({ type, title, message, onPress });
@@ -243,15 +248,42 @@ export default function AuthSelectionScreen() {
       } else {
         const { data: profile } = await tempClient
           .from("users")
-          .select("status")
+          .select("status, role, archived_reason, restore_reason")
           .eq("id", user.id)
           .single();
 
-        if (profile && profile.status === "archived") {
-          setPendingReactivationToken(idToken);
+        if (profile && (profile.role === "admin" || profile.role === "super_admin")) {
+          await tempClient.auth.signOut();
           setIsLoading(false);
-          setReactivateModalVisible(true);
+          showModal("error", "Access Denied", "Admin accounts cannot login here.");
           return;
+        }
+
+        if (profile && profile.status === "archived") {
+          if (profile.archived_reason === "Deactivated by user") {
+            setPendingReactivationToken(idToken);
+            setIsLoading(false);
+            setReactivateModalVisible(true);
+            return;
+          } else {
+            await tempClient.auth.signOut();
+            setIsLoading(false);
+            setAdminArchivedReason(profile.archived_reason || "No reason provided.");
+            setAdminArchivedModalVisible(true);
+            return;
+          }
+        }
+
+        if (profile && profile.status === 'active') {
+             const rReason = profile.restore_reason;
+             if (rReason !== 'Restored by user' && rReason !== 'Restored by user-association agreement') {
+                 await tempClient.auth.signOut();
+                 setIsLoading(false);
+                 setPendingIdToken(idToken);
+                 setPendingGoogleUser(userObj);
+                 setRestorationAgreementModalVisible(true);
+                 return;
+             }
         }
 
         await proceedWithGoogleLogin(tempClient, idToken, userObj);
@@ -294,7 +326,12 @@ export default function AuthSelectionScreen() {
 
       const { error: updateError } = await tempClient
         .from("users")
-        .update({ status: "active", archived_at: null })
+        .update({
+          status: "active",
+          archived_at: null,
+          archived_reason: null,
+          restore_reason: "Restored by user",
+        })
         .eq("id", user.id);
 
       if (updateError) throw updateError;
@@ -308,6 +345,36 @@ export default function AuthSelectionScreen() {
         "Could not restore account. Please contact support.",
       );
     }
+  };
+
+  const handleAgreeRestoration = async () => {
+      setIsLoading(true);
+      setRestorationAgreementModalVisible(false);
+      try {
+          const tempClient = createClient(supabase.supabaseUrl, supabase.supabaseKey, {
+            auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+          });
+          
+          const { data, error } = await tempClient.auth.signInWithIdToken({
+              provider: 'google',
+              token: pendingIdToken
+          });
+          if (error) throw error;
+
+          const { error: updateError } = await tempClient
+            .from('users')
+            .update({ restore_reason: 'Restored by user-association agreement' })
+            .eq('id', data.user.id);
+          
+          if (updateError) throw updateError;
+
+          // Resume
+          await proceedWithGoogleLogin(tempClient, pendingIdToken, pendingGoogleUser);
+
+      } catch (error) {
+          setIsLoading(false);
+          showModal("error", "Error", "Failed to process agreement.");
+      }
   };
 
   const verifyMfaAndLogin = async () => {
@@ -700,6 +767,98 @@ export default function AuthSelectionScreen() {
                 </View>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={adminArchivedModalVisible}
+        onRequestClose={() => setAdminArchivedModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Account Archived</Text>
+            <Text style={[styles.modalBody, { color: theme.textSecondary }]}>
+              Your account was deactivated by the admins.{"\n\n"}
+              <Text style={{ fontWeight: "bold" }}>Reason:</Text> {adminArchivedReason}{"\n\n"}
+              Contact us by email to activate your account.
+            </Text>
+            <TouchableOpacity
+              style={{ width: "100%", marginBottom: 10 }}
+              onPress={() => Linking.openURL("mailto:support@gridwatch.com")}
+            >
+              <View style={[styles.modalButton, { backgroundColor: theme.buttonPrimary }]}>
+                <Text style={{ color: theme.buttonPrimaryText, fontWeight: "bold", fontSize: 12 }}>
+                  CONTACT SUPPORT
+                </Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ width: "100%" }}
+              onPress={() => setAdminArchivedModalVisible(false)}
+            >
+              <View
+                style={[
+                  styles.modalButton,
+                  {
+                    backgroundColor: "transparent",
+                    borderWidth: 1,
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+              >
+                <Text style={{ color: theme.textSecondary, fontWeight: "bold", fontSize: 12 }}>CLOSE</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={restorationAgreementModalVisible}
+        onRequestClose={() => {}}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Account Restored</Text>
+            <Text style={[styles.modalBody, { color: theme.textSecondary }]}>
+              Your account was restored by an administrator.{"\n\n"}
+              By continuing, you agree to adhere to the community guidelines and not repeat the actions that led to deactivation.
+            </Text>
+            <TouchableOpacity
+              style={{ width: "100%", marginBottom: 10 }}
+              onPress={handleAgreeRestoration}
+            >
+              <View style={[styles.modalButton, { backgroundColor: theme.buttonPrimary }]}>
+                <Text style={{ color: theme.buttonPrimaryText, fontWeight: "bold", fontSize: 12 }}>
+                  I AGREE
+                </Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ width: "100%" }}
+              onPress={() => {
+                setRestorationAgreementModalVisible(false);
+                setIsLoading(false);
+              }}
+            >
+              <View
+                style={[
+                  styles.modalButton,
+                  {
+                    backgroundColor: "transparent",
+                    borderWidth: 1,
+                    borderColor: theme.cardBorder,
+                  },
+                ]}
+              >
+                <Text style={{ color: theme.textSecondary, fontWeight: "bold", fontSize: 12 }}>CANCEL</Text>
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

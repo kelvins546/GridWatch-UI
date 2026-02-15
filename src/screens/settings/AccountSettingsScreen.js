@@ -351,6 +351,8 @@ export default function AccountSettingsScreen() {
         .update({
           status: "archived",
           archived_at: new Date().toISOString(),
+          restore_reason: null,
+          archived_reason: "Deactivated by user",
         })
         .eq("id", user.id);
 

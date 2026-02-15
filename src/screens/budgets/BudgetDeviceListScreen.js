@@ -318,16 +318,16 @@ export default function BudgetDeviceListScreen() {
 
       <Modal transparent visible={showConfigModal} animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Outlet Not Configured</Text>
-            <Text style={styles.modalBody}>
+          <View style={[styles.modalContainer, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Outlet Not Configured</Text>
+            <Text style={[styles.modalBody, { color: theme.textSecondary }]}>
               {selectedUnusedDevice?.name} is currently marked as{" "}
-              <Text style={{ fontWeight: "bold" }}>Unused</Text>.
+              <Text style={{ fontWeight: "bold", color: theme.text }}>Unused</Text>.
             </Text>
             <View style={styles.buttonRow}>
               <TouchableOpacity
                 onPress={() => setShowConfigModal(false)}
-                style={styles.modalCancelBtn}
+                style={[styles.modalCancelBtn, { borderColor: theme.cardBorder }]}
               >
                 <Text style={[styles.modalButtonText, { color: theme.text }]}>
                   Cancel
@@ -335,7 +335,7 @@ export default function BudgetDeviceListScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleGoToConfig}
-                style={styles.modalConfirmBtn}
+                style={[styles.modalConfirmBtn, { backgroundColor: theme.buttonPrimary }]}
               >
                 <Text style={[styles.modalButtonText, { color: "#fff" }]}>
                   Configure

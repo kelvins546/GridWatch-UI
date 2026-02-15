@@ -1139,15 +1139,15 @@ export default function BudgetManagerScreen() {
             <Text style={styles.modalBody}>{statusModal.message}</Text>
             <TouchableOpacity
               onPress={() => setStatusModal({ ...statusModal, visible: false })}
-              style={{
-                backgroundColor:
-                  statusModal.type === "error" ? dangerColor : primaryColor,
-                width: "100%",
-                height: 40,
-                borderRadius: 12,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
+              style={[
+                styles.modalConfirmBtn,
+                {
+                  backgroundColor:
+                    statusModal.type === "error" ? dangerColor : primaryColor,
+                  width: "100%",
+                  flex: 0,
+                },
+              ]}
             >
               <Text style={[styles.modalButtonText, { color: "#fff" }]}>
                 OKAY

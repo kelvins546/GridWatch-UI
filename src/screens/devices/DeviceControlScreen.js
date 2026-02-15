@@ -197,6 +197,9 @@ export default function DeviceControlScreen() {
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [editingScheduleId, setEditingScheduleId] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [scheduleToDelete, setScheduleToDelete] = useState(null);
 
   const [schedules, setSchedules] = useState([]);
 
@@ -751,6 +754,30 @@ export default function DeviceControlScreen() {
     setSelectedDays(newDays);
   };
 
+  const handleAddSchedule = () => {
+    setEditingScheduleId(null);
+    setSchedHour("07");
+    setSchedMinute("00");
+    setSchedAmPm("AM");
+    setSelectedDays(Array(7).fill(true));
+    setIsActionOn(true);
+    setShowSchedule(true);
+  };
+
+  const handleEditSchedule = (item) => {
+    setEditingScheduleId(item.id);
+    const [h, m] = item.time.split(":");
+    let hour = parseInt(h, 10);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    hour = hour % 12 || 12;
+    setSchedHour(hour.toString().padStart(2, "0"));
+    setSchedMinute(m);
+    setSchedAmPm(ampm);
+    setSelectedDays(item.days);
+    setIsActionOn(item.action);
+    setShowSchedule(true);
+  };
+
   const saveSchedule = async () => {
     let h = parseInt(schedHour, 10);
     const m = schedMinute;
@@ -761,22 +788,41 @@ export default function DeviceControlScreen() {
     const time24 = `${hStr}:${mStr}`;
 
     try {
-      const { data, error } = await supabase
-        .from("device_schedules")
-        .insert({
-          device_id: deviceId,
-          time: time24,
-          days: selectedDays,
-          action: isActionOn ? "on" : "off",
-          is_active: true,
-        })
-        .select()
-        .single();
+      let data, error;
+
+      if (editingScheduleId) {
+        const response = await supabase
+          .from("device_schedules")
+          .update({
+            time: time24,
+            days: selectedDays,
+            action: isActionOn ? "on" : "off",
+          })
+          .eq("id", editingScheduleId)
+          .select()
+          .single();
+        data = response.data;
+        error = response.error;
+      } else {
+        const response = await supabase
+          .from("device_schedules")
+          .insert({
+            device_id: deviceId,
+            time: time24,
+            days: selectedDays,
+            action: isActionOn ? "on" : "off",
+            is_active: true,
+          })
+          .select()
+          .single();
+        data = response.data;
+        error = response.error;
+      }
 
       if (error) throw error;
 
       if (data) {
-        const newSchedule = {
+        const scheduleData = {
           id: data.id,
           time: data.time.slice(0, 5),
           days: data.days,
@@ -784,7 +830,13 @@ export default function DeviceControlScreen() {
           active: data.is_active,
         };
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setSchedules([...schedules, newSchedule]);
+        if (editingScheduleId) {
+          setSchedules((prev) =>
+            prev.map((s) => (s.id === editingScheduleId ? scheduleData : s))
+          );
+        } else {
+          setSchedules([...schedules, scheduleData]);
+        }
         setShowSchedule(false);
       }
     } catch (err) {
@@ -821,32 +873,28 @@ export default function DeviceControlScreen() {
     }
   };
 
-  const deleteSchedule = async (id) => {
-    Alert.alert(
-      "Delete Schedule",
-      "Are you sure you want to remove this schedule?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const { error } = await supabase
-                .from("device_schedules")
-                .delete()
-                .eq("id", id);
+  const deleteSchedule = (id) => {
+    setScheduleToDelete(id);
+    setShowDeleteConfirm(true);
+  };
 
-              if (error) throw error;
-              setSchedules((prev) => prev.filter((s) => s.id !== id));
-            } catch (err) {
-              console.log("Error deleting schedule:", err);
-              Alert.alert("Error", "Failed to delete schedule");
-            }
-          },
-        },
-      ],
-    );
+  const confirmDeleteSchedule = async () => {
+    if (!scheduleToDelete) return;
+    const id = scheduleToDelete;
+    setShowDeleteConfirm(false);
+
+    try {
+      const { error } = await supabase.from("device_schedules").delete().eq("id", id);
+
+      if (error) throw error;
+      setSchedules((prev) => prev.filter((s) => s.id !== id));
+      setShowSchedule(false);
+    } catch (err) {
+      console.log("Error deleting schedule:", err);
+      Alert.alert("Error", "Failed to delete schedule");
+    } finally {
+      setScheduleToDelete(null);
+    }
   };
 
   if (isLoading) {
@@ -1156,7 +1204,7 @@ export default function DeviceControlScreen() {
             >
               Upcoming Schedules
             </Text>
-            <TouchableOpacity onPress={() => setShowSchedule(true)}>
+            <TouchableOpacity onPress={handleAddSchedule}>
               <Text
                 style={{
                   color: theme.buttonPrimary,
@@ -1170,8 +1218,10 @@ export default function DeviceControlScreen() {
           </View>
 
           {schedules.map((item) => (
-            <View
+            <TouchableOpacity
               key={item.id}
+              activeOpacity={0.7}
+              onPress={() => handleEditSchedule(item)}
               style={[
                 styles.card,
                 {
@@ -1223,18 +1273,8 @@ export default function DeviceControlScreen() {
                   onToggle={() => toggleScheduleActive(item.id)}
                   theme={theme}
                 />
-                <TouchableOpacity
-                  onPress={() => deleteSchedule(item.id)}
-                  style={{ marginLeft: 12, padding: 4 }}
-                >
-                  <MaterialIcons
-                    name="delete-outline"
-                    size={24}
-                    color={isDarkMode ? "#ff4444" : "#cc0000"}
-                  />
-                </TouchableOpacity>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
           <View style={{ height: 40 }} />
         </View>
@@ -1304,7 +1344,7 @@ export default function DeviceControlScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Set Schedule</Text>
+            <Text style={styles.modalTitle}>{editingScheduleId ? "Edit Schedule" : "Set Schedule"}</Text>
 
             <View
               style={{
@@ -1465,6 +1505,22 @@ export default function DeviceControlScreen() {
                 theme={theme}
               />
             </TouchableOpacity>
+
+            {editingScheduleId && (
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: 24,
+                }}
+                onPress={() => deleteSchedule(editingScheduleId)}
+              >
+                <MaterialIcons name="delete-outline" size={20} color={isDarkMode ? "#ff4444" : "#cc0000"} />
+                <Text style={{ color: isDarkMode ? "#ff4444" : "#cc0000", fontWeight: "bold", marginLeft: 8 }}>Delete Schedule</Text>
+              </TouchableOpacity>
+            )}
+
             <View style={styles.modalBtnRow}>
               <TouchableOpacity
                 style={styles.modalBtnCancel}
@@ -1492,6 +1548,43 @@ export default function DeviceControlScreen() {
                   <Text style={[styles.modalBtnText, { color: "#fff" }]}>
                     Save
                   </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showDeleteConfirm}
+        transparent
+        animationType="fade"
+        statusBarTranslucent={true}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Delete Schedule?</Text>
+            <Text style={styles.modalBody}>
+              Are you sure you want to remove this schedule?
+            </Text>
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalBtnCancel}
+                onPress={() => setShowDeleteConfirm(false)}
+              >
+                <Text style={[styles.modalBtnText, { color: theme.text }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalBtnConfirm,
+                  { backgroundColor: theme.buttonDangerText || "#ff4444" },
+                ]}
+                onPress={confirmDeleteSchedule}
+              >
+                <View style={{ width: "100%", height: "100%", justifyContent: "center", alignItems: "center" }}>
+                  <Text style={[styles.modalBtnText, { color: "#fff" }]}>Delete</Text>
                 </View>
               </TouchableOpacity>
             </View>

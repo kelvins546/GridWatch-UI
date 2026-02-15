@@ -8,7 +8,7 @@ import {
   TextInput,
   StyleSheet,
   ActivityIndicator,
-  Alert,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -39,6 +39,15 @@ export default function BudgetDetailScreen() {
   const [otherDevicesLimit, setOtherDevicesLimit] = useState(0);
   const [usedAmount, setUsedAmount] = useState(0);
   const [currentDbDevice, setCurrentDbDevice] = useState(null);
+
+  const [statusModal, setStatusModal] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    type: "success",
+  });
+
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   useEffect(() => {
     fetchDeviceData();
@@ -116,13 +125,23 @@ export default function BudgetDetailScreen() {
       setUsedAmount(totalUsed);
     } catch (error) {
       console.log("Error fetching budget details:", error);
-      Alert.alert("Error", "Failed to load device data.");
+      setStatusModal({
+        visible: true,
+        title: "Error",
+        message: "Failed to load device data.",
+        type: "error",
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
+    setShowConfirmModal(true);
+  };
+
+  const executeSave = async () => {
+    setShowConfirmModal(false);
     if (!currentDbDevice) return;
     setIsSaving(true);
     try {
@@ -139,10 +158,20 @@ export default function BudgetDetailScreen() {
 
       if (error) throw error;
 
-      Alert.alert("Success", "Device budget settings updated.");
-      navigation.goBack();
+      setStatusModal({
+        visible: true,
+        title: "Success",
+        message: "Device budget settings updated.",
+        type: "success",
+        onClose: () => navigation.goBack(),
+      });
     } catch (error) {
-      Alert.alert("Error", "Failed to save settings.");
+      setStatusModal({
+        visible: true,
+        title: "Error",
+        message: "Failed to save settings.",
+        type: "error",
+      });
       console.log(error);
     } finally {
       setIsSaving(false);
@@ -496,6 +525,74 @@ export default function BudgetDetailScreen() {
           />
         </View>
       </ScrollView>
+
+      <Modal visible={showConfirmModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Save Changes?</Text>
+            <Text style={[styles.modalBody, { color: theme.textSecondary }]}>
+              Are you sure you want to update the budget settings?
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10, width: "100%" }}>
+              <TouchableOpacity
+                onPress={() => setShowConfirmModal(false)}
+                style={{
+                  flex: 1,
+                  height: 40,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: theme.cardBorder,
+                }}
+              >
+                <Text style={{ color: theme.text, fontWeight: "bold" }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={executeSave}
+                style={{
+                  flex: 1,
+                  height: 40,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: theme.buttonPrimary,
+                }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                  Confirm
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={statusModal.visible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>{statusModal.title}</Text>
+            <Text style={[styles.modalBody, { color: theme.textSecondary }]}>{statusModal.message}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setStatusModal({ ...statusModal, visible: false });
+                if (statusModal.onClose) statusModal.onClose();
+              }}
+              style={[
+                styles.modalButton,
+                {
+                  backgroundColor:
+                    statusModal.type === "error" ? dangerColor : primaryColor,
+                },
+              ]}
+            >
+              <Text style={styles.modalButtonText}>OKAY</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -584,3 +681,40 @@ function CustomSwitch({ value, onToggle, theme }) {
     </TouchableOpacity>
   );
 }
+
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContainer: {
+    width: 288,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontWeight: "bold",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  modalBody: {
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  modalButton: {
+    width: "100%",
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+  },
+});
