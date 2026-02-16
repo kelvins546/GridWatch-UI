@@ -289,6 +289,10 @@ export default function BudgetManagerScreen() {
   const rawPercentage = activeLimit > 0 ? (currentSpending / activeLimit) * 100 : 0;
   const percentage = Math.min(rawPercentage, 100);
 
+  let progressBarColor = primaryColor;
+  if (rawPercentage >= 90) progressBarColor = dangerColor;
+  else if (rawPercentage >= 75) progressBarColor = warningColor;
+
   const getOrdinalSuffix = (day) => {
     const d = parseInt(day);
     if (d > 3 && d < 21) return "th";
@@ -730,6 +734,7 @@ export default function BudgetManagerScreen() {
                   <Text
                     style={{
                       color: activeLimit > 0 ? (rawPercentage >= 90 ? dangerColor : primaryColor) : theme.textSecondary,
+                      color: activeLimit > 0 ? progressBarColor : theme.textSecondary,
                       fontWeight: "600",
                       fontSize: scaledSize(12),
                     }}
@@ -757,6 +762,8 @@ export default function BudgetManagerScreen() {
                     colors={
                       rawPercentage >= 90
                         ? [warningColor, dangerColor]
+                        : rawPercentage >= 75
+                        ? [warningColor, warningColor]
                         : [primaryColor, isDarkMode ? "#00cc7a" : "#34d399"]
                     }
                     start={{ x: 0, y: 0 }}

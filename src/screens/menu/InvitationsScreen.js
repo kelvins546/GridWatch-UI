@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -258,6 +259,60 @@ export default function InvitationsScreen() {
     }
   };
 
+  const styles = StyleSheet.create({
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.8)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContainer: {
+      borderWidth: 1,
+      padding: 20,
+      borderRadius: 16,
+      width: 288,
+      alignItems: "center",
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+    },
+    modalTitle: {
+      fontWeight: "bold",
+      marginBottom: 8,
+      textAlign: "center",
+      color: theme.text,
+      fontSize: scaledSize(18),
+    },
+    modalBody: {
+      textAlign: "center",
+      marginBottom: 24,
+      lineHeight: 20,
+      color: theme.textSecondary,
+      fontSize: scaledSize(12),
+    },
+    buttonRow: { flexDirection: "row", gap: 10, width: "100%" },
+    modalCancelBtn: {
+      flex: 1,
+      height: 40,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: theme.cardBorder,
+    },
+    modalConfirmBtn: {
+      flex: 1,
+      height: 40,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalButtonText: {
+      fontWeight: "bold",
+      fontSize: scaledSize(12),
+      textTransform: "uppercase",
+    },
+  });
+
   return (
     <SafeAreaView
       className="flex-1"
@@ -452,57 +507,40 @@ export default function InvitationsScreen() {
 
       {}
       <Modal visible={showAcceptModal} transparent animationType="fade">
-        <View className="flex-1 bg-black/80 justify-center items-center p-6">
-          <View
-            className="w-[85%] max-w-[320px] p-5 rounded-2xl border items-center"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
-          >
-            <Text
-              className="font-bold mb-2 text-center"
-              style={{ color: theme.text, fontSize: scaledSize(18) }}
-            >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>
               Join Hub?
             </Text>
-            <Text
-              className="text-center mb-6 leading-5"
-              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
-            >
+            <Text style={styles.modalBody}>
               You will gain {selectedInvite?.role} access to{" "}
               <Text style={{ fontWeight: "bold", color: theme.text }}>
                 {selectedInvite?.hubName}
               </Text>
               .
             </Text>
-            <View className="flex-row gap-3 w-full">
+            <View style={styles.buttonRow}>
               <TouchableOpacity
                 onPress={() => setShowAcceptModal(false)}
                 disabled={processing}
-                className="flex-1 py-3 rounded-xl border items-center"
-                style={{ borderColor: theme.cardBorder }}
+                style={styles.modalCancelBtn}
               >
-                <Text
-                  className="font-bold"
-                  style={{ color: theme.text, fontSize: scaledSize(13) }}
-                >
+                <Text style={[styles.modalButtonText, { color: theme.text }]}>
                   Cancel
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={confirmAccept}
                 disabled={processing}
-                className="flex-1 py-3 rounded-xl items-center"
-                style={{ backgroundColor: theme.buttonPrimary }}
+                style={[
+                  styles.modalConfirmBtn,
+                  { backgroundColor: theme.buttonPrimary },
+                ]}
               >
                 {processing ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text
-                    className="font-bold"
-                    style={{ color: "#fff", fontSize: scaledSize(13) }}
-                  >
+                  <Text style={[styles.modalButtonText, { color: "#fff" }]}>
                     Join
                   </Text>
                 )}
@@ -514,59 +552,40 @@ export default function InvitationsScreen() {
 
       {}
       <Modal visible={showDeclineModal} transparent animationType="fade">
-        <View className="flex-1 bg-black/80 justify-center items-center p-6">
-          <View
-            className="w-[85%] max-w-[320px] p-5 rounded-2xl border items-center"
-            style={{
-              backgroundColor: theme.card,
-              borderColor: theme.cardBorder,
-            }}
-          >
-            <Text
-              className="font-bold mb-2 text-center"
-              style={{ color: theme.text, fontSize: scaledSize(18) }}
-            >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>
               Decline Invitation?
             </Text>
-            <Text
-              className="text-center mb-6 leading-5"
-              style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
-            >
+            <Text style={styles.modalBody}>
               Are you sure you want to decline the invitation from{" "}
               <Text style={{ fontWeight: "bold", color: theme.text }}>
                 {selectedInvite?.inviterName}
               </Text>
               ? This action cannot be undone.
             </Text>
-            <View className="flex-row gap-3 w-full">
+            <View style={styles.buttonRow}>
               <TouchableOpacity
                 onPress={() => setShowDeclineModal(false)}
                 disabled={processing}
-                className="flex-1 py-3 rounded-xl border items-center"
-                style={{ borderColor: theme.cardBorder }}
+                style={styles.modalCancelBtn}
               >
-                <Text
-                  className="font-bold"
-                  style={{ color: theme.text, fontSize: scaledSize(13) }}
-                >
+                <Text style={[styles.modalButtonText, { color: theme.text }]}>
                   Cancel
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={confirmDecline}
                 disabled={processing}
-                className="flex-1 py-3 rounded-xl items-center"
-                style={{
-                  backgroundColor: isDarkMode ? "#ff4444" : "#cc0000",
-                }}
+                style={[
+                  styles.modalConfirmBtn,
+                  { backgroundColor: isDarkMode ? "#ff4444" : "#cc0000" },
+                ]}
               >
                 {processing ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text
-                    className="font-bold"
-                    style={{ color: "#fff", fontSize: scaledSize(13) }}
-                  >
+                  <Text style={[styles.modalButtonText, { color: "#fff" }]}>
                     Decline
                   </Text>
                 )}

@@ -1,31 +1,45 @@
 import React from "react";
 import { FlexWidget, TextWidget } from "react-native-android-widget";
 
-export function BudgetWidget({ budget, usage, cost }) {
-  const safeUsage = Number(usage) || 0;
-  const safeBudget = Number(budget) || 1;
-  const rawPercent = (safeUsage / safeBudget) * 100;
-  const percentage = Math.min(Math.round(rawPercent), 100);
+export function BudgetWidget({ cost, budget, percentage, dailyAvg, forecast, barColor, isDarkMode }) {
+  const safeBudget = Number(budget) || 0;
+  const safePercentage = Number(percentage) || 0;
+  const progressPercent = Math.min(Math.max(safePercentage, 0), 100);
+  const filledBarWidth = Math.round((268 * progressPercent) / 100);
 
-  const COLORS = {
-    bg: "#18181b",
-    track: "#27272a",
-    primary: "#00A651",
-    textMain: "#ffffff",
-    textSub: "#71717a",
-    divider: "#3f3f46",
-  };
+  const finalBarColor = barColor || (safePercentage >= 90 ? "#ef4444" : safePercentage >= 75 ? "#ffaa00" : "#00A651");
+
+  const COLORS = isDarkMode
+    ? {
+        bg: "#18181b",
+        track: "#27272a",
+        primary: finalBarColor,
+        textMain: "#ffffff",
+        textSub: "#71717a",
+        divider: "#27272a",
+      }
+    : {
+        bg: "#ffffff",
+        track: "#e4e4e7",
+        primary: finalBarColor,
+        textMain: "#18181b",
+        textSub: "#71717a",
+        divider: "#e4e4e7",
+      };
 
   return (
     <FlexWidget
       style={{
-        height: "match_parent",
-        width: "match_parent",
+        height: 191,
+        width: 324,
         backgroundColor: COLORS.bg,
-        borderRadius: 22,
-        padding: 16,
+        borderRadius: 16,
+        paddingLeft: 16,
+        paddingRight: 16,
+        paddingTop: 0,
+        paddingBottom: 0,
         flexDirection: "column",
-        justifyContent: "flex-start",
+        justifyContent: "center",
       }}
     >
       {}
@@ -33,137 +47,192 @@ export function BudgetWidget({ budget, usage, cost }) {
         style={{
           flexDirection: "row",
           justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 4,
+          alignItems: "flex-start",
+          marginBottom: 12,
           width: "match_parent",
         }}
       >
-        <TextWidget
-          text="TOTAL SPENDING"
-          style={{
-            color: COLORS.textSub,
-            fontSize: 11,
-            fontWeight: "bold",
-            letterSpacing: 1.5,
-          }}
-        />
-        {}
-        <TextWidget
-          text="GridWatch"
-          style={{
-            color: COLORS.primary,
-            fontSize: 12,
-            fontWeight: "bold",
-            fontStyle: "italic",
-          }}
-        />
-      </FlexWidget>
+        <FlexWidget style={{ flexDirection: "column" }}>
+          <TextWidget
+            text="TOTAL SPENDING"
+            style={{
+              color: COLORS.textSub,
+              fontSize: 10,
+              fontWeight: "bold",
+              letterSpacing: 1.5,
+              marginBottom: 2,
+            }}
+          />
+          <TextWidget
+            text={`₱ ${cost}`}
+            style={{
+              color: COLORS.textMain,
+              fontSize: 28,
+              fontWeight: "bold",
+            }}
+          />
+        </FlexWidget>
 
-      {}
-      <TextWidget
-        text={`₱ ${cost}`}
-        style={{
-          color: COLORS.textMain,
-          fontSize: 28,
-          fontWeight: "bold",
-          marginBottom: 16,
-        }}
-      />
+        <FlexWidget style={{ flexDirection: "column", alignItems: "flex-end" }}>
+          <TextWidget
+            text="BUDGET LIMIT"
+            style={{
+              color: COLORS.textSub,
+              fontSize: 10,
+              fontWeight: "bold",
+              letterSpacing: 1.5,
+              marginBottom: 2,
+            }}
+          />
+          <TextWidget
+            text={`₱ ${safeBudget.toLocaleString()}`}
+            style={{
+              color: COLORS.textSub,
+              fontSize: 14,
+              fontWeight: "bold",
+            }}
+          />
+        </FlexWidget>
+      </FlexWidget>
 
       {}
       <FlexWidget
         style={{
           flexDirection: "column",
           width: "match_parent",
-          marginBottom: 16,
+          marginBottom: 12,
         }}
       >
-        {}
         <FlexWidget
           style={{
-            height: 8,
+            height: 6,
             width: "match_parent",
             backgroundColor: COLORS.track,
-            borderRadius: 4,
-            marginBottom: 6,
+            borderRadius: 3,
+            marginBottom: 8,
+            flexDirection: "row",
           }}
         >
-          {}
           <FlexWidget
             style={{
               height: "match_parent",
-              width: `${percentage}%`,
+              width: filledBarWidth,
               backgroundColor: COLORS.primary,
-              borderRadius: 4,
+              borderRadius: 3,
             }}
           />
         </FlexWidget>
 
-        {}
         <TextWidget
-          text={`${percentage}% of Budget Used`}
+          text={safeBudget > 0 ? `${safePercentage.toFixed(0)}% of Budget Used` : "No Limit Set"}
           style={{
-            color: COLORS.primary,
-            fontSize: 11,
+            color: safeBudget > 0 ? COLORS.primary : COLORS.textSub,
+            fontSize: 10,
             fontWeight: "bold",
           }}
         />
       </FlexWidget>
 
-      {}
+      {/* Divider */}
       <FlexWidget
         style={{
           height: 1,
           width: "match_parent",
-          backgroundColor: COLORS.track,
+          backgroundColor: COLORS.divider,
           marginBottom: 12,
         }}
       />
 
-      {}
-      <FlexWidget style={{ flexDirection: "row", alignItems: "center" }}>
-        {}
-        <FlexWidget style={{ flexDirection: "column", marginRight: 16 }}>
-          <TextWidget
-            text="DAILY AVG"
-            style={{ color: COLORS.textSub, fontSize: 10, fontWeight: "bold" }}
-          />
-          <TextWidget
-            text="₱ 120.50"
+      {/* Bottom Stats Section */}
+      <FlexWidget
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          width: "match_parent",
+        }}
+      >
+        {/* Daily Avg */}
+        <FlexWidget
+          style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
+        >
+          <FlexWidget
             style={{
-              color: COLORS.textMain,
-              fontSize: 14,
-              fontWeight: "bold",
-              marginTop: 2,
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: "rgba(255,255,255,0.1)",
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: 8,
             }}
-          />
+          >
+            <TextWidget text="📈" style={{ fontSize: 14 }} />
+          </FlexWidget>
+          <FlexWidget style={{ flexDirection: "column" }}>
+            <TextWidget
+              text="DAILY AVG"
+              style={{
+                color: COLORS.textSub,
+                fontSize: 9,
+                fontWeight: "bold",
+              }}
+            />
+            <TextWidget
+              text={`₱ ${dailyAvg}`}
+              style={{
+                color: COLORS.textMain,
+                fontSize: 13,
+                fontWeight: "bold",
+              }}
+            />
+          </FlexWidget>
         </FlexWidget>
 
-        {}
+        {/* Vertical Divider */}
         <FlexWidget
           style={{
             width: 1,
             height: 24,
-            backgroundColor: COLORS.track,
-            marginHorizontal: 12,
+            backgroundColor: COLORS.divider,
+            marginHorizontal: 8,
           }}
         />
 
-        {}
-        <FlexWidget style={{ flexDirection: "column" }}>
-          <TextWidget
-            text="FORECAST"
-            style={{ color: COLORS.textSub, fontSize: 10, fontWeight: "bold" }}
-          />
-          <TextWidget
-            text="₱ 3,615"
+        {/* Forecast */}
+        <FlexWidget
+          style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
+        >
+          <FlexWidget
             style={{
-              color: COLORS.textMain,
-              fontSize: 14,
-              fontWeight: "bold",
-              marginTop: 2,
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: "rgba(255,255,255,0.1)",
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: 8,
             }}
-          />
+          >
+            <TextWidget text="📊" style={{ fontSize: 14 }} />
+          </FlexWidget>
+          <FlexWidget style={{ flexDirection: "column" }}>
+            <TextWidget
+              text="FORECAST"
+              style={{
+                color: COLORS.textSub,
+                fontSize: 9,
+                fontWeight: "bold",
+              }}
+            />
+            <TextWidget
+              text={`₱ ${forecast}`}
+              style={{
+                color: COLORS.textMain,
+                fontSize: 13,
+                fontWeight: "bold",
+              }}
+            />
+          </FlexWidget>
         </FlexWidget>
       </FlexWidget>
     </FlexWidget>

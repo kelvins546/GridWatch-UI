@@ -25,7 +25,7 @@ import { useTheme } from "../../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../../lib/supabase";
 import { requestWidgetUpdate } from "react-native-android-widget";
-import { BudgetWidget } from "../../widgets/BudgetWidget";
+import { BudgetWidget } from "../../../widget-task-handler";
 
 if (
   Platform.OS === "android" &&
@@ -306,7 +306,7 @@ export default function SettingsScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
+      { }
       {!isAdvancedMode ? (
         <View
           style={{
@@ -394,7 +394,7 @@ export default function SettingsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="p-6 pb-10">
-          {}
+          { }
           <TouchableOpacity
             className="flex-row items-center mb-6"
             onPress={() => navigation.navigate("ProfileSettings")}
@@ -461,7 +461,7 @@ export default function SettingsScreen() {
             scaledSize={scaledSize}
           />
 
-          {}
+          { }
           <Text
             className="font-bold uppercase tracking-widest mb-3 mt-4"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -553,7 +553,7 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {}
+          { }
           <Text
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -609,7 +609,7 @@ export default function SettingsScreen() {
             scaledSize={scaledSize}
           />
 
-          {}
+          { }
           {isAdvancedMode && (
             <View
               className="rounded-xl border mb-3 overflow-hidden"
@@ -762,7 +762,7 @@ export default function SettingsScreen() {
             </View>
           )}
 
-          {}
+          { }
           <View
             className="p-4 rounded-xl mb-6 flex-row justify-between items-center border h-[72px]"
             style={{
@@ -790,7 +790,7 @@ export default function SettingsScreen() {
             />
           </View>
 
-          {}
+          { }
           <Text
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -814,7 +814,7 @@ export default function SettingsScreen() {
             scaledSize={scaledSize}
           />
 
-          {}
+          { }
           <TouchableOpacity
             className="mt-8 p-4 rounded-xl border items-center"
             style={{
@@ -833,7 +833,7 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
 
-      {}
+      { }
       <Modal
         animationType="fade"
         transparent={true}
@@ -896,7 +896,7 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      {}
+      { }
       <Modal
         animationType="fade"
         transparent={true}
@@ -961,7 +961,7 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      {}
+      { }
       <Modal
         animationType="fade"
         transparent={true}

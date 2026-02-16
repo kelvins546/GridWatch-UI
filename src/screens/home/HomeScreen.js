@@ -29,6 +29,8 @@ import { useNavigation, useIsFocused } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../../context/ThemeContext";
 import { supabase } from "../../lib/supabase";
+import { requestWidgetUpdate } from "react-native-android-widget";
+import { BudgetWidget } from "../../../widget-task-handler";
 
 if (
   Platform.OS === "android" &&
@@ -200,7 +202,6 @@ export default function HomeScreen() {
 
       if (error) throw error;
 
-      // Fetch Shared Hubs
       const { data: sharedData, error: sharedError } = await supabase
         .from("hub_access")
         .select(`
@@ -627,7 +628,11 @@ export default function HomeScreen() {
         0
       );
 
-      limit = Number(monthlyBudget || 0);
+      if (activeTab === "personal") {
+        limit = Number(monthlyBudget || 0);
+      } else {
+        limit = sourceData.reduce((acc, hub) => acc + Number(hub.budgetLimit || 0), 0);
+      }
 
       indicator =
         activeTab === "personal"
@@ -641,7 +646,6 @@ export default function HomeScreen() {
       if (hub) {
         spending = Number(hub.totalSpending || 0);
 
-        // 🔥 CHECK YOUR ACTUAL FIELD NAME HERE
         limit = Number(
           hub.budgetLimit ||
           hub.hub_budget ||
@@ -684,13 +688,42 @@ export default function HomeScreen() {
       ? (summaryData.spending / summaryData.limit) * 100
       : 0;
 
-  // Clamp between 0–100 for UI bar
   const percentage = Math.max(0, Math.min(rawPercentage, 100));
 
 
   let progressBarColor = primaryColor;
   if (rawPercentage >= 90) progressBarColor = dangerColor;
   else if (rawPercentage >= 75) progressBarColor = warningColor;
+
+  useEffect(() => {
+    const updateWidget = async () => {
+      try {
+        const dailyAvg = summaryData.spending / Math.max(1, daysElapsed);
+        const forecast = dailyAvg * 30;
+
+        await AsyncStorage.setItem("widget_theme_is_dark", JSON.stringify(isDarkMode));
+
+        await requestWidgetUpdate({
+          widgetName: "BudgetWidget",
+          renderWidget: () => <BudgetWidget 
+            cost={summaryData.spending.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            budget={summaryData.limit}
+            percentage={rawPercentage}
+            dailyAvg={dailyAvg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            forecast={forecast.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            barColor={progressBarColor}
+            isDarkMode={isDarkMode}
+          />,
+        });
+      } catch (e) {
+      
+      }
+    };
+
+    if (activeHubFilter === "all" && activeTab === "personal") {
+      updateWidget();
+    }
+  }, [summaryData, daysElapsed, rawPercentage, activeHubFilter, activeTab, progressBarColor, isDarkMode]);
 
   return (
     <SafeAreaView

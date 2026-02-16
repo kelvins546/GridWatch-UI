@@ -203,6 +203,16 @@ export default function BudgetDeviceListScreen() {
       return;
     }
 
+    if (device.id === "tv") {
+      navigation.navigate("LimitDetail");
+      return;
+    }
+
+    if (device.id === "outlet") {
+      navigation.navigate("FaultDetail");
+      return;
+    }
+
     navigation.navigate("BudgetDetail", {
       deviceName: device.name,
       deviceId: device.id,

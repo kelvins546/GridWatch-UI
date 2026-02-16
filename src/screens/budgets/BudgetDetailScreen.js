@@ -184,12 +184,18 @@ export default function BudgetDetailScreen() {
 
   const primaryColor = isDarkMode ? theme.buttonPrimary : "#00995e";
   const dangerColor = isDarkMode ? theme.buttonDangerText : "#cc0000";
+  const warningColor = isDarkMode ? "#ffaa00" : "#ff9900";
 
   const numericLimit = parseFloat(limit) || 0;
   const percentage =
     numericLimit > 0
       ? Math.min((usedAmount / numericLimit) * 100, 100).toFixed(0)
       : 100;
+  
+  let progressBarColor = primaryColor;
+  const pctVal = Number(percentage);
+  if (pctVal >= 90) progressBarColor = dangerColor;
+  else if (pctVal >= 75) progressBarColor = warningColor;
 
   const remaining = Math.max(numericLimit - usedAmount, 0).toFixed(2);
 
@@ -451,7 +457,7 @@ export default function BudgetDetailScreen() {
               <Text
                 className="font-bold"
                 style={{
-                  color: theme.buttonPrimary,
+                  color: progressBarColor,
                   fontSize: scaledSize(13),
                 }}
               >
@@ -467,7 +473,7 @@ export default function BudgetDetailScreen() {
                 className="h-full"
                 style={{
                   width: `${percentage}%`,
-                  backgroundColor: theme.buttonPrimary,
+                  backgroundColor: progressBarColor,
                 }}
               />
             </View>
