@@ -50,6 +50,18 @@ export default function InvitationsScreen() {
   const [showAcceptModal, setShowAcceptModal] = useState(false);
   const [showDeclineModal, setShowDeclineModal] = useState(false);
 
+  const [alertModalVisible, setAlertModalVisible] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({
+    type: "success",
+    title: "",
+    message: "",
+  });
+
+  const showAlert = (type, title, message) => {
+    setAlertConfig({ type, title, message });
+    setAlertModalVisible(true);
+  };
+
   useEffect(() => {
     let subscription;
 
@@ -218,9 +230,9 @@ export default function InvitationsScreen() {
       setInvitations((prev) => prev.filter((i) => i.id !== selectedInvite.id));
       setShowAcceptModal(false);
       setSelectedInvite(null);
-      Alert.alert("Success", "You have joined the hub!");
+      showAlert("success", "Success", "You have joined the hub!");
     } catch (err) {
-      Alert.alert("Error", err.message);
+      showAlert("error", "Error", err.message);
     } finally {
       setProcessing(false);
     }
@@ -253,7 +265,7 @@ export default function InvitationsScreen() {
       setShowDeclineModal(false);
       setSelectedInvite(null);
     } catch (err) {
-      Alert.alert("Error", err.message);
+      showAlert("error", "Error", err.message);
     } finally {
       setProcessing(false);
     }
@@ -591,6 +603,31 @@ export default function InvitationsScreen() {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={alertModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>{alertConfig.title}</Text>
+            <Text style={styles.modalBody}>{alertConfig.message}</Text>
+            <TouchableOpacity
+              onPress={() => setAlertModalVisible(false)}
+              style={[
+                styles.modalConfirmBtn,
+                {
+                  backgroundColor:
+                    alertConfig.type === "success"
+                      ? theme.buttonPrimary
+                      : isDarkMode ? "#ff4444" : "#cc0000",
+                  width: "100%",
+                  flex: 0,
+                },
+              ]}
+            >
+              <Text style={[styles.modalButtonText, { color: "#fff" }]}>Okay</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

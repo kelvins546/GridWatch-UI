@@ -210,6 +210,51 @@ export default function BudgetDetailScreen() {
     setLimit(cleaned);
   };
 
+  const styles = StyleSheet.create({
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.8)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContainer: {
+      width: 288,
+      padding: 20,
+      borderRadius: 16,
+      borderWidth: 1,
+      alignItems: "center",
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+    },
+    modalTitle: {
+      fontWeight: "bold",
+      marginBottom: 8,
+      textAlign: "center",
+      color: theme.text,
+      fontSize: scaledSize(18),
+    },
+    modalBody: {
+      textAlign: "center",
+      marginBottom: 24,
+      lineHeight: 20,
+      color: theme.textSecondary,
+      fontSize: scaledSize(12),
+    },
+    modalButton: {
+      width: "100%",
+      height: 40,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalButtonText: {
+      color: "#fff",
+      fontWeight: "bold",
+      fontSize: scaledSize(12),
+      textTransform: "uppercase",
+    },
+  });
+
   if (isLoading) {
     return (
       <View
@@ -534,9 +579,9 @@ export default function BudgetDetailScreen() {
 
       <Modal visible={showConfirmModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContainer, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Save Changes?</Text>
-            <Text style={[styles.modalBody, { color: theme.textSecondary }]}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Save Changes?</Text>
+            <Text style={styles.modalBody}>
               Are you sure you want to update the budget settings?
             </Text>
             <View style={{ flexDirection: "row", gap: 10, width: "100%" }}>
@@ -578,9 +623,9 @@ export default function BudgetDetailScreen() {
 
       <Modal visible={statusModal.visible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContainer, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>{statusModal.title}</Text>
-            <Text style={[styles.modalBody, { color: theme.textSecondary }]}>{statusModal.message}</Text>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>{statusModal.title}</Text>
+            <Text style={styles.modalBody}>{statusModal.message}</Text>
             <TouchableOpacity
               onPress={() => {
                 setStatusModal({ ...statusModal, visible: false });
@@ -687,40 +732,3 @@ function CustomSwitch({ value, onToggle, theme }) {
     </TouchableOpacity>
   );
 }
-
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContainer: {
-    width: 288,
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  modalTitle: {
-    fontWeight: "bold",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  modalBody: {
-    textAlign: "center",
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  modalButton: {
-    width: "100%",
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalButtonText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
-});

@@ -224,6 +224,60 @@ export default function BudgetDeviceListScreen() {
     navigation.navigate("HubConfig", { hubId: hubId, fromBudget: true });
   };
 
+  const styles = StyleSheet.create({
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.8)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContainer: {
+      borderWidth: 1,
+      padding: 20,
+      borderRadius: 16,
+      width: 288,
+      alignItems: "center",
+      backgroundColor: theme.card,
+      borderColor: theme.cardBorder,
+    },
+    modalTitle: {
+      fontWeight: "bold",
+      marginBottom: 8,
+      textAlign: "center",
+      color: theme.text,
+      fontSize: scaledSize(18),
+    },
+    modalBody: {
+      textAlign: "center",
+      marginBottom: 24,
+      lineHeight: 20,
+      color: theme.textSecondary,
+      fontSize: scaledSize(12),
+    },
+    buttonRow: { flexDirection: "row", gap: 10, width: "100%" },
+    modalCancelBtn: {
+      flex: 1,
+      height: 40,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: theme.cardBorder,
+    },
+    modalConfirmBtn: {
+      flex: 1,
+      height: 40,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalButtonText: {
+      fontWeight: "bold",
+      fontSize: scaledSize(12),
+      textTransform: "uppercase",
+    },
+  });
+
   if (loading) {
     return (
       <View
@@ -328,16 +382,16 @@ export default function BudgetDeviceListScreen() {
 
       <Modal transparent visible={showConfigModal} animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContainer, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Outlet Not Configured</Text>
-            <Text style={[styles.modalBody, { color: theme.textSecondary }]}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Outlet Not Configured</Text>
+            <Text style={styles.modalBody}>
               {selectedUnusedDevice?.name} is currently marked as{" "}
               <Text style={{ fontWeight: "bold", color: theme.text }}>Unused</Text>.
             </Text>
             <View style={styles.buttonRow}>
               <TouchableOpacity
                 onPress={() => setShowConfigModal(false)}
-                style={[styles.modalCancelBtn, { borderColor: theme.cardBorder }]}
+                style={styles.modalCancelBtn}
               >
                 <Text style={[styles.modalButtonText, { color: theme.text }]}>
                   Cancel
@@ -518,55 +572,3 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
     </TouchableOpacity>
   );
 }
-
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContainer: {
-    borderWidth: 1,
-    padding: 20,
-    borderRadius: 16,
-    width: 288,
-    alignItems: "center",
-    backgroundColor: "#fff",
-  },
-  modalTitle: {
-    fontWeight: "bold",
-    marginBottom: 8,
-    textAlign: "center",
-    fontSize: 18,
-  },
-  modalBody: {
-    textAlign: "center",
-    marginBottom: 24,
-    lineHeight: 20,
-    fontSize: 12,
-  },
-  buttonRow: { flexDirection: "row", gap: 10, width: "100%" },
-  modalCancelBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#ccc",
-  },
-  modalConfirmBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#00995e",
-  },
-  modalButtonText: {
-    fontWeight: "bold",
-    fontSize: 12,
-    textTransform: "uppercase",
-  },
-});

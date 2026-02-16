@@ -1015,6 +1015,8 @@ export default function BudgetManagerScreen() {
                 data={hub}
                 theme={theme}
                 primaryColor={primaryColor}
+                dangerColor={dangerColor}
+                warningColor={warningColor}
                 scaledSize={scaledSize}
                 now={now}
                 onPress={() =>
@@ -1329,9 +1331,13 @@ function StatItem({ label, value, icon, theme, scaledSize }) {
   );
 }
 
-function HubListItem({ data, theme, primaryColor, scaledSize, onPress, now }) {
+function HubListItem({ data, theme, primaryColor, dangerColor, warningColor, scaledSize, onPress, now }) {
   const usagePercent =
     data.limit > 0 ? Math.min((data.totalSpending / data.limit) * 100, 100) : 0;
+
+  let barColor = primaryColor;
+  if (usagePercent >= 90) barColor = dangerColor;
+  else if (usagePercent >= 75) barColor = warningColor;
 
   let isOnline = false;
   if (data.last_seen) {
@@ -1436,7 +1442,7 @@ function HubListItem({ data, theme, primaryColor, scaledSize, onPress, now }) {
             style={{
               width: `${usagePercent}%`,
               height: "100%",
-              backgroundColor: primaryColor,
+              backgroundColor: barColor,
             }}
           />
         </View>
