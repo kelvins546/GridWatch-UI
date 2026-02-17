@@ -39,6 +39,7 @@ export default function DeviceConfigScreen() {
     serial_number: "---",
     last_seen: null,
     current_firmware: "1.0.0",
+    current_voltage: 0,
   });
 
   const [now, setNow] = useState(Date.now());
@@ -133,9 +134,10 @@ export default function DeviceConfigScreen() {
       )
       .subscribe();
 
+    // UPDATED: Check 2x per second (500ms) for fast Traffic Light updates
     const timer = setInterval(() => {
       if (mounted) setNow(Date.now());
-    }, 1000);
+    }, 500);
 
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (
@@ -155,50 +157,74 @@ export default function DeviceConfigScreen() {
     };
   }, [hubId]);
 
-  let isOnline = false;
+  // --- TRAFFIC LIGHT STATUS LOGIC START ---
   let diffInSeconds = 0;
-
   if (hubData.last_seen) {
     let timeStr = hubData.last_seen.replace(" ", "T");
     if (!timeStr.endsWith("Z") && !timeStr.includes("+")) timeStr += "Z";
     const lastSeenMs = new Date(timeStr).getTime();
     if (!isNaN(lastSeenMs)) {
       diffInSeconds = (now - lastSeenMs) / 1000;
-      const threshold = isRefreshing ? 20 : 8;
-      isOnline = diffInSeconds < threshold && diffInSeconds > -5;
     }
   }
 
-  let statusDetailText = "Offline • Check Connection";
+  let statusDetailText = "Initializing...";
   let statusIcon = "wifi-off";
-  const iconColor = "#fff";
+  let statusColor = "#94a3b8"; // Grey default
+  let isDanger = false;
+  let isOnline = false;
 
-  if (!isOnline && !loading) {
-    let displayDiff = Math.max(1, diffInSeconds - 7);
+  let displayDiff = Math.max(0, diffInSeconds);
+
+  if (loading) {
+    statusDetailText = "Checking Status...";
+  }
+  // LOGIC 1: HARDWARE FAILURE (Voltage=0 check)
+  else if (hubData.current_voltage < 50 && diffInSeconds < 5) {
+    statusDetailText = "MAINS POWER FAILURE";
+    statusIcon = "flash-off";
+    statusColor = "#ef4444"; // Red
+    isDanger = true;
+    isOnline = false;
+  }
+  // LOGIC 2: ONLINE (Green) - < 3 seconds
+  else if (diffInSeconds < 3) {
+    statusDetailText = "Online • Stable";
+    statusIcon = "check-circle";
+    statusColor = "#22c55e"; // Green
+    isOnline = true;
+  }
+  // LOGIC 3: UNSTABLE WIFI (Yellow) - 3 to 6 seconds
+  else if (diffInSeconds < 6) {
+    statusDetailText = "Signal Unstable...";
+    statusIcon = "wifi";
+    statusColor = "#eab308"; // Yellow/Orange
+    isOnline = true; // Still considered online
+  }
+  // LOGIC 4: OFFLINE (Red) - > 6 seconds
+  else {
     let timeAgo = "";
     if (displayDiff < 60) timeAgo = `${Math.floor(displayDiff)}s ago`;
     else if (displayDiff < 3600)
       timeAgo = `${Math.floor(displayDiff / 60)}m ago`;
-    else if (displayDiff < 86400)
-      timeAgo = `${Math.floor(displayDiff / 3600)}h ago`;
-    else timeAgo = `${Math.floor(displayDiff / 86400)}d ago`;
-    statusDetailText = `Offline • Seen ${timeAgo}`;
+    else timeAgo = `${Math.floor(displayDiff / 3600)}h ago`;
+
+    statusDetailText = `OFFLINE (Power or WiFi) • ${timeAgo}`;
+    statusIcon = "cloud-off";
+    statusColor = "#ef4444"; // Red
+    isDanger = true;
+    isOnline = false;
   }
 
+  // Reboot Override
   if (isRestarting) {
     statusDetailText = "System Rebooting...";
     statusIcon = "hourglass-top";
-  } else if (isOnline) {
-    statusDetailText = "Online • Stable";
-    statusIcon = "router";
+    statusColor = "#3b82f6"; // Blue
   }
 
-  const gradientColors =
-    isOnline && !isRestarting
-      ? [theme.buttonPrimary, theme.background]
-      : isDarkMode
-        ? ["#2c3e50", theme.background]
-        : ["#94a3b8", theme.background];
+  const gradientColors = [statusColor, theme.background];
+  // --- TRAFFIC LIGHT STATUS LOGIC END ---
 
   const openModal = (type) => {
     let config = { visible: true, type, loading: false };
@@ -353,7 +379,7 @@ export default function DeviceConfigScreen() {
       justifyContent: "center",
       marginBottom: 10,
       borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.2)",
+      // Dynamic border color handled inline
       position: "relative",
     },
     heroTitle: {
@@ -480,20 +506,23 @@ export default function DeviceConfigScreen() {
         showsVerticalScrollIndicator={false}
       >
         <LinearGradient colors={gradientColors} style={styles.heroContainer}>
-          <View style={styles.heroIconContainer}>
+          {/* Updated Hero Icon to match Traffic Light Logic */}
+          <View
+            style={[styles.heroIconContainer, { borderColor: statusColor }]}
+          >
             <Animated.View
               style={{
                 position: "absolute",
                 width: "100%",
                 height: "100%",
                 borderRadius: 9999,
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.5)",
+                borderWidth: 2,
+                borderColor: statusColor,
                 transform: [{ scale: pulseScale }],
                 opacity: pulseOpacity,
               }}
             />
-            <MaterialIcons name={statusIcon} size={40} color={iconColor} />
+            <MaterialIcons name={statusIcon} size={40} color="#fff" />
           </View>
           <Text style={styles.heroTitle}>{hubName || "Hub"}</Text>
           <Text style={styles.heroSubtitle}>
@@ -502,7 +531,7 @@ export default function DeviceConfigScreen() {
         </LinearGradient>
 
         <View style={{ padding: 24 }}>
-          {}
+          {/* System Info */}
           <Text style={styles.sectionTitle}>System Information</Text>
           <View style={styles.card}>
             <InfoItem
@@ -550,7 +579,7 @@ export default function DeviceConfigScreen() {
             </View>
           </View>
 
-          {}
+          {/* Network Connection */}
           <Text style={styles.sectionTitle}>Network Connection</Text>
           <View
             style={[
@@ -617,7 +646,7 @@ export default function DeviceConfigScreen() {
             </TouchableOpacity>
           </View>
 
-          {}
+          {/* Outlet Configuration */}
           <Text style={styles.sectionTitle}>Outlet Configuration</Text>
           <TouchableOpacity
             style={[
@@ -687,7 +716,7 @@ export default function DeviceConfigScreen() {
             />
           </TouchableOpacity>
 
-          {}
+          {/* Advanced Actions */}
           <Text style={styles.sectionTitle}>Advanced Actions</Text>
           <TouchableOpacity
             activeOpacity={0.7}
@@ -749,7 +778,7 @@ export default function DeviceConfigScreen() {
         </View>
       </ScrollView>
 
-      {}
+      {/* Modal Overlay */}
       <Modal
         transparent
         visible={modalState.visible}
@@ -778,7 +807,7 @@ export default function DeviceConfigScreen() {
               <Text style={styles.modalMsg}>{modalState.msg}</Text>
 
               <View style={styles.modalBtnRow}>
-                {}
+                {/* Cancel Button */}
                 {(modalState.type === "restart" ||
                   modalState.type === "unpair" ||
                   modalState.type === "force_unpair" ||
@@ -793,7 +822,7 @@ export default function DeviceConfigScreen() {
                   </TouchableOpacity>
                 )}
 
-                {}
+                {/* Confirm Button */}
                 <TouchableOpacity
                   style={[
                     styles.modalBtn,

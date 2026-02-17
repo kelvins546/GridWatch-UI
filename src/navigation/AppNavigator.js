@@ -95,11 +95,11 @@ const getRefinedSecurityMessage = (title, body) => {
   }
 
   if (t.includes("accepted")) {
-    return { title: "Invite Accepted ✅", body: body };
+    return { title: "Invite Accepted", body: body };
   }
 
   if (t.includes("declined")) {
-    return { title: "Invite Declined ❌", body: body };
+    return { title: "Invite Declined", body: body };
   }
 
   return { title, body };
@@ -432,7 +432,7 @@ export default function AppNavigator() {
     const suppressed = await shouldSuppressNotification(title, body);
     if (suppressed && !silent) {
       silent = true;
-      console.log(`🔕 Suppressed notification by user settings: ${title}`);
+      console.log(`Suppressed notification by user settings: ${title}`);
     }
 
     notifiedIds.current.add(id);

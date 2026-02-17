@@ -48,6 +48,7 @@ export default function MyHubsScreen() {
   };
 
   useEffect(() => {
+    // Keep data fresh every 5s (Database sync)
     const autoRefreshInterval = setInterval(() => {
       fetchHubs();
     }, 5000);
@@ -102,7 +103,7 @@ export default function MyHubsScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
+      {/* Header */}
       <View
         className="flex-row items-center px-6 py-5 border-b"
         style={{
@@ -182,10 +183,15 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
+    // UPDATED: Check 2x per second (500ms) for fast Traffic Light updates
+    const t = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(t);
   }, []);
 
+  // --- TRAFFIC LIGHT LOGIC START ---
+  let statusText = "Offline";
+  let statusColor = "#ef4444"; // Red Default
+  let statusIcon = "wifi-off";
   let isOnline = false;
   let timeAgoText = "";
 
@@ -198,11 +204,30 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
     const lastSeenMs = new Date(timeStr).getTime();
     if (!isNaN(lastSeenMs)) {
       const diffSeconds = (now - lastSeenMs) / 1000;
+      const displayDiff = Math.max(0, diffSeconds);
 
-      isOnline = diffSeconds < 8 && diffSeconds > -5;
+      // LOGIC 1: ONLINE (Green) - < 3 seconds
+      if (diffSeconds < 3) {
+        statusText = "Online";
+        statusColor = "#22c55e"; // Green
+        statusIcon = "router";
+        isOnline = true;
+      }
+      // LOGIC 2: UNSTABLE (Yellow) - 3 to 6 seconds
+      else if (diffSeconds < 6) {
+        statusText = "Unstable";
+        statusColor = "#eab308"; // Yellow/Orange
+        statusIcon = "wifi";
+        isOnline = true; // Still reachable
+      }
+      // LOGIC 3: OFFLINE (Red) - > 6 seconds
+      else {
+        statusText = "Offline";
+        statusColor = "#ef4444"; // Red
+        statusIcon = "wifi-off";
+        isOnline = false;
 
-      if (!isOnline) {
-        let displayDiff = Math.max(1, diffSeconds - 7);
+        // Calculate time ago string
         if (displayDiff < 60) {
           timeAgoText = `${Math.floor(displayDiff)}s ago`;
         } else if (displayDiff < 3600) {
@@ -215,29 +240,31 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
       }
     }
   }
+  // --- TRAFFIC LIGHT LOGIC END ---
 
   const deviceCount = hub.devices ? hub.devices.length : 0;
 
-  const statusColor = isOnline ? theme.buttonPrimary : theme.textSecondary;
-  const cardBgColor = isOnline ? `${theme.buttonPrimary}1A` : theme.card;
-  const iconContainerBg = isOnline
-    ? `${theme.buttonPrimary}33`
-    : `${theme.textSecondary}1A`;
+  // Card Styles based on status
+  const cardBgColor = isOnline ? `${statusColor}0D` : theme.card; // Very faint bg if online
+  const borderColor = isOnline ? statusColor : theme.cardBorder;
+  const borderWidth = isOnline ? 1.5 : 1;
+  const iconContainerBg = `${statusColor}26`; // 15% opacity of status color
 
   return (
     <TouchableOpacity
       className="rounded-2xl p-4 mb-4 border relative"
       style={{
         backgroundColor: cardBgColor,
-        borderColor: isOnline ? theme.buttonPrimary : theme.cardBorder,
-        borderWidth: isOnline ? 1.5 : 1,
+        borderColor: borderColor,
+        borderWidth: borderWidth,
       }}
       activeOpacity={0.8}
       onPress={() =>
         navigation.navigate("DeviceConfig", {
           hubName: hub.name,
           hubId: hub.id,
-          status: isOnline ? "Online" : "Offline",
+          // Pass the calculated status to next screen
+          status: statusText,
         })
       }
     >
@@ -247,7 +274,7 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
           style={{ backgroundColor: iconContainerBg }}
         >
           <MaterialIcons
-            name={isOnline ? "router" : "wifi-off"}
+            name={statusIcon}
             size={scaledSize(24)}
             color={statusColor}
           />
@@ -257,7 +284,7 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
           <View
             className="px-2 py-1 rounded-md border mb-1"
             style={{
-              backgroundColor: isOnline ? theme.buttonPrimary : "transparent",
+              backgroundColor: isOnline ? statusColor : "transparent",
               borderColor: statusColor,
             }}
           >
@@ -268,7 +295,7 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
                 fontSize: scaledSize(10),
               }}
             >
-              {isOnline ? "Online" : "Offline"}
+              {statusText}
             </Text>
           </View>
 
@@ -305,9 +332,7 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
       <View
         className="flex-row border-t pt-3 mt-1"
         style={{
-          borderTopColor: isOnline
-            ? `${theme.buttonPrimary}33`
-            : theme.cardBorder,
+          borderTopColor: isOnline ? `${statusColor}33` : theme.cardBorder,
         }}
       >
         <StatCol
@@ -318,7 +343,9 @@ function HubCard({ hub, theme, scaledSize, navigation }) {
         />
         <StatCol
           label="Signal"
-          value={isOnline ? "Strong" : "None"}
+          value={
+            statusText === "Unstable" ? "Weak" : isOnline ? "Strong" : "None"
+          }
           color={theme.text}
           theme={theme}
           scaledSize={scaledSize}

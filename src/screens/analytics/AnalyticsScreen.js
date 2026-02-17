@@ -24,6 +24,15 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+// --- HELPER: Get Local YYYY-MM-DD String ---
+const getLocalDateString = (date) => {
+  const offset = date.getTimezoneOffset() * 60000;
+  const localISOTime = new Date(date.getTime() - offset)
+    .toISOString()
+    .slice(0, 10);
+  return localISOTime;
+};
+
 const getCategoryIcon = (name) => {
   const n = name.toLowerCase();
   if (n.includes("air") || n.includes("ac") || n.includes("conditioner"))
@@ -38,21 +47,22 @@ const getCategoryIcon = (name) => {
   if (n.includes("wash") || n.includes("laundry"))
     return "local-laundry-service";
   if (n.includes("light") || n.includes("lamp")) return "lightbulb";
-  if (n.includes("tool") || n.includes("drill")) return "handyman";
-  if (n.includes("garage")) return "garage";
   if (n.includes("computer") || n.includes("pc")) return "computer";
   return "bolt";
 };
 
 export default function AnalyticsScreen() {
   const navigation = useNavigation();
-  const { theme, fontScale } = useTheme();
+  const { theme, fontScale, isDarkMode } = useTheme();
   const scaledSize = (size) => size * fontScale;
 
   const [activeScope, setActiveScope] = useState("personal");
-  const [activeTab, setActiveTab] = useState("Week");
+  const [activeTab, setActiveTab] = useState("This Week");
   const [activeHubFilter, setActiveHubFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
+
+  // Time Travel State
+  const [dateOffset, setDateOffset] = useState(0);
 
   const [personalHubs, setPersonalHubs] = useState([]);
   const [sharedHubs, setSharedHubs] = useState([]);
@@ -60,19 +70,60 @@ export default function AnalyticsScreen() {
   const [totalValue, setTotalValue] = useState(0);
   const [chartBars, setChartBars] = useState([]);
   const [chartLabels, setChartLabels] = useState([]);
-  const [comparisonText, setComparisonText] = useState("");
-  const [comparisonTrend, setComparisonTrend] = useState("neutral"); // 'up', 'down', 'neutral'
+  const [dateRangeText, setDateRangeText] = useState("");
+
+  const faultLogs = [
+    {
+      id: 1,
+      type: "Limit",
+      device: "Air Conditioner",
+      msg: "Daily budget limit (₱150) reached. Auto-cutoff triggered.",
+      date: "Feb 16, 2026 • 14:30",
+      color: "#ffaa00",
+    },
+    {
+      id: 2,
+      type: "Fault",
+      device: "Washing Machine",
+      msg: "Short circuit detected on Outlet 2. Safe shutdown completed.",
+      date: "Feb 14, 2026 • 09:15",
+      color: "#ff4444",
+    },
+  ];
+
+  const getBarColor = (percent) => {
+    if (percent > 80) return isDarkMode ? "#ff4444" : "#cc0000"; // Red
+    if (percent > 50) return isDarkMode ? "#ffaa00" : "#ff9900"; // Yellow
+    return theme.buttonPrimary; // Green
+  };
+
+  const handleTabChange = (tab) => {
+    if (activeTab !== tab) {
+      setDateOffset(0);
+      setActiveTab(tab);
+    }
+  };
+
+  const handleDateNav = (direction) => {
+    setDateOffset((prev) => prev + direction);
+  };
+
+  const handleHubFilterChange = (hubId) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setActiveHubFilter(hubId);
+  };
 
   const fetchAnalytics = async () => {
     setIsLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. Fetch Hubs & Devices
       const { data: ownedHubs } = await supabase
         .from("hubs")
-        .select("id, name, devices(id, name)")
+        .select("id, name, devices(id, name, type)")
         .eq("user_id", user.id);
 
       const { data: sharedAccess } = await supabase
@@ -85,7 +136,7 @@ export default function AnalyticsScreen() {
         const sharedIds = sharedAccess.map((r) => r.hub_id);
         const { data: sharedData } = await supabase
           .from("hubs")
-          .select("id, name, devices(id, name)")
+          .select("id, name, devices(id, name, type)")
           .in("id", sharedIds);
         sharedHubsList = sharedData || [];
       }
@@ -93,135 +144,191 @@ export default function AnalyticsScreen() {
       setPersonalHubs(ownedHubs || []);
       setSharedHubs(sharedHubsList);
 
-      // 2. Filter Devices based on Scope & Filter
-      const targetHubs = activeScope === "personal" ? (ownedHubs || []) : sharedHubsList;
-      const filteredHubs = activeHubFilter === "all" 
-        ? targetHubs 
-        : targetHubs.filter(h => h.id === activeHubFilter);
-      
-      const deviceMap = {}; // id -> { name, hubName }
+      const targetHubs =
+        activeScope === "personal" ? ownedHubs || [] : sharedHubsList;
+      const filteredHubs =
+        activeHubFilter === "all"
+          ? targetHubs
+          : targetHubs.filter((h) => h.id === activeHubFilter);
+
       const allDeviceIds = [];
-      
-      filteredHubs.forEach(hub => {
-        hub.devices?.forEach(d => {
-          deviceMap[d.id] = { name: d.name, location: hub.name, hubId: hub.id };
-          allDeviceIds.push(d.id);
+      const deviceMap = {};
+
+      filteredHubs.forEach((hub) => {
+        hub.devices?.forEach((d) => {
+          if (d.type !== "Unused") {
+            deviceMap[d.id] = { name: d.name, location: hub.name };
+            allDeviceIds.push(d.id);
+          }
         });
       });
 
-      if (allDeviceIds.length === 0) {
-        setTotalValue(0);
-        setBreakdownData([]);
-        setChartBars([]);
-        setChartLabels([]);
-        setIsLoading(false);
-        return;
-      }
-
-      // 3. Determine Date Ranges
+      // --- DATE LOGIC ---
       const now = new Date();
       let startDate = new Date();
-      let prevStartDate = new Date();
+      let endDate = new Date();
       let labels = [];
       let buckets = [];
 
-      if (activeTab === "Day") {
+      if (activeTab === "This Day") {
+        startDate.setDate(now.getDate() + dateOffset);
         startDate.setHours(0, 0, 0, 0);
-        prevStartDate.setDate(startDate.getDate() - 1);
-        prevStartDate.setHours(0, 0, 0, 0);
-        labels = ["6a", "9a", "12p", "3p", "6p", "9p"];
-        buckets = new Array(6).fill(0); // Placeholder buckets
-      } else if (activeTab === "Week") {
-        startDate.setDate(now.getDate() - 6);
+
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 1);
+
+        setDateRangeText(
+          startDate.toLocaleDateString("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          }),
+        );
+
+        labels = ["12am", "4am", "8am", "12pm", "4pm", "8pm"];
+        buckets = new Array(6).fill(0);
+      } else if (activeTab === "This Week") {
+        const currentDay = now.getDay();
+        const diff = now.getDate() - currentDay + dateOffset * 7;
+        startDate.setDate(diff);
         startDate.setHours(0, 0, 0, 0);
-        prevStartDate.setDate(startDate.getDate() - 7);
-        prevStartDate.setHours(0, 0, 0, 0);
-        for (let i = 0; i < 7; i++) {
-          const d = new Date(startDate);
-          d.setDate(d.getDate() + i);
-          labels.push(d.toLocaleDateString("en-US", { weekday: "narrow" }));
-        }
+
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 7);
+
+        const endDisplay = new Date(endDate);
+        endDisplay.setDate(endDisplay.getDate() - 1);
+
+        const startStr = startDate.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+        const endStr = endDisplay.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+        const yearStr =
+          startDate.getFullYear() !== now.getFullYear()
+            ? `, ${startDate.getFullYear()}`
+            : "";
+
+        setDateRangeText(`${startStr} - ${endStr}${yearStr}`);
+        labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
         buckets = new Array(7).fill(0);
-      } else if (activeTab === "Month") {
-        startDate.setDate(now.getDate() - 29);
+      } else if (activeTab === "This Month") {
+        startDate.setMonth(now.getMonth() + dateOffset, 1);
         startDate.setHours(0, 0, 0, 0);
-        prevStartDate.setDate(startDate.getDate() - 30);
-        prevStartDate.setHours(0, 0, 0, 0);
-        labels = ["W1", "W2", "W3", "W4"];
-        buckets = new Array(4).fill(0);
+
+        endDate = new Date(startDate);
+        endDate.setMonth(startDate.getMonth() + 1);
+
+        setDateRangeText(
+          startDate.toLocaleDateString("en-US", {
+            month: "short",
+            year: "numeric",
+          }),
+        );
+        labels = ["W1", "W2", "W3", "W4", "W5"];
+        buckets = new Array(5).fill(0);
+      } else if (activeTab === "This Year") {
+        startDate.setFullYear(now.getFullYear() + dateOffset, 0, 1);
+        startDate.setHours(0, 0, 0, 0);
+
+        endDate = new Date(startDate);
+        endDate.setFullYear(startDate.getFullYear() + 1);
+
+        setDateRangeText(startDate.getFullYear().toString());
+        labels = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
+        buckets = new Array(12).fill(0);
       }
 
-      // 4. Fetch Usage Data
-      const { data: usageData } = await supabase
-        .from("usage_analytics")
-        .select("device_id, cost_incurred, date")
-        .in("device_id", allDeviceIds)
-        .gte("date", prevStartDate.toISOString().split('T')[0]);
+      // --- FETCH DATA ---
+      const startStr = getLocalDateString(startDate);
+      const endStr = getLocalDateString(endDate);
 
-      // 5. Process Data
+      let usageData = [];
+      if (allDeviceIds.length > 0) {
+        const { data } = await supabase
+          .from("usage_analytics")
+          .select("device_id, cost_incurred, date")
+          .in("device_id", allDeviceIds)
+          .gte("date", startStr)
+          .lt("date", endStr);
+        usageData = data || [];
+      }
+
       let currentTotal = 0;
-      let prevTotal = 0;
       const deviceTotals = {};
 
-      usageData?.forEach(row => {
-        const rowDate = new Date(row.date);
+      usageData.forEach((row) => {
         const cost = row.cost_incurred || 0;
+        currentTotal += cost;
+        deviceTotals[row.device_id] = (deviceTotals[row.device_id] || 0) + cost;
 
-        if (rowDate >= startDate) {
-          currentTotal += cost;
-          deviceTotals[row.device_id] = (deviceTotals[row.device_id] || 0) + cost;
+        const rowDate = new Date(row.date);
 
-          // Chart Bucketing
-          if (activeTab === "Week") {
-            const dayDiff = Math.floor((rowDate - startDate) / (1000 * 60 * 60 * 24));
-            if (dayDiff >= 0 && dayDiff < 7) buckets[dayDiff] += cost;
-          } else if (activeTab === "Month") {
-            const dayDiff = Math.floor((rowDate - startDate) / (1000 * 60 * 60 * 24));
-            const weekIdx = Math.floor(dayDiff / 7);
-            if (weekIdx >= 0 && weekIdx < 4) buckets[weekIdx] += cost;
-          } else if (activeTab === "Day") {
-             // Distribute evenly for visual placeholder since we lack hourly data
-             const bucketIdx = Math.floor(Math.random() * 6); 
-             buckets[bucketIdx] += (cost / 2); // Just visual noise
+        if (activeTab === "This Week") {
+          const dayIndex = rowDate.getDay();
+          if (buckets[dayIndex] !== undefined) buckets[dayIndex] += cost;
+        } else if (activeTab === "This Month") {
+          const dayOfMonth = rowDate.getDate();
+          const weekIdx = Math.min(Math.floor((dayOfMonth - 1) / 7), 4);
+          if (buckets[weekIdx] !== undefined) buckets[weekIdx] += cost;
+        } else if (activeTab === "This Year") {
+          const monthIdx = rowDate.getMonth();
+          if (buckets[monthIdx] !== undefined) buckets[monthIdx] += cost;
+        } else if (activeTab === "This Day") {
+          const currentHour = new Date().getHours();
+          let passedBucketsCount = 0;
+          if (currentHour >= 0) passedBucketsCount = 1;
+          if (currentHour >= 4) passedBucketsCount = 2;
+          if (currentHour >= 8) passedBucketsCount = 3;
+          if (currentHour >= 12) passedBucketsCount = 4;
+          if (currentHour >= 16) passedBucketsCount = 5;
+          if (currentHour >= 20) passedBucketsCount = 6;
+
+          if (passedBucketsCount > 0) {
+            const slice = cost / passedBucketsCount;
+            for (let i = 0; i < passedBucketsCount; i++) {
+              buckets[i] += slice;
+            }
           }
-        } else if (rowDate >= prevStartDate) {
-          prevTotal += cost;
         }
       });
 
-      // Normalize Chart Bars (0-100 scale)
       const maxVal = Math.max(...buckets, 1);
-      const normalizedBars = buckets.map(v => (v / maxVal) * 100);
-
-      // Breakdown List
-      const breakdown = Object.keys(deviceTotals)
-        .map(id => ({
-          name: deviceMap[id]?.name || "Unknown Device",
-          location: deviceMap[id]?.location || "Unknown Hub",
-          cost: deviceTotals[id],
-          percent: currentTotal > 0 ? `${Math.round((deviceTotals[id] / currentTotal) * 100)}%` : "0%"
-        }))
-        .sort((a, b) => b.cost - a.cost);
-
-      // Comparison Text
-      let diffPercent = 0;
-      if (prevTotal > 0) {
-        diffPercent = ((currentTotal - prevTotal) / prevTotal) * 100;
-      } else if (currentTotal > 0) {
-        diffPercent = 100;
-      }
-      
-      setTotalValue(currentTotal);
-      setBreakdownData(breakdown);
-      setChartBars(normalizedBars);
+      setChartBars(buckets.map((v) => (v / maxVal) * 100));
       setChartLabels(labels);
-      
-      const trend = diffPercent > 0 ? "up" : diffPercent < 0 ? "down" : "neutral";
-      setComparisonTrend(trend);
-      setComparisonText(`${Math.abs(diffPercent).toFixed(0)}% ${diffPercent >= 0 ? "more" : "less"} vs last ${activeTab.toLowerCase()}`);
-
+      setTotalValue(currentTotal);
+      setBreakdownData(
+        Object.keys(deviceTotals)
+          .map((id) => ({
+            name: deviceMap[id].name,
+            location: deviceMap[id].location,
+            cost: deviceTotals[id],
+            percent:
+              currentTotal > 0
+                ? `${Math.round((deviceTotals[id] / currentTotal) * 100)}%`
+                : "0%",
+          }))
+          .sort((a, b) => b.cost - a.cost),
+      );
     } catch (err) {
-      console.error("Analytics Error:", err);
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
@@ -230,33 +337,11 @@ export default function AnalyticsScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchAnalytics();
-    }, [activeScope, activeTab, activeHubFilter])
+    }, [activeScope, activeTab, activeHubFilter, dateOffset]),
   );
 
-  const handleScopeChange = (scope) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setActiveScope(scope);
-    setActiveHubFilter("all");
-  };
-
-  const handleFilterChange = (id) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setActiveHubFilter(id);
-  };
-
-  const currentHubList = activeScope === "personal" ? personalHubs : sharedHubs;
-
-  if (isLoading && totalValue === 0) {
-    return (
-      <View style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={theme.buttonPrimary} />
-        <Text style={{ marginTop: 12, color: theme.textSecondary }}>Loading Analytics...</Text>
-      </View>
-    );
-  }
-
-  const trendColor = comparisonTrend === "up" ? "#ff4444" : "#22c55e"; // Red if spending went up, Green if down
-  const trendIcon = comparisonTrend === "up" ? "trending-up" : comparisonTrend === "down" ? "trending-down" : "remove";
+  // --- NEW: Source Hubs for Filter ---
+  const sourceHubs = activeScope === "personal" ? personalHubs : sharedHubs;
 
   return (
     <SafeAreaView
@@ -268,16 +353,7 @@ export default function AnalyticsScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: 24,
-          paddingVertical: 16,
-        }}
-      >
+      <View style={styles.header}>
         <Text
           style={{
             fontSize: scaledSize(20),
@@ -287,66 +363,39 @@ export default function AnalyticsScreen() {
         >
           Analytics
         </Text>
-
-        {}
         <View
-          style={{
-            flexDirection: "row",
-            backgroundColor: theme.buttonNeutral,
-            borderRadius: 20,
-            padding: 4,
-          }}
+          style={[
+            styles.scopeToggle,
+            { backgroundColor: isDarkMode ? theme.buttonNeutral : "#f0f0f0" },
+          ]}
         >
-          <TouchableOpacity
-            onPress={() => handleScopeChange("personal")}
-            style={{
-              paddingVertical: 6,
-              paddingHorizontal: 16,
-              borderRadius: 16,
-              backgroundColor:
-                activeScope === "personal" ? theme.card : "transparent",
-              shadowColor: activeScope === "personal" ? "#000" : "transparent",
-              shadowOpacity: activeScope === "personal" ? 0.1 : 0,
-              shadowRadius: 2,
-              elevation: activeScope === "personal" ? 2 : 0,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: scaledSize(12),
-                fontWeight: "600",
-                color:
-                  activeScope === "personal" ? theme.text : theme.textSecondary,
+          {["personal", "shared"].map((s) => (
+            <TouchableOpacity
+              key={s}
+              onPress={() => {
+                LayoutAnimation.easeInEaseOut();
+                setActiveScope(s);
+                setActiveHubFilter("all");
               }}
+              style={[
+                styles.scopeBtn,
+                activeScope === s && {
+                  backgroundColor: theme.card,
+                  elevation: 2,
+                },
+              ]}
             >
-              Personal
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleScopeChange("shared")}
-            style={{
-              paddingVertical: 6,
-              paddingHorizontal: 16,
-              borderRadius: 16,
-              backgroundColor:
-                activeScope === "shared" ? theme.card : "transparent",
-              shadowColor: activeScope === "shared" ? "#000" : "transparent",
-              shadowOpacity: activeScope === "shared" ? 0.1 : 0,
-              shadowRadius: 2,
-              elevation: activeScope === "shared" ? 2 : 0,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: scaledSize(12),
-                fontWeight: "600",
-                color:
-                  activeScope === "shared" ? theme.text : theme.textSecondary,
-              }}
-            >
-              Shared
-            </Text>
-          </TouchableOpacity>
+              <Text
+                style={{
+                  fontSize: scaledSize(12),
+                  fontWeight: "600",
+                  color: activeScope === s ? theme.text : theme.textSecondary,
+                }}
+              >
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
 
@@ -354,203 +403,15 @@ export default function AnalyticsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
-        {}
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "center",
-            marginTop: 8,
-            marginBottom: 24,
-            gap: 24,
-          }}
-        >
-          {["Day", "Week", "Month"].map((tab) => {
-            const isActive = activeTab === tab;
-            return (
-              <TouchableOpacity
-                key={tab}
-                onPress={() => setActiveTab(tab)}
-                style={{
-                  borderBottomWidth: 2,
-                  borderBottomColor: isActive
-                    ? theme.buttonPrimary
-                    : "transparent",
-                  paddingBottom: 4,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: scaledSize(14),
-                    fontWeight: isActive ? "700" : "500",
-                    color: isActive ? theme.buttonPrimary : theme.textSecondary,
-                  }}
-                >
-                  {tab}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {}
-        <View style={{ alignItems: "center", marginBottom: 32 }}>
-          <Text
-            style={{
-              fontSize: scaledSize(12),
-              color: theme.textSecondary,
-              textTransform: "uppercase",
-              letterSpacing: 1,
-              marginBottom: 4,
-            }}
-          >
-            Total Expenditure
-          </Text>
-          <Text
-            style={{
-              fontSize: scaledSize(40),
-              fontWeight: "bold",
-              color: theme.text,
-            }}
-          >
-            ₱
-            {totalValue.toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
-          </Text>
-          {}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              marginTop: 8,
-              backgroundColor: `${trendColor}20`,
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-              borderRadius: 8,
-            }}
-          >
-            <MaterialIcons name={trendIcon} size={14} color={trendColor} />
-            <Text
-              style={{
-                color: trendColor,
-                fontSize: scaledSize(12),
-                fontWeight: "600",
-                marginLeft: 4,
-              }}
-            >
-              {comparisonText}
-            </Text>
-          </View>
-        </View>
-
-        {}
-        <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
-          <View
-            style={{
-              height: 180,
-              flexDirection: "row",
-              alignItems: "flex-end",
-              justifyContent: "space-between",
-              paddingTop: 20,
-            }}
-          >
-            {}
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { justifyContent: "space-between", paddingBottom: 20 },
-              ]}
-            >
-              <View
-                style={{
-                  borderTopWidth: 1,
-                  borderTopColor: theme.cardBorder,
-                  borderStyle: "dashed",
-                  opacity: 0.5,
-                }}
-              />
-              <View
-                style={{
-                  borderTopWidth: 1,
-                  borderTopColor: theme.cardBorder,
-                  borderStyle: "dashed",
-                  opacity: 0.5,
-                }}
-              />
-              <View
-                style={{
-                  borderTopWidth: 1,
-                  borderTopColor: theme.cardBorder,
-                  borderStyle: "dashed",
-                  opacity: 0.5,
-                }}
-              />
-              {}
-              <View
-                style={{
-                  borderBottomWidth: 1,
-                  borderBottomColor: theme.textSecondary,
-                  opacity: 0.2,
-                }}
-              />
-            </View>
-
-            {}
-            {chartBars.map((height, idx) => (
-              <View
-                key={idx}
-                style={{
-                  width: `${100 / chartBars.length}%`,
-                  alignItems: "center",
-                  zIndex: 1,
-                }}
-              >
-                <View
-                  style={{
-                    width: 8,
-                    borderTopLeftRadius: 4,
-                    borderTopRightRadius: 4,
-                    height: `${height}%`,
-                    backgroundColor:
-                      height > 80 ? theme.buttonPrimary : theme.buttonNeutral,
-                    opacity: height > 80 ? 1 : 0.6,
-                  }}
-                />
-                <Text
-                  style={{
-                    marginTop: 8,
-                    fontSize: scaledSize(10),
-                    color: theme.textSecondary,
-                    fontWeight: "600",
-                  }}
-                >
-                  {chartLabels[idx]}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {}
-        <View style={{ paddingLeft: 24, marginBottom: 24 }}>
-          <Text
-            style={{
-              fontSize: scaledSize(13),
-              fontWeight: "600",
-              color: theme.text,
-              marginBottom: 10,
-            }}
-          >
-            Filter by Hub
-          </Text>
+        {/* --- ADDED: HUB FILTER UI --- */}
+        <View style={{ marginBottom: 20 }}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingRight: 24 }}
+            contentContainerStyle={{ paddingHorizontal: 24 }}
           >
             <TouchableOpacity
-              onPress={() => handleFilterChange("all")}
+              onPress={() => handleHubFilterChange("all")}
               style={{
                 paddingHorizontal: 16,
                 paddingVertical: 8,
@@ -573,11 +434,10 @@ export default function AnalyticsScreen() {
                 All
               </Text>
             </TouchableOpacity>
-
-            {currentHubList.map((hub) => (
+            {sourceHubs.map((hub) => (
               <TouchableOpacity
                 key={hub.id}
-                onPress={() => handleFilterChange(hub.id)}
+                onPress={() => handleHubFilterChange(hub.id)}
                 style={{
                   paddingHorizontal: 16,
                   paddingVertical: 8,
@@ -606,100 +466,292 @@ export default function AnalyticsScreen() {
           </ScrollView>
         </View>
 
-        {}
-        <View style={{ paddingHorizontal: 24 }}>
-          <Text
-            style={{
-              fontSize: scaledSize(13),
-              fontWeight: "600",
-              color: theme.text,
-              marginBottom: 12,
-            }}
-          >
-            Breakdown
-          </Text>
-
-          {breakdownData.length > 0 ? (
-            breakdownData.map((item, index) => (
-              <View
-                key={index}
+        <View style={styles.timeTabs}>
+          {["This Day", "This Week", "This Month", "This Year"].map((t) => (
+            <TouchableOpacity
+              key={t}
+              onPress={() => handleTabChange(t)}
+              style={[
+                styles.tab,
+                activeTab === t && { borderBottomColor: theme.buttonPrimary },
+              ]}
+            >
+              <Text
                 style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: 16,
+                  color:
+                    activeTab === t ? theme.buttonPrimary : theme.textSecondary,
+                  fontWeight: activeTab === t ? "bold" : "500",
                 }}
               >
-                {}
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: 12,
-                    backgroundColor: `${theme.buttonPrimary}15`,
-                  }}
-                >
-                  <MaterialIcons
-                    name={getCategoryIcon(item.name)}
-                    size={20}
-                    color={theme.buttonPrimary}
-                  />
-                </View>
+                {t.replace("This ", "")}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-                {}
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: scaledSize(14),
-                      fontWeight: "600",
-                      color: theme.text,
-                    }}
-                  >
-                    {item.name}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: scaledSize(12),
-                      color: theme.textSecondary,
-                    }}
-                  >
-                    {item.location}
-                  </Text>
-                </View>
+        <View style={styles.totalContainer}>
+          <View style={styles.dateNavRow}>
+            <TouchableOpacity
+              onPress={() => handleDateNav(-1)}
+              style={styles.navArrow}
+            >
+              <MaterialIcons
+                name="chevron-left"
+                size={24}
+                color={theme.textSecondary}
+              />
+            </TouchableOpacity>
 
-                {}
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text
-                    style={{
-                      fontSize: scaledSize(14),
-                      fontWeight: "bold",
-                      color: theme.text,
-                    }}
-                  >
-                    ₱{item.cost.toFixed(0)}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: scaledSize(11),
-                      color: theme.textSecondary,
-                    }}
-                  >
-                    {item.percent}
-                  </Text>
-                </View>
-              </View>
-            ))
-          ) : (
-            <View style={{ alignItems: "center", paddingVertical: 40 }}>
-              <Text style={{ color: theme.textSecondary }}>
-                No data available for this filter.
+            <Text
+              style={[
+                styles.subLabel,
+                { color: theme.textSecondary, marginTop: 4 },
+              ]}
+            >
+              {dateRangeText}
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => handleDateNav(1)}
+              style={styles.navArrow}
+            >
+              <MaterialIcons
+                name="chevron-right"
+                size={24}
+                color={theme.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[styles.totalText, { color: theme.text }]}>
+            ₱
+            {totalValue.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </Text>
+          <Text
+            style={[
+              styles.subLabel,
+              { marginTop: 4, color: theme.textSecondary },
+            ]}
+          >
+            Total Spending
+          </Text>
+        </View>
+
+        <View style={styles.chartContainer}>
+          <View style={styles.gridLinesContainer}>
+            <View
+              style={[styles.gridLine, { backgroundColor: theme.cardBorder }]}
+            />
+            <View
+              style={[styles.gridLine, { backgroundColor: theme.cardBorder }]}
+            />
+            <View
+              style={[styles.gridLine, { backgroundColor: theme.cardBorder }]}
+            />
+          </View>
+
+          {chartBars.map((height, idx) => (
+            <View
+              key={idx}
+              style={[
+                styles.chartColumn,
+                { width: `${100 / chartBars.length}%` },
+              ]}
+            >
+              <View
+                style={[
+                  styles.chartBar,
+                  {
+                    height: `${height}%`,
+                    backgroundColor: getBarColor(height),
+                  },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.chartLabelText,
+                  {
+                    color: theme.textSecondary,
+                    fontSize: activeTab === "This Year" ? 9 : 10,
+                  },
+                ]}
+              >
+                {chartLabels[idx]}
               </Text>
             </View>
-          )}
+          ))}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            Breakdown
+          </Text>
+          {breakdownData.map((item, i) => (
+            <View key={i} style={styles.breakdownItem}>
+              <View
+                style={[
+                  styles.iconBox,
+                  { backgroundColor: `${theme.buttonPrimary}15` },
+                ]}
+              >
+                <MaterialIcons
+                  name={getCategoryIcon(item.name)}
+                  size={24}
+                  color={theme.buttonPrimary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: "600", color: theme.text }}>
+                  {item.name}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: scaledSize(12),
+                    color: theme.textSecondary,
+                  }}
+                >
+                  {item.location}
+                </Text>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text
+                  style={{
+                    fontSize: scaledSize(14),
+                    fontWeight: "bold",
+                    color: theme.text,
+                  }}
+                >
+                  ₱{item.cost.toFixed(2)}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: scaledSize(11),
+                    color: theme.textSecondary,
+                  }}
+                >
+                  {item.percent}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            Limit & Fault Events
+          </Text>
+          {faultLogs.map((log) => (
+            <View
+              key={log.id}
+              style={[
+                styles.logCard,
+                { backgroundColor: theme.card, borderColor: theme.cardBorder },
+              ]}
+            >
+              <View
+                style={[styles.logIndicator, { backgroundColor: log.color }]}
+              />
+              <View style={{ flex: 1, paddingLeft: 12 }}>
+                <Text
+                  style={{
+                    color: theme.text,
+                    fontWeight: "bold",
+                    fontSize: 13,
+                  }}
+                >
+                  {log.device} - {log.type}
+                </Text>
+                <Text style={{ color: theme.textSecondary, fontSize: 11 }}>
+                  {log.msg}
+                </Text>
+                <Text
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: 10,
+                    marginTop: 4,
+                  }}
+                >
+                  {log.date}
+                </Text>
+              </View>
+            </View>
+          ))}
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 24,
+  },
+  scopeToggle: { flexDirection: "row", borderRadius: 20, padding: 4 },
+  scopeBtn: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16 },
+  timeTabs: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 30,
+    marginBottom: 20,
+  },
+  tab: {
+    paddingBottom: 5,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  totalContainer: { alignItems: "center", marginBottom: 30 },
+  dateNavRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
+  navArrow: { padding: 8 },
+  subLabel: { textTransform: "uppercase", fontSize: 10, letterSpacing: 1 },
+  totalText: { fontSize: 36, fontWeight: "bold" },
+  chartContainer: {
+    height: 150,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: 24,
+    marginBottom: 40,
+    justifyContent: "space-between",
+  },
+  gridLinesContainer: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    left: 24,
+    justifyContent: "space-between",
+    paddingBottom: 20,
+  },
+  gridLine: { width: "100%", height: 1 },
+  chartColumn: { alignItems: "center", zIndex: 1 },
+  chartBar: { width: 10, borderRadius: 5, marginBottom: 8, zIndex: 1 },
+  chartLabelText: { fontSize: 10 },
+  section: { paddingHorizontal: 24, marginBottom: 30 },
+  sectionTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 15 },
+  breakdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  iconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 15,
+  },
+  logCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+  },
+  logIndicator: { width: 4, height: "100%", borderRadius: 2 },
+});

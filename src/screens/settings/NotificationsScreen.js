@@ -24,6 +24,34 @@ export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // --- STATIC SIMULATION DATA (Faults/Limits) ---
+  const SIMULATED_FAULTS = [
+    {
+      id: "sim-1",
+      title: "Daily Limit Reached",
+      body: "Air Conditioner reached daily budget limit (₱150). Auto-cutoff triggered.",
+      type: "budget", // Maps to orange color
+      created_at: "2026-02-16T14:30:00", // ISO format for sorting
+      is_read: true,
+    },
+    {
+      id: "sim-2",
+      title: "Critical Fault Detected",
+      body: "Short circuit detected on Washing Machine (Outlet 2). Safe shutdown completed.",
+      type: "critical", // Maps to red color
+      created_at: "2026-02-14T09:15:00",
+      is_read: true,
+    },
+    {
+      id: "sim-3",
+      title: "Monthly Allocation Alert",
+      body: "Smart TV has consumed 90% of its monthly budget.",
+      type: "budget",
+      created_at: "2026-02-12T18:45:00",
+      is_read: true,
+    },
+  ];
+
   const normalizeData = (item, source) => {
     let title, body, category, type, icon, dateObj, isRead;
 
@@ -35,7 +63,18 @@ export default function NotificationsScreen() {
       icon = "person-add";
       dateObj = new Date(item.created_at);
       isRead = false;
+    } else if (source === "simulation") {
+      // Handle Simulated Faults
+      title = item.title;
+      body = item.body;
+      category = "system";
+      type = item.type;
+      icon =
+        item.type === "critical" ? "error-outline" : "account-balance-wallet";
+      dateObj = new Date(item.created_at);
+      isRead = item.is_read;
     } else {
+      // Handle Supabase Notifications
       title = item.title;
       body = item.body;
       isRead = item.is_read;
@@ -137,7 +176,12 @@ export default function NotificationsScreen() {
       const parsedNotifs = notifs.map((n) => normalizeData(n, "notification"));
       const parsedInvites = invites.map((i) => normalizeData(i, "invite"));
 
-      const combined = [...parsedNotifs, ...parsedInvites].sort(
+      // --- INTEGRATE SIMULATION DATA ---
+      const parsedSims = SIMULATED_FAULTS.map((s) =>
+        normalizeData(s, "simulation"),
+      );
+
+      const combined = [...parsedNotifs, ...parsedInvites, ...parsedSims].sort(
         (a, b) => b.rawDate - a.rawDate,
       );
 
@@ -207,6 +251,7 @@ export default function NotificationsScreen() {
   }, []);
 
   const handleMarkAllRead = async () => {
+    // Only mark real notifications as read in state, keep simulation as is or mark read locally
     setNotifications(notifications.map((n) => ({ ...n, unread: false })));
     try {
       const {
@@ -236,7 +281,7 @@ export default function NotificationsScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
+      {/* Header */}
       <View
         style={{
           flexDirection: "row",
@@ -292,7 +337,7 @@ export default function NotificationsScreen() {
         </TouchableOpacity>
       </View>
 
-      {}
+      {/* Tabs */}
       <View style={styles.tabContainer}>
         <TabButton
           label="System Logs"

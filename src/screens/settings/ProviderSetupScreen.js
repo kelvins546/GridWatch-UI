@@ -232,7 +232,7 @@ export default function ProviderSetupScreen() {
 
     const val = parseFloat(cleaned);
     if (cleaned !== "" && !isNaN(val)) {
-      if (val > 50) setRealtimeError("Max rate is ₱50.00");
+      if (val > 1000) setRealtimeError("Max rate is ₱1000.00");
       else setRealtimeError(null);
     } else {
       setRealtimeError(null);
@@ -245,9 +245,14 @@ export default function ProviderSetupScreen() {
 
     if (selectedId === "manual") {
       const rateValue = parseFloat(customRate);
-      if (!customRate || isNaN(rateValue) || rateValue <= 0 || rateValue > 50) {
+      if (
+        !customRate ||
+        isNaN(rateValue) ||
+        rateValue <= 0 ||
+        rateValue > 1000
+      ) {
         setErrorMessage(
-          "Please enter a valid rate between ₱ 0.01 and ₱ 50.00.",
+          "Please enter a valid rate between ₱ 0.01 and ₱ 1000.00.",
         );
         setErrorModalVisible(true);
         return;

@@ -182,9 +182,12 @@ export default function DeviceControlScreen() {
   const [electricityRate, setElectricityRate] = useState(12);
   const [providerName, setProviderName] = useState(null);
 
+  // DB Data (Confirmed History)
   const [dbRuntimeMinutes, setDbRuntimeMinutes] = useState(0);
-  const [sessionMinutes, setSessionMinutes] = useState(0);
-  const [todayCost, setTodayCost] = useState(0);
+  const [dbCost, setDbCost] = useState(0);
+
+  // Persistence Data (To bridge the gap between DB updates)
+  const [lastLogTime, setLastLogTime] = useState(Date.now());
 
   const [deviceId, setDeviceId] = useState(paramDeviceId);
   const [hubId, setHubId] = useState(null);
@@ -212,33 +215,50 @@ export default function DeviceControlScreen() {
 
   const lastTriggeredRef = useRef(null);
 
-  const checkHubOnline = () => {
-    if (!hubLastSeen) return false;
+  // --- TRAFFIC LIGHT LOGIC ---
+  let diffInSeconds = 0;
+  if (hubLastSeen) {
     let timeStr = hubLastSeen.replace(" ", "T");
     if (!timeStr.endsWith("Z") && !timeStr.includes("+")) timeStr += "Z";
     const lastSeenMs = new Date(timeStr).getTime();
-    if (isNaN(lastSeenMs)) return false;
-    const diffInSeconds = (now - lastSeenMs) / 1000;
-    return diffInSeconds < 15;
-  };
+    if (!isNaN(lastSeenMs)) {
+      diffInSeconds = (now - lastSeenMs) / 1000;
+    }
+  }
 
-  const isHubOnline = checkHubOnline();
-  const displayWatts = isHubOnline ? currentWatts : 0;
+  const isHubOnline = diffInSeconds < 6;
+  const isUnstable = isHubOnline && diffInSeconds >= 3;
+
+  // VISUAL MASK: Hide sensor noise when OFF
+  const displayWatts = isHubOnline && isPowered ? currentWatts : 0;
   const displayVolts = isHubOnline ? `${currentVoltage.toFixed(1)} V` : "0 V";
+
+  // --- FIX: PERSISTENT LIVE CALCULATION ---
+  // Calculates gap between "Now" and "Last DB Save"
+  // If lastLogTime is 5 mins ago, this adds those 5 mins to the display.
+  // This works even if you close the app and re-open it.
+  const secondsSinceSync = Math.max(0, (now - lastLogTime) / 1000);
+
+  // Only add live estimation if powered ON and Online
+  // Guard clause: Don't add if gap is ridiculously large (> 24 hours) as that means stale data
+  const liveSessionSeconds =
+    isPowered && isHubOnline && secondsSinceSync < 86400 ? secondsSinceSync : 0;
+
+  const sessionKwh = (displayWatts / 1000) * (liveSessionSeconds / 3600);
+  const sessionCost = sessionKwh * electricityRate;
+
+  const displayTotalCost = dbCost + sessionCost;
+  const totalDisplayMinutes = dbRuntimeMinutes + liveSessionSeconds / 60;
 
   const estCostPerHour = (displayWatts / 1000) * electricityRate;
 
+  // --- UI TIMER (Updates 'now' every second) ---
   useEffect(() => {
-    let interval;
-    if (isPowered) {
-      interval = setInterval(() => {
-        setSessionMinutes((prev) => prev + 1 / 60);
-      }, 1000);
-    } else {
-      setSessionMinutes(0);
-    }
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
     return () => clearInterval(interval);
-  }, [isPowered]);
+  }, []);
 
   const pulseAnim = useRef(new Animated.Value(0)).current;
 
@@ -278,7 +298,6 @@ export default function DeviceControlScreen() {
 
     try {
       let targetId = deviceId;
-
       const selectQuery = `
         *,
         hubs(id, last_seen, current_voltage),
@@ -299,14 +318,12 @@ export default function DeviceControlScreen() {
           data: { user },
         } = await supabase.auth.getUser();
         if (!user) return;
-
         const response = await supabase
           .from("devices")
           .select(selectQuery)
           .eq("user_id", user.id)
           .eq("name", deviceName)
           .single();
-
         data = response.data;
         error = response.error;
       } else {
@@ -315,7 +332,6 @@ export default function DeviceControlScreen() {
           .select(selectQuery)
           .eq("id", targetId)
           .single();
-
         data = response.data;
         error = response.error;
       }
@@ -325,7 +341,9 @@ export default function DeviceControlScreen() {
       if (data) {
         if (!targetId) setDeviceId(data.id);
 
-        setIsPowered(checkIsOn(data.status));
+        const isOn = checkIsOn(data.status);
+        setIsPowered(isOn);
+
         setCurrentWatts(data.current_power_watts || 0);
         setHubId(data.hub_id);
         setHubLastSeen(data.hubs?.last_seen);
@@ -355,6 +373,7 @@ export default function DeviceControlScreen() {
         const day = String(dateNow.getDate()).padStart(2, "0");
         const todayStr = `${year}-${month}-${day}`;
 
+        // 1. Get Totals
         const { data: usageData, error: usageError } = await supabase
           .from("usage_analytics")
           .select("duration_minutes, cost_incurred")
@@ -370,12 +389,27 @@ export default function DeviceControlScreen() {
             (sum, item) => sum + (item.cost_incurred || 0),
             0,
           );
-
           setDbRuntimeMinutes(totalMins);
-          setTodayCost(totalCostVal);
+          setDbCost(totalCostVal);
+        }
+
+        // 2. CRITICAL FIX: Only grab logs from TODAY to prevent 138-hour bug
+        const { data: lastLog } = await supabase
+          .from("usage_analytics")
+          .select("created_at")
+          .eq("device_id", data.id)
+          .eq("date", todayStr) // <--- THIS FIXES THE 2800 PESO BUG
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (lastLog) {
+          setLastLogTime(new Date(lastLog.created_at).getTime());
+        } else {
+          // If no logs today, start counting from NOW
+          setLastLogTime(Date.now());
         }
       }
-
       setNow(Date.now());
     } catch (error) {
       console.log("Error fetching device:", error.message);
@@ -395,7 +429,6 @@ export default function DeviceControlScreen() {
         .order("time", { ascending: true });
 
       if (error) throw error;
-
       if (data) {
         const formatted = data.map((s) => ({
           id: s.id,
@@ -432,11 +465,15 @@ export default function DeviceControlScreen() {
 
   const getRuntimeString = () => {
     if (!isHubOnline) return "---";
-    const totalMinutes = dbRuntimeMinutes + sessionMinutes;
-    if (totalMinutes < 1 && isPowered) return "< 1m Today";
-    if (totalMinutes < 1) return "0m Today";
-    const h = Math.floor(totalMinutes / 60);
-    const m = Math.floor(totalMinutes % 60);
+
+    // Use the Calculated Total Minutes (DB + Local Session)
+    const totalMins = totalDisplayMinutes;
+
+    if (totalMins < 1 && isPowered) return "< 1m Today";
+    if (totalMins < 1) return "0m Today";
+
+    const h = Math.floor(totalMins / 60);
+    const m = Math.floor(totalMins % 60);
     if (h > 0) return `${h}h ${m}m Today`;
     return `${m}m Today`;
   };
@@ -467,7 +504,10 @@ export default function DeviceControlScreen() {
                 LayoutAnimation.configureNext(
                   LayoutAnimation.Presets.easeInEaseOut,
                 );
-                setIsPowered(checkIsOn(payload.new.status));
+                const newIsOn = checkIsOn(payload.new.status);
+                setIsPowered(newIsOn);
+                // Reset baseline when status toggles
+                setLastLogTime(Date.now());
               } else if (payload.new.status) {
                 setIsPowered(checkIsOn(payload.new.status));
               }
@@ -491,6 +531,7 @@ export default function DeviceControlScreen() {
             filter: `device_id=eq.${deviceId}`,
           },
           (payload) => {
+            // DB has new chunk. Refresh baseline.
             if (mounted) fetchDeviceData();
           },
         )
@@ -523,7 +564,7 @@ export default function DeviceControlScreen() {
 
     const timer = setInterval(() => {
       if (mounted) setNow(Date.now());
-    }, 1000);
+    }, 500);
 
     return () => {
       mounted = false;
@@ -547,10 +588,8 @@ export default function DeviceControlScreen() {
       const minutes = date.getMinutes().toString().padStart(2, "0");
       const currentTime = `${hours}:${minutes}`;
 
-      // Prevent multiple triggers in the same minute
       if (lastTriggeredRef.current === currentTime) return;
 
-      // Map JS Day (0=Sun, 1=Mon) to UI Array (0=Mon, ... 6=Sun)
       const dayIndex = date.getDay();
       const mappedDayIndex = (dayIndex + 6) % 7;
 
@@ -561,12 +600,12 @@ export default function DeviceControlScreen() {
 
       if (matchingSchedule) {
         lastTriggeredRef.current = currentTime;
-        const shouldBeOn = matchingSchedule.action; // true = ON, false = OFF
+        const shouldBeOn = matchingSchedule.action;
 
         if (isPowered !== shouldBeOn) {
-          // Optimistic update
           setIsPowered(shouldBeOn);
           if (!shouldBeOn) setCurrentWatts(0);
+          setLastLogTime(Date.now()); // Reset visual timer
 
           try {
             await supabase
@@ -601,6 +640,7 @@ export default function DeviceControlScreen() {
       if (error) throw error;
       setIsPowered(!isPowered);
       if (newStatus === "off") setCurrentWatts(0);
+      setLastLogTime(Date.now()); // Reset visual timer on toggle
     } catch (error) {
       console.error("Error toggling device:", error);
       alert("Failed to toggle device");
@@ -609,27 +649,39 @@ export default function DeviceControlScreen() {
     }
   };
 
-  const statusIcon = isHubOnline
-    ? isPowered
-      ? "power"
-      : "power-off"
-    : "wifi-off";
-  const statusTitle = isHubOnline
-    ? isPowered
-      ? "Power ON"
-      : "Standby"
-    : "Hub Offline";
-  const statusSubtitle = isHubOnline
-    ? `${deviceName} is ${isPowered ? "running" : "idle"}`
-    : "Device unreachable";
+  const statusIcon = !isHubOnline
+    ? "wifi-off"
+    : isUnstable
+      ? "wifi"
+      : isPowered
+        ? "power"
+        : "power-off";
+
+  const statusTitle = !isHubOnline
+    ? "Hub Offline"
+    : isUnstable
+      ? "Signal Unstable"
+      : isPowered
+        ? "Power ON"
+        : "Standby";
+
+  const statusSubtitle = !isHubOnline
+    ? "Device unreachable"
+    : isUnstable
+      ? "Connection is weak..."
+      : `${deviceName} is ${isPowered ? "running" : "idle"}`;
+
+  const warningColor = "#eab308"; // Yellow
 
   const gradientColors = !isHubOnline
     ? ["#666666", theme.background]
-    : isPowered
-      ? [theme.buttonPrimary, theme.background]
-      : isDarkMode
-        ? ["#2c3e50", theme.background]
-        : ["#94a3b8", theme.background];
+    : isUnstable
+      ? [warningColor, theme.background]
+      : isPowered
+        ? [theme.buttonPrimary, theme.background]
+        : isDarkMode
+          ? ["#2c3e50", theme.background]
+          : ["#94a3b8", theme.background];
 
   const activeColor = !isHubOnline ? "#666" : theme.buttonPrimary;
 
@@ -789,7 +841,6 @@ export default function DeviceControlScreen() {
 
     try {
       let data, error;
-
       if (editingScheduleId) {
         const response = await supabase
           .from("device_schedules")
@@ -832,7 +883,7 @@ export default function DeviceControlScreen() {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         if (editingScheduleId) {
           setSchedules((prev) =>
-            prev.map((s) => (s.id === editingScheduleId ? scheduleData : s))
+            prev.map((s) => (s.id === editingScheduleId ? scheduleData : s)),
           );
         } else {
           setSchedules([...schedules, scheduleData]);
@@ -850,8 +901,6 @@ export default function DeviceControlScreen() {
     if (!schedule) return;
 
     const newActive = !schedule.active;
-
-    // Optimistic update
     setSchedules((current) =>
       current.map((s) => (s.id === id ? { ...s, active: newActive } : s)),
     );
@@ -861,12 +910,10 @@ export default function DeviceControlScreen() {
         .from("device_schedules")
         .update({ is_active: newActive })
         .eq("id", id);
-
       if (error) throw error;
     } catch (err) {
       console.log("Error toggling schedule:", err);
       Alert.alert("Error", "Failed to update schedule");
-      // Revert
       setSchedules((current) =>
         current.map((s) => (s.id === id ? { ...s, active: !newActive } : s)),
       );
@@ -884,8 +931,10 @@ export default function DeviceControlScreen() {
     setShowDeleteConfirm(false);
 
     try {
-      const { error } = await supabase.from("device_schedules").delete().eq("id", id);
-
+      const { error } = await supabase
+        .from("device_schedules")
+        .delete()
+        .eq("id", id);
       if (error) throw error;
       setSchedules((prev) => prev.filter((s) => s.id !== id));
       setShowSchedule(false);
@@ -972,7 +1021,7 @@ export default function DeviceControlScreen() {
               borderColor: "rgba(255,255,255,0.2)",
             }}
           >
-            {isHubOnline && (
+            {isHubOnline && !isUnstable && (
               <Animated.View
                 style={{
                   position: "absolute",
@@ -1150,7 +1199,9 @@ export default function DeviceControlScreen() {
                 style={{ marginBottom: 8 }}
               />
               <Text style={styles.detailLabel}>Today's Cost</Text>
-              <Text style={styles.detailValue}>₱ {todayCost.toFixed(4)}</Text>
+              <Text style={styles.detailValue}>
+                ₱ {displayTotalCost.toFixed(4)}
+              </Text>
             </View>
           </View>
 
@@ -1280,7 +1331,7 @@ export default function DeviceControlScreen() {
         </View>
       </ScrollView>
 
-      {}
+      {/* Confirmation Modal */}
       <Modal
         visible={showConfirm}
         transparent
@@ -1335,7 +1386,7 @@ export default function DeviceControlScreen() {
         </View>
       </Modal>
 
-      {}
+      {/* Schedule Modal */}
       <Modal
         visible={showSchedule}
         transparent
@@ -1344,7 +1395,9 @@ export default function DeviceControlScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>{editingScheduleId ? "Edit Schedule" : "Set Schedule"}</Text>
+            <Text style={styles.modalTitle}>
+              {editingScheduleId ? "Edit Schedule" : "Set Schedule"}
+            </Text>
 
             <View
               style={{
@@ -1516,8 +1569,20 @@ export default function DeviceControlScreen() {
                 }}
                 onPress={() => deleteSchedule(editingScheduleId)}
               >
-                <MaterialIcons name="delete-outline" size={20} color={isDarkMode ? "#ff4444" : "#cc0000"} />
-                <Text style={{ color: isDarkMode ? "#ff4444" : "#cc0000", fontWeight: "bold", marginLeft: 8 }}>Delete Schedule</Text>
+                <MaterialIcons
+                  name="delete-outline"
+                  size={20}
+                  color={isDarkMode ? "#ff4444" : "#cc0000"}
+                />
+                <Text
+                  style={{
+                    color: isDarkMode ? "#ff4444" : "#cc0000",
+                    fontWeight: "bold",
+                    marginLeft: 8,
+                  }}
+                >
+                  Delete Schedule
+                </Text>
               </TouchableOpacity>
             )}
 
@@ -1583,8 +1648,17 @@ export default function DeviceControlScreen() {
                 ]}
                 onPress={confirmDeleteSchedule}
               >
-                <View style={{ width: "100%", height: "100%", justifyContent: "center", alignItems: "center" }}>
-                  <Text style={[styles.modalBtnText, { color: "#fff" }]}>Delete</Text>
+                <View
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={[styles.modalBtnText, { color: "#fff" }]}>
+                    Delete
+                  </Text>
                 </View>
               </TouchableOpacity>
             </View>

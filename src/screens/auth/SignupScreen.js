@@ -1456,7 +1456,7 @@ function InputGroup({
             includeFontPadding: false,
           }}
           placeholder={placeholder}
-          placeholderTextColor={theme.textSecondary}
+          placeholderTextColor="#9CA3AF"
           secureTextEntry={isPassword && !showPassword}
           value={value}
           onChangeText={onChangeText}

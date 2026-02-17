@@ -215,7 +215,7 @@ export default function InvitationsScreen() {
 
       await supabase.from("app_notifications").insert({
         user_id: selectedInvite.sender_id,
-        title: "Invitation Accepted ✅",
+        title: "Invitation Accepted",
         body: `${user.email} has accepted your invitation to ${selectedInvite.hubName}.`,
       });
 
@@ -521,9 +521,7 @@ export default function InvitationsScreen() {
       <Modal visible={showAcceptModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>
-              Join Hub?
-            </Text>
+            <Text style={styles.modalTitle}>Join Hub?</Text>
             <Text style={styles.modalBody}>
               You will gain {selectedInvite?.role} access to{" "}
               <Text style={{ fontWeight: "bold", color: theme.text }}>
@@ -566,9 +564,7 @@ export default function InvitationsScreen() {
       <Modal visible={showDeclineModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>
-              Decline Invitation?
-            </Text>
+            <Text style={styles.modalTitle}>Decline Invitation?</Text>
             <Text style={styles.modalBody}>
               Are you sure you want to decline the invitation from{" "}
               <Text style={{ fontWeight: "bold", color: theme.text }}>
@@ -620,13 +616,17 @@ export default function InvitationsScreen() {
                   backgroundColor:
                     alertConfig.type === "success"
                       ? theme.buttonPrimary
-                      : isDarkMode ? "#ff4444" : "#cc0000",
+                      : isDarkMode
+                        ? "#ff4444"
+                        : "#cc0000",
                   width: "100%",
                   flex: 0,
                 },
               ]}
             >
-              <Text style={[styles.modalButtonText, { color: "#fff" }]}>Okay</Text>
+              <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                Okay
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

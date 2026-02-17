@@ -10,12 +10,21 @@ import {
   ActivityIndicator,
   Modal,
   RefreshControl,
+  Platform,
+  UIManager,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import { supabase } from "../../lib/supabase";
+
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export default function BudgetDeviceListScreen() {
   const navigation = useNavigation();
@@ -38,11 +47,12 @@ export default function BudgetDeviceListScreen() {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedUnusedDevice, setSelectedUnusedDevice] = useState(null);
 
+  // --- MOCK DEVICES (Kept as requested) ---
   const mockDevices = [
     {
       id: "tv",
       name: "Smart TV",
-      icon: "power",
+      icon: "tv",
       currentLoad: "₱ 452.00",
       limit: "₱ 400.00",
       statusText: "Over Limit (113%)",
@@ -61,11 +71,13 @@ export default function BudgetDeviceListScreen() {
     },
   ];
 
+  // --- TIMER: Updates 'now' every second for relative time calc ---
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // --- REALTIME: Fetch Online/Offline Status (Copied & Improved) ---
   useEffect(() => {
     if (!hubId) return;
 
@@ -80,8 +92,12 @@ export default function BudgetDeviceListScreen() {
           filter: `id=eq.${hubId}`,
         },
         (payload) => {
-          if (payload.new && payload.new.last_seen) {
-            setHubLastSeen(payload.new.last_seen);
+          if (payload.new) {
+            if (payload.new.last_seen) {
+              setHubLastSeen(payload.new.last_seen);
+            }
+            // Force immediate UI update when heartbeat arrives
+            setNow(Date.now());
           }
         },
       )
@@ -154,13 +170,16 @@ export default function BudgetDeviceListScreen() {
   const processedRealDevices = realDevices.map((d) => {
     let isHubOnline = false;
 
+    // --- FIX: Increased Threshold to 120s (2 mins) to match Home Screen ---
     if (hubLastSeen) {
       let timeStr = hubLastSeen.replace(" ", "T");
       if (!timeStr.endsWith("Z") && !timeStr.includes("+")) timeStr += "Z";
       const lastSeenMs = new Date(timeStr).getTime();
-      const diffSeconds = (now - lastSeenMs) / 1000;
 
-      isHubOnline = diffSeconds < 8 && diffSeconds > -5;
+      if (!isNaN(lastSeenMs)) {
+        const diffSeconds = (now - lastSeenMs) / 1000;
+        isHubOnline = diffSeconds < 120; // 2 minute buffer
+      }
     }
 
     const isOn = d.status?.toLowerCase() === "on";
@@ -186,7 +205,12 @@ export default function BudgetDeviceListScreen() {
       icon: "power",
       currentLoad:
         d.type === "Unused" ? "---" : `₱ ${(d.totalCost || 0).toFixed(2)}`,
-      limit: d.type === "Unused" ? "---" : (d.budget_limit ? `₱ ${d.budget_limit.toFixed(2)}` : "No Limit"),
+      limit:
+        d.type === "Unused"
+          ? "---"
+          : d.budget_limit
+            ? `₱ ${d.budget_limit.toFixed(2)}`
+            : "No Limit",
       statusText: statusText,
       type: type,
       isReal: true,
@@ -386,7 +410,10 @@ export default function BudgetDeviceListScreen() {
             <Text style={styles.modalTitle}>Outlet Not Configured</Text>
             <Text style={styles.modalBody}>
               {selectedUnusedDevice?.name} is currently marked as{" "}
-              <Text style={{ fontWeight: "bold", color: theme.text }}>Unused</Text>.
+              <Text style={{ fontWeight: "bold", color: theme.text }}>
+                Unused
+              </Text>
+              .
             </Text>
             <View style={styles.buttonRow}>
               <TouchableOpacity
@@ -399,7 +426,10 @@ export default function BudgetDeviceListScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleGoToConfig}
-                style={[styles.modalConfirmBtn, { backgroundColor: theme.buttonPrimary }]}
+                style={[
+                  styles.modalConfirmBtn,
+                  { backgroundColor: theme.buttonPrimary },
+                ]}
               >
                 <Text style={[styles.modalButtonText, { color: "#fff" }]}>
                   Configure
@@ -414,7 +444,6 @@ export default function BudgetDeviceListScreen() {
 }
 
 function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
-  const scaleValue = useRef(new Animated.Value(1)).current;
   let iconColor, iconBg, statusTextColor;
   let borderColor = theme.cardBorder;
 
@@ -448,7 +477,7 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
       onPress={onPress}
       style={{ marginBottom: 0 }}
     >
-      <Animated.View
+      <View
         style={{
           flexDirection: "row",
           alignItems: "center",
@@ -568,7 +597,7 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
           size={scaledSize(20)}
           color={theme.textSecondary}
         />
-      </Animated.View>
+      </View>
     </TouchableOpacity>
   );
 }

@@ -24,14 +24,15 @@ export default function BudgetDetailScreen() {
   const scaledSize = (size) => size * fontScale;
 
   const { deviceName, deviceId } = route.params || {
-    deviceName: "Air Conditioner",
+    deviceName: "Smart Socket",
   };
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Default to 'Monthly'
   const [period, setPeriod] = useState("Monthly");
-  const [limit, setLimit] = useState("0");
+  const [limit, setLimit] = useState(""); // Empty string defaults to "No Limit"
   const [autoCutoff, setAutoCutoff] = useState(false);
   const [pushNotifications, setPushNotifications] = useState(true);
 
@@ -49,46 +50,93 @@ export default function BudgetDetailScreen() {
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
+  // --- 1. INITIAL FETCH ---
   useEffect(() => {
     fetchDeviceData();
-  }, [deviceName]);
+  }, [deviceName, deviceId, period]);
 
-  const fetchDeviceData = async () => {
-    setIsLoading(true);
+  // --- 2. REALTIME LISTENER ---
+  useEffect(() => {
+    let channel;
+    const setupRealtime = async () => {
+      if (!currentDbDevice?.id) return;
+
+      channel = supabase
+        .channel(`budget_detail_v3_${currentDbDevice.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "usage_analytics",
+            filter: `device_id=eq.${currentDbDevice.id}`,
+          },
+          () => fetchDeviceData(true),
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "devices",
+            filter: `id=eq.${currentDbDevice.id}`,
+          },
+          () => fetchDeviceData(true),
+        )
+        .subscribe();
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [currentDbDevice?.id]);
+
+  const fetchDeviceData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
 
+      // 1. Get Device Details
       let query = supabase.from("devices").select("*").eq("user_id", user.id);
-
       if (deviceId) {
         query = query.eq("id", deviceId);
       } else {
         query = query.eq("name", deviceName);
       }
-
       const { data: deviceData, error: deviceError } = await query.single();
-
       if (deviceError) throw deviceError;
+
+      if (!silent) {
+        const dbLimit = deviceData.budget_limit;
+        // FIX: If 0 or null, set to empty string to show "No Limit" placeholder
+        if (dbLimit === 0 || dbLimit === null) {
+          setLimit("");
+        } else {
+          setLimit(dbLimit.toLocaleString()); // Add commas
+        }
+        setAutoCutoff(deviceData.auto_cutoff || false);
+        setPushNotifications(deviceData.is_monitored || false);
+      }
       setCurrentDbDevice(deviceData);
 
-      setLimit(
-        deviceData.budget_limit ? deviceData.budget_limit.toString() : "0",
-      );
-      setAutoCutoff(deviceData.auto_cutoff || false);
-      setPushNotifications(deviceData.is_monitored || false);
-
+      // 2. Get User Billing Cycle (Global Budget)
       const { data: userData, error: userError } = await supabase
         .from("users")
-        .select("monthly_budget")
+        .select("monthly_budget, bill_cycle_day")
         .eq("id", user.id)
         .single();
 
       if (userError) throw userError;
       setGlobalBudget(userData.monthly_budget || 0);
 
+      const billDay = userData.bill_cycle_day || 1;
+
+      // 3. Get Other Devices
       const { data: allDevices, error: allDevError } = await supabase
         .from("devices")
         .select("id, budget_limit")
@@ -96,43 +144,58 @@ export default function BudgetDetailScreen() {
         .neq("id", deviceData.id);
 
       if (allDevError) throw allDevError;
-
       const othersTotal = allDevices.reduce(
-        (sum, d) => sum + (d.budget_limit || 0),
+        (sum, d) => sum + (parseFloat(d.budget_limit) || 0),
         0,
       );
       setOtherDevicesLimit(othersTotal);
 
+      // 4. Calculate Usage based on PERIOD
       const now = new Date();
-      const startOfMonth = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        1,
-      ).toISOString();
+      let startDate = new Date();
+
+      if (period === "Daily") {
+        startDate.setHours(0, 0, 0, 0);
+      } else if (period === "Weekly") {
+        const day = startDate.getDay();
+        const diff = startDate.getDate() - day;
+        startDate.setDate(diff);
+        startDate.setHours(0, 0, 0, 0);
+      } else {
+        // Monthly
+        startDate = new Date(now.getFullYear(), now.getMonth(), billDay);
+        if (now.getDate() < billDay) {
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, billDay);
+        }
+      }
+
+      const startDateStr = startDate.toISOString();
 
       const { data: usageData, error: usageError } = await supabase
         .from("usage_analytics")
         .select("cost_incurred")
         .eq("device_id", deviceData.id)
-        .gte("date", startOfMonth);
+        .gte("date", startDateStr);
 
       if (usageError) throw usageError;
 
       const totalUsed = usageData.reduce(
-        (sum, row) => sum + (row.cost_incurred || 0),
+        (sum, row) => sum + (parseFloat(row.cost_incurred) || 0),
         0,
       );
       setUsedAmount(totalUsed);
     } catch (error) {
       console.log("Error fetching budget details:", error);
-      setStatusModal({
-        visible: true,
-        title: "Error",
-        message: "Failed to load device data.",
-        type: "error",
-      });
+      if (!silent) {
+        setStatusModal({
+          visible: true,
+          title: "Error",
+          message: "Failed to load device data.",
+          type: "error",
+        });
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -145,12 +208,17 @@ export default function BudgetDetailScreen() {
     if (!currentDbDevice) return;
     setIsSaving(true);
     try {
-      const numericLimit = parseFloat(limit) || 0;
+      // FIX: Clean commas before saving
+      const cleanLimit = limit.toString().replace(/,/g, "");
+      const numericLimit = parseFloat(cleanLimit) || 0;
+
+      // FIX: Send NULL to DB if limit is 0 (No Limit)
+      const limitToSave = numericLimit === 0 ? null : numericLimit;
 
       const { error } = await supabase
         .from("devices")
         .update({
-          budget_limit: numericLimit,
+          budget_limit: limitToSave,
           auto_cutoff: autoCutoff,
           is_monitored: pushNotifications,
         })
@@ -158,12 +226,18 @@ export default function BudgetDetailScreen() {
 
       if (error) throw error;
 
+      setCurrentDbDevice((prev) => ({
+        ...prev,
+        budget_limit: limitToSave,
+        auto_cutoff: autoCutoff,
+        is_monitored: pushNotifications,
+      }));
+
       setStatusModal({
         visible: true,
         title: "Success",
         message: "Device budget settings updated.",
         type: "success",
-        onClose: () => navigation.goBack(),
       });
     } catch (error) {
       setStatusModal({
@@ -178,37 +252,58 @@ export default function BudgetDetailScreen() {
     }
   };
 
-  const currentDeviceLimit = parseFloat(limit) || 0;
-  const totalAllocated = otherDevicesLimit + currentDeviceLimit;
-  const isOverAllocated = totalAllocated > globalBudget;
+  // --- HELPER: Parse Input with Commas ---
+  const handleLimitChange = (text) => {
+    const cleanValue = text.replace(/[^0-9]/g, "");
+    const numericValue = parseInt(cleanValue, 10);
+
+    if (isNaN(numericValue) || numericValue === 0) {
+      setLimit(""); // Set to empty string for "No Limit"
+    } else {
+      // Cap at 999,999
+      const cappedValue = Math.min(numericValue, 999999);
+      setLimit(cappedValue.toLocaleString());
+    }
+  };
+
+  const adjustLimit = (amount) => {
+    const currentStr = limit.toString().replace(/,/g, "");
+    const current = parseFloat(currentStr) || 0;
+    const next = Math.max(0, Math.min(current + amount, 999999));
+
+    if (next === 0) setLimit("");
+    else setLimit(next.toLocaleString());
+  };
+
+  // --- CALCULATION LOGIC ---
+  const rawLimit = parseFloat(limit.toString().replace(/,/g, "")) || 0;
+
+  let projectedMonthlyCost = rawLimit;
+  if (period === "Daily") {
+    projectedMonthlyCost = rawLimit * 30;
+  } else if (period === "Weekly") {
+    projectedMonthlyCost = rawLimit * 4;
+  }
+
+  // If 0 (No Limit), it contributes 0 to the "reserved" budget
+  const totalAllocatedMonthly = otherDevicesLimit + projectedMonthlyCost;
+
+  // FIX: Only flag Over Allocation if Global Budget is set (> 0)
+  const isOverAllocated =
+    globalBudget > 0 && totalAllocatedMonthly > globalBudget;
 
   const primaryColor = isDarkMode ? theme.buttonPrimary : "#00995e";
   const dangerColor = isDarkMode ? theme.buttonDangerText : "#cc0000";
   const warningColor = isDarkMode ? "#ffaa00" : "#ff9900";
 
-  const numericLimit = parseFloat(limit) || 0;
-  const percentage =
-    numericLimit > 0
-      ? Math.min((usedAmount / numericLimit) * 100, 100).toFixed(0)
-      : 100;
-  
+  const percentageValue = rawLimit > 0 ? (usedAmount / rawLimit) * 100 : 0;
+  const percentageDisplay = Math.min(percentageValue, 100).toFixed(0);
+
   let progressBarColor = primaryColor;
-  const pctVal = Number(percentage);
-  if (pctVal >= 90) progressBarColor = dangerColor;
-  else if (pctVal >= 75) progressBarColor = warningColor;
+  if (percentageValue >= 90) progressBarColor = dangerColor;
+  else if (percentageValue >= 75) progressBarColor = warningColor;
 
-  const remaining = Math.max(numericLimit - usedAmount, 0).toFixed(2);
-
-  const adjustLimit = (amount) => {
-    const current = parseFloat(limit) || 0;
-    const next = Math.max(0, current + amount);
-    setLimit(next.toString());
-  };
-
-  const handleLimitChange = (text) => {
-    const cleaned = text.replace(/[^0-9.]/g, "");
-    setLimit(cleaned);
-  };
+  const remaining = Math.max(rawLimit - usedAmount, 0).toFixed(2);
 
   const styles = StyleSheet.create({
     modalOverlay: {
@@ -280,7 +375,7 @@ export default function BudgetDetailScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
+      {/* Header */}
       <View
         style={{
           flexDirection: "row",
@@ -412,13 +507,16 @@ export default function BudgetDetailScreen() {
                 value={limit}
                 onChangeText={handleLimitChange}
                 keyboardType="numeric"
+                placeholder="No Limit"
+                placeholderTextColor={theme.textSecondary}
                 className="font-bold text-center"
                 style={{
                   color: theme.text,
                   fontSize: scaledSize(28),
                   minWidth: 80,
+                  textAlign: "center",
                 }}
-                maxLength={6}
+                maxLength={8} // Allow formatting chars
               />
             </View>
 
@@ -435,7 +533,7 @@ export default function BudgetDetailScreen() {
             </TouchableOpacity>
           </View>
 
-          {}
+          {/* Allocation Warning */}
           <View
             className="p-3 rounded-xl border mb-8"
             style={{
@@ -473,9 +571,11 @@ export default function BudgetDetailScreen() {
                 lineHeight: 16,
               }}
             >
-              {isOverAllocated
-                ? `This limit (₱${currentDeviceLimit}) combined with others (₱${otherDevicesLimit}) exceeds your global goal of ₱${globalBudget}.`
-                : "This limit fits safely within your overall budget goal."}
+              {globalBudget <= 0
+                ? "Global Budget is Unlimited."
+                : isOverAllocated
+                  ? `${period} limit ₱${rawLimit.toLocaleString()} (approx ₱${projectedMonthlyCost.toLocaleString()}/mo) exceeds global goal of ₱${globalBudget.toLocaleString()}.`
+                  : `This ${period.toLowerCase()} limit fits safely within your overall budget.`}
             </Text>
           </View>
 
@@ -483,7 +583,7 @@ export default function BudgetDetailScreen() {
             className="font-bold uppercase tracking-widest mb-3"
             style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
           >
-            Current Usage Status
+            Current Usage Status ({period})
           </Text>
           <View className="mb-8">
             <View className="flex-row justify-between mb-2">
@@ -506,7 +606,7 @@ export default function BudgetDetailScreen() {
                   fontSize: scaledSize(13),
                 }}
               >
-                {percentage}%
+                {rawLimit > 0 ? `${percentageDisplay}%` : "No Limit"}
               </Text>
             </View>
 
@@ -517,20 +617,21 @@ export default function BudgetDetailScreen() {
               <View
                 className="h-full"
                 style={{
-                  width: `${percentage}%`,
+                  width: `${percentageDisplay}%`,
                   backgroundColor: progressBarColor,
                 }}
               />
             </View>
 
             <View className="flex-row justify-between">
+              {/* --- FIX: Display "Remaining: ---" if limit is 0 --- */}
               <Text
                 style={{
                   color: theme.textSecondary,
                   fontSize: scaledSize(11),
                 }}
               >
-                Remaining: ₱ {remaining}
+                {rawLimit > 0 ? `Remaining: ₱ ${remaining}` : "Remaining: ---"}
               </Text>
               <Text
                 style={{
@@ -538,13 +639,12 @@ export default function BudgetDetailScreen() {
                   fontSize: scaledSize(11),
                 }}
               >
-                Resets in:{" "}
-                {new Date(
-                  new Date().getFullYear(),
-                  new Date().getMonth() + 1,
-                  0,
-                ).getDate() - new Date().getDate()}{" "}
-                Days
+                Resets:{" "}
+                {period === "Daily"
+                  ? "Midnight"
+                  : period === "Weekly"
+                    ? "Next Sunday"
+                    : "Next Cycle"}
               </Text>
             </View>
           </View>
@@ -629,7 +729,6 @@ export default function BudgetDetailScreen() {
             <TouchableOpacity
               onPress={() => {
                 setStatusModal({ ...statusModal, visible: false });
-                if (statusModal.onClose) statusModal.onClose();
               }}
               style={[
                 styles.modalButton,
@@ -691,7 +790,7 @@ function RuleItem({
         </Text>
       </View>
 
-      {}
+      {/* Switch */}
       <CustomSwitch
         value={value}
         onToggle={disabled ? null : onToggle}
