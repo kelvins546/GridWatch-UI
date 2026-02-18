@@ -155,6 +155,15 @@ const formatTime12h = (time24) => {
   return `${hour12}:${m} ${ampm}`;
 };
 
+// --- HELPER: Get Date String for Philippines (UTC+8) ---
+// This aligns the APP with your physical location.
+const getPhilippineDateString = () => {
+  const now = new Date();
+  const utc8Ms = now.getTime() + 8 * 60 * 60 * 1000;
+  const phDate = new Date(utc8Ms);
+  return phDate.toISOString().slice(0, 10);
+};
+
 export default function DeviceControlScreen() {
   const navigation = useNavigation();
   const route = useRoute();
@@ -186,7 +195,7 @@ export default function DeviceControlScreen() {
   const [dbRuntimeMinutes, setDbRuntimeMinutes] = useState(0);
   const [dbCost, setDbCost] = useState(0);
 
-  // Persistence Data (To bridge the gap between DB updates)
+  // Persistence Data
   const [lastLogTime, setLastLogTime] = useState(Date.now());
 
   const [deviceId, setDeviceId] = useState(paramDeviceId);
@@ -229,18 +238,13 @@ export default function DeviceControlScreen() {
   const isHubOnline = diffInSeconds < 6;
   const isUnstable = isHubOnline && diffInSeconds >= 3;
 
-  // VISUAL MASK: Hide sensor noise when OFF
   const displayWatts = isHubOnline && isPowered ? currentWatts : 0;
   const displayVolts = isHubOnline ? `${currentVoltage.toFixed(1)} V` : "0 V";
 
-  // --- FIX: PERSISTENT LIVE CALCULATION ---
-  // Calculates gap between "Now" and "Last DB Save"
-  // If lastLogTime is 5 mins ago, this adds those 5 mins to the display.
-  // This works even if you close the app and re-open it.
+  // --- LIVE CALCULATION ---
   const secondsSinceSync = Math.max(0, (now - lastLogTime) / 1000);
 
   // Only add live estimation if powered ON and Online
-  // Guard clause: Don't add if gap is ridiculously large (> 24 hours) as that means stale data
   const liveSessionSeconds =
     isPowered && isHubOnline && secondsSinceSync < 86400 ? secondsSinceSync : 0;
 
@@ -252,7 +256,7 @@ export default function DeviceControlScreen() {
 
   const estCostPerHour = (displayWatts / 1000) * electricityRate;
 
-  // --- UI TIMER (Updates 'now' every second) ---
+  // --- UI TIMER ---
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(Date.now());
@@ -367,13 +371,9 @@ export default function DeviceControlScreen() {
         setElectricityRate(finalRate);
         setProviderName(finalProviderName);
 
-        const dateNow = new Date();
-        const year = dateNow.getFullYear();
-        const month = String(dateNow.getMonth() + 1).padStart(2, "0");
-        const day = String(dateNow.getDate()).padStart(2, "0");
-        const todayStr = `${year}-${month}-${day}`;
+        // --- USE PHILIPPINE TIME ---
+        const todayStr = getPhilippineDateString();
 
-        // 1. Get Totals
         const { data: usageData, error: usageError } = await supabase
           .from("usage_analytics")
           .select("duration_minutes, cost_incurred")
@@ -391,24 +391,13 @@ export default function DeviceControlScreen() {
           );
           setDbRuntimeMinutes(totalMins);
           setDbCost(totalCostVal);
-        }
-
-        // 2. CRITICAL FIX: Only grab logs from TODAY to prevent 138-hour bug
-        const { data: lastLog } = await supabase
-          .from("usage_analytics")
-          .select("created_at")
-          .eq("device_id", data.id)
-          .eq("date", todayStr) // <--- THIS FIXES THE 2800 PESO BUG
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single();
-
-        if (lastLog) {
-          setLastLogTime(new Date(lastLog.created_at).getTime());
         } else {
-          // If no logs today, start counting from NOW
-          setLastLogTime(Date.now());
+          setDbRuntimeMinutes(0);
+          setDbCost(0);
         }
+
+        // RESET LIVE COUNTER
+        setLastLogTime(Date.now());
       }
       setNow(Date.now());
     } catch (error) {
@@ -466,7 +455,6 @@ export default function DeviceControlScreen() {
   const getRuntimeString = () => {
     if (!isHubOnline) return "---";
 
-    // Use the Calculated Total Minutes (DB + Local Session)
     const totalMins = totalDisplayMinutes;
 
     if (totalMins < 1 && isPowered) return "< 1m Today";
@@ -506,7 +494,6 @@ export default function DeviceControlScreen() {
                 );
                 const newIsOn = checkIsOn(payload.new.status);
                 setIsPowered(newIsOn);
-                // Reset baseline when status toggles
                 setLastLogTime(Date.now());
               } else if (payload.new.status) {
                 setIsPowered(checkIsOn(payload.new.status));
@@ -531,7 +518,7 @@ export default function DeviceControlScreen() {
             filter: `device_id=eq.${deviceId}`,
           },
           (payload) => {
-            // DB has new chunk. Refresh baseline.
+            // DB updated? Refresh totals.
             if (mounted) fetchDeviceData();
           },
         )
@@ -605,7 +592,7 @@ export default function DeviceControlScreen() {
         if (isPowered !== shouldBeOn) {
           setIsPowered(shouldBeOn);
           if (!shouldBeOn) setCurrentWatts(0);
-          setLastLogTime(Date.now()); // Reset visual timer
+          setLastLogTime(Date.now());
 
           try {
             await supabase
@@ -640,7 +627,7 @@ export default function DeviceControlScreen() {
       if (error) throw error;
       setIsPowered(!isPowered);
       if (newStatus === "off") setCurrentWatts(0);
-      setLastLogTime(Date.now()); // Reset visual timer on toggle
+      setLastLogTime(Date.now());
     } catch (error) {
       console.error("Error toggling device:", error);
       alert("Failed to toggle device");
@@ -671,7 +658,7 @@ export default function DeviceControlScreen() {
       ? "Connection is weak..."
       : `${deviceName} is ${isPowered ? "running" : "idle"}`;
 
-  const warningColor = "#eab308"; // Yellow
+  const warningColor = "#eab308";
 
   const gradientColors = !isHubOnline
     ? ["#666666", theme.background]

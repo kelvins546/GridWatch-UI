@@ -256,7 +256,6 @@ export default function AnalyticsScreen() {
         buckets = new Array(12).fill(0);
       }
 
-      // --- FETCH DATA ---
       const startStr = getLocalDateString(startDate);
       const endStr = getLocalDateString(endDate);
 
@@ -264,7 +263,7 @@ export default function AnalyticsScreen() {
       if (allDeviceIds.length > 0) {
         const { data } = await supabase
           .from("usage_analytics")
-          .select("device_id, cost_incurred, date")
+          .select("device_id, cost_incurred, date, created_at")
           .in("device_id", allDeviceIds)
           .gte("date", startStr)
           .lt("date", endStr);
@@ -292,21 +291,9 @@ export default function AnalyticsScreen() {
           const monthIdx = rowDate.getMonth();
           if (buckets[monthIdx] !== undefined) buckets[monthIdx] += cost;
         } else if (activeTab === "This Day") {
-          const currentHour = new Date().getHours();
-          let passedBucketsCount = 0;
-          if (currentHour >= 0) passedBucketsCount = 1;
-          if (currentHour >= 4) passedBucketsCount = 2;
-          if (currentHour >= 8) passedBucketsCount = 3;
-          if (currentHour >= 12) passedBucketsCount = 4;
-          if (currentHour >= 16) passedBucketsCount = 5;
-          if (currentHour >= 20) passedBucketsCount = 6;
-
-          if (passedBucketsCount > 0) {
-            const slice = cost / passedBucketsCount;
-            for (let i = 0; i < passedBucketsCount; i++) {
-              buckets[i] += slice;
-            }
-          }
+          // --- AS REQUESTED: PUT ALL DATA INTO 12PM BUCKET ---
+          // Index 3 corresponds to the "12pm" label in the labels array
+          buckets[3] += cost;
         }
       });
 
@@ -340,7 +327,6 @@ export default function AnalyticsScreen() {
     }, [activeScope, activeTab, activeHubFilter, dateOffset]),
   );
 
-  // --- NEW: Source Hubs for Filter ---
   const sourceHubs = activeScope === "personal" ? personalHubs : sharedHubs;
 
   return (
@@ -403,7 +389,6 @@ export default function AnalyticsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
-        {/* --- ADDED: HUB FILTER UI --- */}
         <View style={{ marginBottom: 20 }}>
           <ScrollView
             horizontal
