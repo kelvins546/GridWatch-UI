@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,11 +12,13 @@ import {
   StyleSheet,
   UIManager,
   LayoutAnimation,
+  ActivityIndicator,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase"; // Make sure path is correct
 
 if (
   Platform.OS === "android" &&
@@ -29,9 +31,18 @@ const { width } = Dimensions.get("window");
 
 export default function LimitDetailScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { theme, fontScale, isDarkMode } = useTheme();
 
   const scaledSize = (size) => size * fontScale;
+
+  // Accept params so real devices can use this screen
+  const { deviceId = "tv", deviceName = "Smart TV" } = route.params || {};
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [deviceData, setDeviceData] = useState(null);
+  const [usedAmount, setUsedAmount] = useState(0);
+  const [dbLimit, setDbLimit] = useState(0);
 
   const [amount, setAmount] = useState("");
   const [autoOff, setAutoOff] = useState(true);
@@ -42,8 +53,75 @@ export default function LimitDetailScreen() {
     redirect: null,
   });
 
-  const handleExtension = () => {
-    if (!amount || isNaN(amount) || Number(amount) <= 0) {
+  // --- FETCH REAL DEVICE USAGE ---
+  useEffect(() => {
+    if (deviceId === "tv") {
+      // Mock data for presentation
+      setDeviceData({ name: "Smart TV", auto_cutoff: true });
+      setDbLimit(400);
+      setUsedAmount(452);
+      setAutoOff(true);
+      setIsLoading(false);
+    } else {
+      fetchRealDevice();
+    }
+  }, [deviceId]);
+
+  const fetchRealDevice = async () => {
+    try {
+      const { data: dev } = await supabase
+        .from("devices")
+        .select("*")
+        .eq("id", deviceId)
+        .single();
+
+      if (dev) {
+        setDeviceData(dev);
+        setDbLimit(dev.budget_limit || 0);
+        setAutoOff(dev.auto_cutoff || false);
+      }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data: userData } = await supabase
+          .from("users")
+          .select("bill_cycle_day")
+          .eq("id", user.id)
+          .single();
+
+        const billDay = userData?.bill_cycle_day || 1;
+        const now = new Date();
+        let startDate = new Date(now.getFullYear(), now.getMonth(), billDay);
+        if (now.getDate() < billDay) {
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, billDay);
+        }
+
+        const { data: usageData } = await supabase
+          .from("usage_analytics")
+          .select("cost_incurred")
+          .eq("device_id", deviceId)
+          .gte("date", startDate.toISOString());
+
+        const totalUsed =
+          usageData?.reduce(
+            (sum, row) => sum + (parseFloat(row.cost_incurred) || 0),
+            0,
+          ) || 0;
+        setUsedAmount(totalUsed);
+      }
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleExtension = async () => {
+    const addedAmount = parseFloat(amount);
+    if (!addedAmount || isNaN(addedAmount) || addedAmount <= 0) {
       setModalContent({
         title: "Invalid Amount",
         msg: "Please enter a valid amount greater than 0.",
@@ -53,26 +131,56 @@ export default function LimitDetailScreen() {
       return;
     }
 
+    // Update real database if not a mock device
+    if (deviceId !== "tv") {
+      const newLimit = dbLimit + addedAmount;
+      await supabase
+        .from("devices")
+        // NEW: Clear the alert date so it can trigger again if the NEW limit is hit!
+        .update({ budget_limit: newLimit, last_budget_alert_date: null })
+        .eq("id", deviceId);
+      setDbLimit(newLimit); // Update UI
+    } else {
+      setDbLimit(dbLimit + addedAmount);
+    }
+
+    setAmount("");
     setModalContent({
       title: "Limit Extended",
-      msg: `Your daily budget has been increased by ₱${amount}.00.`,
-      redirect: "Home",
+      msg: `Your budget has been safely increased by ₱${addedAmount.toFixed(2)}.`,
+      redirect: "GoBack",
     });
     setModalVisible(true);
   };
 
-  const handleTurnOff = () => {
+  const handleTurnOff = async () => {
+    // Update real database if not a mock device
+    if (deviceId !== "tv") {
+      await supabase
+        .from("devices")
+        .update({ status: "off" })
+        .eq("id", deviceId);
+    }
+
     setModalContent({
       title: "Device OFF",
-      msg: "Smart TV is shutting down safely.",
-      redirect: "Home",
+      msg: `${deviceData?.name || deviceName} is shutting down safely.`,
+      redirect: "GoBack",
     });
     setModalVisible(true);
   };
 
-  const handleToggleAutoOff = () => {
+  const handleToggleAutoOff = async () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setAutoOff(!autoOff);
+    const newVal = !autoOff;
+    setAutoOff(newVal);
+
+    if (deviceId !== "tv") {
+      await supabase
+        .from("devices")
+        .update({ auto_cutoff: newVal })
+        .eq("id", deviceId);
+    }
   };
 
   const handleModalClose = () => {
@@ -81,6 +189,8 @@ export default function LimitDetailScreen() {
       setTimeout(() => {
         if (modalContent.redirect === "Home") {
           navigation.navigate("MainApp", { screen: "Home" });
+        } else if (modalContent.redirect === "GoBack") {
+          navigation.goBack();
         } else {
           navigation.navigate(modalContent.redirect);
         }
@@ -88,12 +198,15 @@ export default function LimitDetailScreen() {
     }
   };
 
+  const percentage =
+    dbLimit > 0 ? ((usedAmount / dbLimit) * 100).toFixed(0) : 0;
+  const progressWidth = Math.min(percentage, 100);
+
   const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: theme.background,
     },
-
     backButton: {
       position: "absolute",
       top: 60,
@@ -103,7 +216,6 @@ export default function LimitDetailScreen() {
       backgroundColor: "rgba(0,0,0,0.2)",
       borderRadius: 20,
     },
-
     card: {
       backgroundColor: theme.card,
       borderColor: theme.cardBorder,
@@ -120,7 +232,6 @@ export default function LimitDetailScreen() {
       marginBottom: 10,
       letterSpacing: 1,
     },
-
     inputContainer: {
       flexDirection: "row",
       gap: 8,
@@ -166,7 +277,6 @@ export default function LimitDetailScreen() {
       justifyContent: "center",
       marginTop: 10,
     },
-
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.8)",
@@ -206,6 +316,19 @@ export default function LimitDetailScreen() {
     },
   });
 
+  if (isLoading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
+        <ActivityIndicator size="large" color="#ffaa00" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar
@@ -221,7 +344,6 @@ export default function LimitDetailScreen() {
         <MaterialIcons name="arrow-back" size={scaledSize(24)} color="#fff" />
       </TouchableOpacity>
 
-      {}
       <LinearGradient
         colors={["#ffaa00", theme.background]}
         style={{ paddingTop: 120, paddingBottom: 40, alignItems: "center" }}
@@ -257,12 +379,11 @@ export default function LimitDetailScreen() {
             color: "rgba(255,255,255,0.9)",
           }}
         >
-          Smart TV exceeded daily budget
+          {deviceData?.name || deviceName} exceeded allocated budget
         </Text>
       </LinearGradient>
 
       <ScrollView contentContainerStyle={{ padding: 24 }}>
-        {}
         <View style={styles.card}>
           <Text style={styles.detailLabel}>Daily Consumption</Text>
 
@@ -281,7 +402,7 @@ export default function LimitDetailScreen() {
                 color: theme.text,
               }}
             >
-              ₱ 45.50
+              ₱ {usedAmount.toFixed(2)}
             </Text>
             <Text
               style={{
@@ -291,7 +412,7 @@ export default function LimitDetailScreen() {
                 paddingBottom: 6,
               }}
             >
-              Limit: ₱ 40.00
+              Limit: ₱ {dbLimit.toFixed(2)}
             </Text>
           </View>
 
@@ -308,7 +429,7 @@ export default function LimitDetailScreen() {
               colors={["#ffcc00", "#ff4444"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={{ height: "100%", width: "100%" }}
+              style={{ height: "100%", width: `${progressWidth}%` }}
             />
           </View>
 
@@ -320,7 +441,7 @@ export default function LimitDetailScreen() {
               fontWeight: "700",
             }}
           >
-            113% Used
+            {percentage}% Used
           </Text>
 
           <View
@@ -334,25 +455,20 @@ export default function LimitDetailScreen() {
             }}
           >
             <Text
-              style={{
-                fontSize: scaledSize(13),
-                color: theme.textSecondary,
-              }}
+              style={{ fontSize: scaledSize(13), color: theme.textSecondary }}
             >
-              Duration: 6h 30m
+              {deviceId === "tv"
+                ? "Duration: 6h 30m"
+                : "Realtime Monitor Active"}
             </Text>
             <Text
-              style={{
-                fontSize: scaledSize(13),
-                color: theme.textSecondary,
-              }}
+              style={{ fontSize: scaledSize(13), color: theme.textSecondary }}
             >
-              Avg: 120 Watts
+              {deviceId === "tv" ? "Avg: 120 Watts" : ""}
             </Text>
           </View>
         </View>
 
-        {}
         <View
           style={[
             styles.card,
@@ -376,10 +492,7 @@ export default function LimitDetailScreen() {
               {autoOff ? "Auto-Off Enabled" : "Auto-Off Disabled"}
             </Text>
             <Text
-              style={{
-                fontSize: scaledSize(13),
-                color: theme.textSecondary,
-              }}
+              style={{ fontSize: scaledSize(13), color: theme.textSecondary }}
             >
               {autoOff
                 ? "Device will turn off in 5 mins."
@@ -394,12 +507,10 @@ export default function LimitDetailScreen() {
           />
         </View>
 
-        {}
         <View style={styles.card}>
           <Text style={[styles.detailLabel, { color: "#ffaa00" }]}>
             Extend Budget (Pesos)
           </Text>
-
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
@@ -409,7 +520,6 @@ export default function LimitDetailScreen() {
               value={amount}
               onChangeText={setAmount}
             />
-
             <TouchableOpacity onPress={handleExtension} activeOpacity={0.8}>
               <View style={styles.addButton}>
                 <Text style={styles.addButtonText}>ADD</Text>
@@ -418,7 +528,6 @@ export default function LimitDetailScreen() {
           </View>
         </View>
 
-        {}
         <TouchableOpacity style={styles.turnOffButton} onPress={handleTurnOff}>
           <MaterialIcons
             name="power-settings-new"
@@ -439,7 +548,17 @@ export default function LimitDetailScreen() {
 
         <TouchableOpacity
           style={{ marginTop: 24, alignItems: "center" }}
-          onPress={() => navigation.goBack()}
+          onPress={async () => {
+            // NEW: Set the ignore flag for today in Supabase
+            if (deviceId !== "tv") {
+              const todayStr = new Date().toISOString().split("T")[0];
+              await supabase
+                .from("devices")
+                .update({ last_budget_alert_date: todayStr + "_ignored" })
+                .eq("id", deviceId);
+            }
+            navigation.goBack();
+          }}
         >
           <Text
             style={{
@@ -455,7 +574,6 @@ export default function LimitDetailScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {}
       <Modal
         animationType="fade"
         transparent={true}

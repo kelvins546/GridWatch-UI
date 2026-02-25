@@ -35,6 +35,7 @@ export default function BudgetDetailScreen() {
   const [limit, setLimit] = useState(""); // Empty string defaults to "No Limit"
   const [autoCutoff, setAutoCutoff] = useState(false);
   const [pushNotifications, setPushNotifications] = useState(true);
+  const [autoPopup, setAutoPopup] = useState(false); // NEW: State for Alert Style
 
   const [globalBudget, setGlobalBudget] = useState(0);
   const [otherDevicesLimit, setOtherDevicesLimit] = useState(0);
@@ -121,6 +122,7 @@ export default function BudgetDetailScreen() {
         }
         setAutoCutoff(deviceData.auto_cutoff || false);
         setPushNotifications(deviceData.is_monitored || false);
+        setAutoPopup(deviceData.auto_popup || false); // NEW: Load popup preference
       }
       setCurrentDbDevice(deviceData);
 
@@ -221,6 +223,7 @@ export default function BudgetDetailScreen() {
           budget_limit: limitToSave,
           auto_cutoff: autoCutoff,
           is_monitored: pushNotifications,
+          auto_popup: autoPopup, // NEW: Save popup preference
         })
         .eq("id", currentDbDevice.id);
 
@@ -231,6 +234,7 @@ export default function BudgetDetailScreen() {
         budget_limit: limitToSave,
         auto_cutoff: autoCutoff,
         is_monitored: pushNotifications,
+        auto_popup: autoPopup, // NEW: Update local device state
       }));
 
       setStatusModal({
@@ -671,6 +675,21 @@ export default function BudgetDetailScreen() {
             value={pushNotifications}
             onToggle={() => setPushNotifications(!pushNotifications)}
             disabled={false}
+            theme={theme}
+            scaledSize={scaledSize}
+          />
+
+          {/* NEW: Alert Style Choice */}
+          <RuleItem
+            title="Alert Style: Auto-Popup"
+            desc={
+              autoPopup
+                ? "Limit alerts will aggressively pop up on screen."
+                : "Limit alerts will show as a standard dropdown banner."
+            }
+            value={autoPopup}
+            onToggle={() => setAutoPopup(!autoPopup)}
+            disabled={!pushNotifications} // Disabled if notifications are completely turned off
             theme={theme}
             scaledSize={scaledSize}
           />

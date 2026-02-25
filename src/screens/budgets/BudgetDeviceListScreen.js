@@ -47,7 +47,7 @@ export default function BudgetDeviceListScreen() {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedUnusedDevice, setSelectedUnusedDevice] = useState(null);
 
-  // --- MOCK DEVICES (Kept as requested) ---
+  // --- MOCK DEVICES ---
   const mockDevices = [
     {
       id: "tv",
@@ -71,13 +71,11 @@ export default function BudgetDeviceListScreen() {
     },
   ];
 
-  // --- TIMER: Updates 'now' every second for relative time calc ---
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // --- REALTIME: Fetch Online/Offline Status (Copied & Improved) ---
   useEffect(() => {
     if (!hubId) return;
 
@@ -96,7 +94,6 @@ export default function BudgetDeviceListScreen() {
             if (payload.new.last_seen) {
               setHubLastSeen(payload.new.last_seen);
             }
-            // Force immediate UI update when heartbeat arrives
             setNow(Date.now());
           }
         },
@@ -170,7 +167,6 @@ export default function BudgetDeviceListScreen() {
   const processedRealDevices = realDevices.map((d) => {
     let isHubOnline = false;
 
-    // --- FIX: Increased Threshold to 120s (2 mins) to match Home Screen ---
     if (hubLastSeen) {
       let timeStr = hubLastSeen.replace(" ", "T");
       if (!timeStr.endsWith("Z") && !timeStr.includes("+")) timeStr += "Z";
@@ -178,7 +174,7 @@ export default function BudgetDeviceListScreen() {
 
       if (!isNaN(lastSeenMs)) {
         const diffSeconds = (now - lastSeenMs) / 1000;
-        isHubOnline = diffSeconds < 120; // 2 minute buffer
+        isHubOnline = diffSeconds < 120;
       }
     }
 
@@ -186,10 +182,19 @@ export default function BudgetDeviceListScreen() {
     let type = "neutral";
     let statusText = "Off";
 
+    // --- CHECK FOR BUDGET OVERAGE ---
+    const budgetLimit = d.budget_limit || 0;
+    const currentCost = d.totalCost || 0;
+    const isOverBudget = budgetLimit > 0 && currentCost >= budgetLimit;
+
     if (!isHubOnline) {
       statusText = "Offline";
     } else if (d.type === "Unused") {
       statusText = "Not Configured";
+    } else if (isOverBudget) {
+      // Show warning color if it's over budget
+      type = "warn";
+      statusText = "Budget Exceeded!";
     } else if (isOn) {
       type = "good";
       const watts =
@@ -203,23 +208,25 @@ export default function BudgetDeviceListScreen() {
       id: d.id,
       name: d.name || `Outlet ${d.outlet_number}`,
       icon: "power",
-      currentLoad:
-        d.type === "Unused" ? "---" : `₱ ${(d.totalCost || 0).toFixed(2)}`,
+      currentLoad: d.type === "Unused" ? "---" : `₱ ${currentCost.toFixed(2)}`,
       limit:
         d.type === "Unused"
           ? "---"
-          : d.budget_limit
-            ? `₱ ${d.budget_limit.toFixed(2)}`
+          : budgetLimit
+            ? `₱ ${budgetLimit.toFixed(2)}`
             : "No Limit",
       statusText: statusText,
       type: type,
       isReal: true,
       dbType: d.type,
+      rawLimit: budgetLimit,
+      totalCost: currentCost,
     };
   });
 
   const displayList = [...processedRealDevices, ...mockDevices];
 
+  // --- AUTOMATIC REDIRECT LOGIC HERE ---
   const handleDevicePress = (device) => {
     if (device.dbType === "Unused") {
       setSelectedUnusedDevice(device);
@@ -228,7 +235,10 @@ export default function BudgetDeviceListScreen() {
     }
 
     if (device.id === "tv") {
-      navigation.navigate("LimitDetail");
+      navigation.navigate("LimitDetail", {
+        deviceId: "tv",
+        deviceName: "Smart TV",
+      });
       return;
     }
 
@@ -237,6 +247,20 @@ export default function BudgetDeviceListScreen() {
       return;
     }
 
+    // --- TRIGGER: IF BUDGET IS REACHED, SEND TO LIMIT DETAIL ---
+    if (
+      device.isReal &&
+      device.rawLimit > 0 &&
+      device.totalCost >= device.rawLimit
+    ) {
+      navigation.navigate("LimitDetail", {
+        deviceId: device.id,
+        deviceName: device.name,
+      });
+      return;
+    }
+
+    // Otherwise go to standard details
     navigation.navigate("BudgetDetail", {
       deviceName: device.name,
       deviceId: device.id,
@@ -446,8 +470,12 @@ export default function BudgetDeviceListScreen() {
 function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
   let iconColor, iconBg, statusTextColor;
   let borderColor = theme.cardBorder;
+  let isCritical = false;
 
-  if (data.statusText === "Offline") {
+  if (
+    data.statusText === "Offline" ||
+    (data.statusText.includes("Offline") && data.type !== "critical")
+  ) {
     iconColor = theme.textSecondary;
     iconBg = theme.buttonNeutral;
     statusTextColor = theme.textSecondary;
@@ -461,6 +489,7 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
     statusTextColor = iconColor;
     borderColor = iconColor;
   } else if (data.type === "critical") {
+    isCritical = true;
     iconColor = isDarkMode ? "#ff4444" : "#c62828";
     iconBg = isDarkMode ? "rgba(255, 68, 68, 0.15)" : "rgba(198, 40, 40, 0.1)";
     statusTextColor = iconColor;
@@ -473,11 +502,11 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
 
   return (
     <TouchableOpacity
-      activeOpacity={0.9}
+      activeOpacity={0.8}
       onPress={onPress}
       style={{ marginBottom: 0 }}
     >
-      <View
+      <Animated.View
         style={{
           flexDirection: "row",
           alignItems: "center",
@@ -485,6 +514,7 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
           padding: 16,
           borderRadius: 16,
           borderWidth: 1,
+          borderLeftWidth: isCritical ? 5 : 1,
           backgroundColor: theme.card,
           borderColor: borderColor,
         }}
@@ -543,10 +573,7 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
             </View>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <Text
-                style={{
-                  color: theme.textSecondary,
-                  fontSize: scaledSize(11),
-                }}
+                style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
               >
                 {data.currentLoad}
               </Text>
@@ -597,7 +624,7 @@ function DeviceRow({ data, theme, isDarkMode, onPress, scaledSize }) {
           size={scaledSize(20)}
           color={theme.textSecondary}
         />
-      </View>
+      </Animated.View>
     </TouchableOpacity>
   );
 }

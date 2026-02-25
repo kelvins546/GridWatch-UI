@@ -13,7 +13,10 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
-import { useNavigation } from "@react-navigation/native";
+import {
+  useNavigation,
+  createNavigationContainerRef,
+} from "@react-navigation/native";
 import * as Notifications from "expo-notifications";
 import { supabase } from "../lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -56,6 +59,8 @@ import InvitationsScreen from "../screens/menu/InvitationsScreen";
 import FaultDetailScreen from "../screens/devices/FaultDetailScreen";
 import DeviceControlScreen from "../screens/devices/DeviceControlScreen";
 import DisconnectedScreen from "../screens/settings/DisconnectedScreen";
+
+export const navigationRef = createNavigationContainerRef();
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -211,6 +216,11 @@ function BottomTabNavigator() {
         const data = response.notification.request.content.data;
         if (data?.screen === "Invitations") {
           navigation.navigate("Invitations");
+        } else if (data?.screen === "LimitDetail" && data?.deviceId) {
+          navigation.navigate("LimitDetail", {
+            deviceId: data.deviceId,
+            deviceName: data.deviceName || "Device",
+          });
         } else if (data?.screen === "Notifications") {
           navigation.navigate("Notifications");
         } else {
@@ -219,7 +229,7 @@ function BottomTabNavigator() {
       },
     );
     return () => subscription.remove();
-  }, []);
+  }, [navigation]);
 
   return (
     <Tab.Navigator
@@ -307,6 +317,9 @@ export default function AppNavigator() {
   const notifiedIds = useRef(new Set());
   const isJustLoggedIn = useRef(true);
 
+  // Track devices that have already triggered a limit alert
+  const alertedDevices = useRef(new Set());
+
   const [initialRoute, setInitialRoute] = useState(null);
 
   useEffect(() => {
@@ -343,6 +356,16 @@ export default function AppNavigator() {
     registerForPushNotificationsAsync().then(async (token) => {
       if (token && authUser) {
         console.log("Push Token ready:", token);
+
+        // NEW: Actually save the token to the Supabase users table!
+        const { error } = await supabase
+          .from("users")
+          .update({ expo_push_token: token })
+          .eq("id", authUser.id);
+
+        if (error) {
+          console.log("Error saving push token:", error);
+        }
       }
     });
 
@@ -424,6 +447,7 @@ export default function AppNavigator() {
     body,
     screen = "Notifications",
     silent = false,
+    extraData = {},
   ) => {
     if (notifiedIds.current.has(id)) {
       return false;
@@ -454,11 +478,131 @@ export default function AppNavigator() {
         title: title,
         body: body,
         sound: true,
-        data: { screen: screen },
+        data: { screen: screen, ...extraData },
       },
       trigger: null,
     });
     return true;
+  };
+
+  // --- REWIRED BUDGET MONITORING LOGIC ---
+  const checkDeviceBudgets = async () => {
+    if (!authUser) return;
+
+    try {
+      const { data: userData } = await supabase
+        .from("users")
+        .select("bill_cycle_day")
+        .eq("id", authUser.id)
+        .single();
+
+      const billDay = userData?.bill_cycle_day || 1;
+      const now = new Date();
+      let startDate = new Date(now.getFullYear(), now.getMonth(), billDay);
+      if (now.getDate() < billDay) {
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, billDay);
+      }
+
+      const { data: devices, error: devError } = await supabase
+        .from("devices")
+        .select(
+          "id, name, budget_limit, is_monitored, auto_popup, last_budget_alert_date",
+        )
+        .eq("user_id", authUser.id);
+
+      if (devError || !devices) {
+        console.log("DB columns missing! Please run the SQL command.");
+        return;
+      }
+
+      for (const device of devices) {
+        // Skip only if there is strictly no budget set.
+        if (
+          device.budget_limit === null ||
+          device.budget_limit === undefined ||
+          device.budget_limit <= 0
+        ) {
+          alertedDevices.current.delete(device.id);
+          if (device.last_budget_alert_date != null) {
+            await supabase
+              .from("devices")
+              .update({ last_budget_alert_date: null })
+              .eq("id", device.id);
+          }
+          continue;
+        }
+
+        const { data: usageData } = await supabase
+          .from("usage_analytics")
+          .select("cost_incurred")
+          .eq("device_id", device.id)
+          .gte("date", startDate.toISOString());
+
+        const totalUsed =
+          usageData?.reduce(
+            (sum, row) => sum + (parseFloat(row.cost_incurred) || 0),
+            0,
+          ) || 0;
+
+        console.log(
+          `[Budget Check] ${device.name}: Used ₱${totalUsed.toFixed(2)} / Limit ₱${device.budget_limit}`,
+        );
+
+        if (totalUsed >= device.budget_limit) {
+          // NEW: Create today's string to check for the ignore flag
+          const todayStr = new Date().toISOString().split("T")[0];
+          const ignoredFlag = todayStr + "_ignored";
+
+          // If the user already clicked "Ignore" today, skip everything!
+          if (device.last_budget_alert_date === ignoredFlag) {
+            continue;
+          }
+
+          if (!alertedDevices.current.has(device.id)) {
+            alertedDevices.current.add(device.id); // Mark as alerted
+
+            // NEW: Tell Supabase we hit the limit RIGHT NOW using a Timestamp
+            const triggerTime = new Date().toISOString();
+            await supabase
+              .from("devices")
+              .update({ last_budget_alert_date: triggerTime })
+              .eq("id", device.id);
+
+            // Trigger the App Popup / Notification
+            if (device.auto_popup === true) {
+              console.log("Triggering Auto-Popup Screen Hijack!");
+              if (navigationRef.isReady()) {
+                navigationRef.navigate("LimitDetail", {
+                  deviceId: device.id,
+                  deviceName: device.name,
+                });
+              }
+            } else if (device.is_monitored === true) {
+              console.log("Triggering Push Notification Banner!");
+              await sendUniqueNotification(
+                `limit_hit_${device.id}_${now.getTime()}`,
+                "Budget Limit Reached ⚠️",
+                `${device.name} has exceeded its set limit of ₱${device.budget_limit}. Tap to manage.`,
+                "LimitDetail",
+                false,
+                { deviceId: device.id, deviceName: device.name },
+              );
+            }
+          }
+        } else {
+          // If the limit is safe again, clear the locks!
+          alertedDevices.current.delete(device.id);
+          if (device.last_budget_alert_date != null) {
+            await supabase
+              .from("devices")
+              .update({ last_budget_alert_date: null })
+              .eq("id", device.id);
+          }
+        }
+      }
+    } catch (err) {
+      console.log("Budget monitor error:", err);
+    }
   };
 
   useEffect(() => {
@@ -518,7 +662,7 @@ export default function AppNavigator() {
     };
 
     checkDatabase();
-    const intervalId = setInterval(checkDatabase, 15000);
+    checkDeviceBudgets();
 
     const channel = supabase
       .channel("global_alerts")
@@ -560,11 +704,25 @@ export default function AppNavigator() {
           }
         },
       )
+      // TRIGGERS INSTANTLY WHEN ENERGY USAGE GOES UP OR BUDGET EDITED
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "usage_analytics" },
+        () => {
+          checkDeviceBudgets();
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "devices" },
+        () => {
+          checkDeviceBudgets();
+        },
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(intervalId);
     };
   }, [authUser]);
 
@@ -610,11 +768,6 @@ export default function AppNavigator() {
     >
       {authUser ? (
         <Stack.Group>
-          {/* CRITICAL: 
-             If initialRoute is 'SetupHub', we MUST list SetupHub first.
-             If 'MainApp', list MainApp first.
-             This guarantees correct loading order.
-          */}
           {initialRoute === "SetupHub" ? (
             <>
               <Stack.Screen name="SetupHub" component={SetupHubScreen} />
@@ -627,7 +780,6 @@ export default function AppNavigator() {
             </>
           )}
 
-          {}
           <Stack.Screen
             name="ProfileSettings"
             component={ProfileSettingsScreen}
@@ -645,7 +797,6 @@ export default function AppNavigator() {
           <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
           <Stack.Screen name="AboutUs" component={AboutUsScreen} />
           <Stack.Screen name="ProviderSetup" component={ProviderSetupScreen} />
-
           <Stack.Screen
             name="BudgetDeviceList"
             component={BudgetDeviceListScreen}
@@ -661,7 +812,6 @@ export default function AppNavigator() {
           <Stack.Screen name="HubConfig" component={HubConfigScreen} />
           <Stack.Screen name="FamilyAccess" component={FamilyAccessScreen} />
           <Stack.Screen name="Invitations" component={InvitationsScreen} />
-
           <Stack.Screen name="Disconnected" component={DisconnectedScreen} />
           <Stack.Screen name="FaultDetail" component={FaultDetailScreen} />
           <Stack.Screen name="DeviceControl" component={DeviceControlScreen} />
