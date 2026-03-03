@@ -27,7 +27,7 @@ import { Audio } from "expo-av";
 
 import * as FileSystem from "expo-file-system/legacy";
 
-const GEMINI_API_KEY = "AIzaSyD0wyF9A1_kzm5timBCT52DPYH-ofaFC9w";
+const GEMINI_API_KEY = "AIzaSyAZbf-xiS7aEdvgQfF_aychB4T59jcHdLo";
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 const SYSTEM_PROMPT = `
@@ -37,13 +37,13 @@ Your ONLY goal is to help users manage their home energy, smart devices, budgets
 OFFICIAL KNOWLEDGE BASE (Use this as your source of truth):
 
 1. **Hardware & Connectivity (Technical Limits):**
-   - [cite_start]**Capacity:** Each GridWatch Hub supports a maximum load of **10 Amps** (approx. 2,200 Watts) per outlet[cite: 47]. Do not overload.
-   - [cite_start]**Outlets:** Each Hub controls exactly **4 independent outlets**[cite: 47].
-   - [cite_start]**Requirements:** Remote control, real-time cost tracking, and syncing require an active internet connection[cite: 48].
+   - **Capacity:** Each GridWatch Hub supports a maximum load of **10 Amps** (approx. 2,200 Watts) per outlet. Do not overload.
+   - **Outlets:** Each Hub controls exactly **4 independent outlets**.
+   - **Requirements:** Remote control, real-time cost tracking, and syncing require an active internet connection.
 
 2. **Billing & Costs:**
-   - **Estimates Only:** GridWatch provides **cost estimates** for personal budgeting. [cite_start]The official bill remains the exclusive domain of your utility provider (e.g., Meralco)[cite: 46].
-   - [cite_start]**Rates:** Users can select a specific provider or manually input their own custom electricity rate (PHP/kWh)[cite: 32].
+   - **Estimates Only:** GridWatch provides **cost estimates** for personal budgeting. The official bill remains the exclusive domain of your utility provider (e.g., Meralco).
+   - **Rates:** Users can select a specific provider or manually input their own custom electricity rate (PHP/kWh).
 
 3. **Terms of Service & Privacy:**
    - **Data Monitoring:** By using the service, users acknowledge that voltage, current, and wattage data are uploaded to the cloud for analysis.
@@ -52,13 +52,16 @@ OFFICIAL KNOWLEDGE BASE (Use this as your source of truth):
 
 STRICT GUIDELINES:
 1. **Scope Restriction:** You must ONLY answer questions related to:
-   - [cite_start]GridWatch app features (Budgeting, Hub Setup, Device Config) [cite: 25, 26]
-   - [cite_start]Home energy management & electricity bills [cite: 10]
+   - GridWatch app features (Budgeting, Hub Setup, Device Config)
+   - Home energy management & electricity bills
    - Smart device troubleshooting (Offline hubs, incorrect readings, connection issues)
    - Safety warnings (Overloading the 10A limit)
 2. **Refusal Protocol:** If a user asks about ANY topic outside of the above scope, POLITELY REFUSE.
    - Standard refusal message: "I am the GridWatch Assistant. I can only help you with energy management and app support."
 3. **Format:** Keep answers concise (under 3 sentences).
+4. **Profanity & Abuse Moderation:**
+   - NEVER use profanity, curse words, or inappropriate language.
+   - If a user prompt contains profanity or abusive language, DO NOT answer the core question. Instead, reply strictly with: "Please keep the conversation professional. How can I help you with GridWatch today?"
 `;
 
 if (Platform.OS === "android") {
@@ -116,7 +119,7 @@ export default function HelpSupportScreen() {
     {
       id: Date.now(),
       createdAt: Date.now(),
-      text: "Hello! I am the GridWatch AI Assistant. How can I help you today?",
+      text: "Hello! I am the GridWatch AI Assistant. I am here to help you manage your smart home and electricity usage.\n\nWhat I can help you with:\n• 𝗔𝗽𝗽 𝗙𝗲𝗮𝘁𝘂𝗿𝗲𝘀: Budgeting, Hub setup, and device configuration.\n• 𝗘𝗻𝗲𝗿𝗴𝘆 𝗠𝗮𝗻𝗮𝗴𝗲𝗺𝗲𝗻𝘁: Understanding your electricity estimates and rates.\n• 𝗧𝗿𝗼𝘂𝗯𝗹𝗲𝘀𝗵𝗼𝗼𝘁𝗶𝗻𝗴: Fixing offline hubs, connection issues, or reading errors.\n• 𝗛𝗮𝗿𝗱𝘄𝗮𝗿𝗲 & 𝗦𝗮𝗳𝗲𝘁𝘆: Guidelines on our 4-outlet hubs and 10A load limits.\n\nPlease note: I am a specialized assistant, so I can strictly only answer questions related to GridWatch and home energy management.\n\nHow can I assist you today?",
       sender: "agent",
       type: "text",
       time: new Date().toLocaleTimeString([], {
@@ -407,14 +410,54 @@ export default function HelpSupportScreen() {
         body: JSON.stringify({
           system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
           contents: [{ role: "user", parts: currentParts }],
+          safetySettings: [
+            {
+              category: "HARM_CATEGORY_HARASSMENT",
+              threshold: "BLOCK_LOW_AND_ABOVE",
+            },
+            {
+              category: "HARM_CATEGORY_HATE_SPEECH",
+              threshold: "BLOCK_LOW_AND_ABOVE",
+            },
+            {
+              category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+              threshold: "BLOCK_LOW_AND_ABOVE",
+            },
+            {
+              category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+              threshold: "BLOCK_LOW_AND_ABOVE",
+            },
+          ],
         }),
       });
 
       const data = await response.json();
       if (data.error) throw new Error(data.error.message);
+
+      // 1. Check if Gemini's strict safety API blocked it
+      const isApiBlocked =
+        (data.promptFeedback && data.promptFeedback.blockReason) ||
+        (data.candidates && data.candidates[0].finishReason === "SAFETY");
+
       const aiText =
         data.candidates?.[0]?.content?.parts?.[0]?.text ||
         "I couldn't process that.";
+
+      // 2. Check if our System Prompt blocked it (useful for Tagalog slang)
+      const isPromptBlocked = aiText.includes(
+        "Please keep the conversation professional",
+      );
+
+      if (isApiBlocked || isPromptBlocked) {
+        // MARK THE MESSAGE AS BLOCKED INSTEAD OF DELETING IT
+        setChatHistory((prev) =>
+          prev.map((msg) =>
+            msg.id === currentUserMsg.id ? { ...msg, isBlocked: true } : msg,
+          ),
+        );
+        setIsTyping(false);
+        return; // Exit the function early so NO bot reply is sent
+      }
 
       setChatHistory((prev) => [
         ...prev,
@@ -469,6 +512,13 @@ export default function HelpSupportScreen() {
   );
 
   const renderBubbleContent = (item, isUser) => {
+    // If the user's message is blocked, text turns to theme.text instead of white
+    const bubbleTextColor = isUser
+      ? item.isBlocked
+        ? theme.text
+        : "#fff"
+      : theme.text;
+
     if (item.type === "image") {
       return (
         <TouchableOpacity
@@ -479,14 +529,14 @@ export default function HelpSupportScreen() {
         >
           <Image
             source={{ uri: item.uri }}
-            style={styles.chatImage}
+            style={[styles.chatImage, item.isBlocked && { opacity: 0.5 }]}
             resizeMode="cover"
           />
           <Text
             style={[
               styles.bubbleText,
               {
-                color: isUser ? "#fff" : theme.text,
+                color: bubbleTextColor,
                 fontSize: 12,
                 fontStyle: "italic",
               },
@@ -512,7 +562,9 @@ export default function HelpSupportScreen() {
               styles.playButtonSmall,
               {
                 backgroundColor: isUser
-                  ? "rgba(255,255,255,0.2)"
+                  ? item.isBlocked
+                    ? `${theme.text}20`
+                    : "rgba(255,255,255,0.2)"
                   : theme.buttonPrimary,
               },
             ]}
@@ -520,14 +572,14 @@ export default function HelpSupportScreen() {
             <MaterialIcons
               name={isThisPlaying ? "pause" : "play-arrow"}
               size={24}
-              color="#fff"
+              color={isUser && item.isBlocked ? theme.text : "#fff"}
             />
           </TouchableOpacity>
 
           <View>
             <Text
               style={{
-                color: isUser ? "#fff" : theme.text,
+                color: bubbleTextColor,
                 fontWeight: "bold",
               }}
             >
@@ -535,7 +587,11 @@ export default function HelpSupportScreen() {
             </Text>
             <Text
               style={{
-                color: isUser ? "#eee" : theme.textSecondary,
+                color: isUser
+                  ? item.isBlocked
+                    ? theme.textSecondary
+                    : "#eee"
+                  : theme.textSecondary,
                 fontSize: 10,
                 fontVariant: ["tabular-nums"],
               }}
@@ -547,9 +603,7 @@ export default function HelpSupportScreen() {
       );
     }
     return (
-      <Text
-        style={[styles.bubbleText, { color: isUser ? "#fff" : theme.text }]}
-      >
+      <Text style={[styles.bubbleText, { color: bubbleTextColor }]}>
         {item.text}
       </Text>
     );
@@ -851,7 +905,14 @@ export default function HelpSupportScreen() {
                             styles.bubble,
                             isUser
                               ? {
-                                  backgroundColor: theme.buttonPrimary,
+                                  // Turns transparent with red border if blocked
+                                  backgroundColor: item.isBlocked
+                                    ? "transparent"
+                                    : theme.buttonPrimary,
+                                  borderColor: item.isBlocked
+                                    ? "#ff4444"
+                                    : "transparent",
+                                  borderWidth: item.isBlocked ? 1 : 0,
                                   borderBottomRightRadius: 4,
                                 }
                               : {
@@ -864,17 +925,41 @@ export default function HelpSupportScreen() {
                         >
                           {renderBubbleContent(item, isUser)}
                         </View>
-                        <Text
-                          style={[
-                            styles.timeText,
-                            {
-                              color: theme.textSecondary,
-                              textAlign: isUser ? "right" : "left",
-                            },
-                          ]}
+
+                        {/* Status / Timestamp Row */}
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            justifyContent: isUser ? "flex-end" : "flex-start",
+                            alignItems: "center",
+                            marginTop: 4,
+                          }}
                         >
-                          {item.time}
-                        </Text>
+                          {item.isBlocked && (
+                            <MaterialIcons
+                              name="error-outline"
+                              size={12}
+                              color="#ff4444"
+                              style={{ marginRight: 4 }}
+                            />
+                          )}
+                          <Text
+                            style={[
+                              styles.timeText,
+                              {
+                                color: item.isBlocked
+                                  ? "#ff4444"
+                                  : theme.textSecondary,
+                                textAlign: isUser ? "right" : "left",
+                                marginTop: 0,
+                              },
+                            ]}
+                          >
+                            {item.isBlocked
+                              ? "Not sent - Inappropriate content"
+                              : item.time}
+                          </Text>
+                        </View>
                       </View>
                     </View>
                   </View>

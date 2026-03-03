@@ -32,7 +32,8 @@
         "CHANGE_WIFI_STATE",
         "INTERNET",
         "ACCESS_NETWORK_STATE",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "VIBRATE"
       ]
     },
     "web": {

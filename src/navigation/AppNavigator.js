@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Text,
   StatusBar,
+  Vibration,
 } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -314,11 +315,14 @@ function BottomTabNavigator() {
 export default function AppNavigator() {
   const { isDarkMode, theme } = useTheme();
   const { user: authUser, isLoading } = useAuth();
+  const rootNavigation = useNavigation();
   const notifiedIds = useRef(new Set());
   const isJustLoggedIn = useRef(true);
 
   // Track devices that have already triggered a limit alert
   const alertedDevices = useRef(new Set());
+  // Track devices currently in a fault state
+  const alertedFaults = useRef(new Set());
 
   const [initialRoute, setInitialRoute] = useState(null);
 
@@ -357,7 +361,7 @@ export default function AppNavigator() {
       if (token && authUser) {
         console.log("Push Token ready:", token);
 
-        // NEW: Actually save the token to the Supabase users table!
+        // Actually save the token to the Supabase users table!
         const { error } = await supabase
           .from("users")
           .update({ expo_push_token: token })
@@ -506,7 +510,7 @@ export default function AppNavigator() {
       const { data: devices, error: devError } = await supabase
         .from("devices")
         .select(
-          "id, name, budget_limit, is_monitored, auto_popup, last_budget_alert_date",
+          "id, name, budget_limit, is_monitored, auto_popup, last_budget_alert_date, status",
         )
         .eq("user_id", authUser.id);
 
@@ -516,6 +520,38 @@ export default function AppNavigator() {
       }
 
       for (const device of devices) {
+        // ==========================================
+        // 🚨 NEW FAULT DETECTION & EMERGENCY BUZZ 🚨
+        // ==========================================
+        if (device.status === "fault") {
+          if (!alertedFaults.current.has(device.id)) {
+            alertedFaults.current.add(device.id);
+
+            console.log(`CRITICAL FAULT ON ${device.name} - Hijacking screen!`);
+
+            // 1. Emergency Buzz Pattern: (Wait 0ms, Buzz 500ms, Pause 200ms, Buzz 500ms, Pause 200ms, Long Buzz 1000ms)
+            Vibration.vibrate([0, 500, 200, 500, 200, 1000]);
+
+            // 2. Force Screen Hijack using global navigationRef
+            if (navigationRef.isReady()) {
+              navigationRef.navigate("FaultDetail", {
+                deviceId: device.id,
+                deviceName: device.name,
+              });
+            } else if (rootNavigation) {
+              rootNavigation.navigate("FaultDetail", {
+                deviceId: device.id,
+                deviceName: device.name,
+              });
+            }
+          }
+          continue; // Skip the budget check if the device is currently exploding
+        } else {
+          // If the fault is fixed (status back to 'on' or 'off'), remove the lock
+          alertedFaults.current.delete(device.id);
+        }
+        // ==========================================
+
         // Skip only if there is strictly no budget set.
         if (
           device.budget_limit === null ||
@@ -549,7 +585,7 @@ export default function AppNavigator() {
         );
 
         if (totalUsed >= device.budget_limit) {
-          // NEW: Create today's string to check for the ignore flag
+          // Create today's string to check for the ignore flag
           const todayStr = new Date().toISOString().split("T")[0];
           const ignoredFlag = todayStr + "_ignored";
 
@@ -561,7 +597,7 @@ export default function AppNavigator() {
           if (!alertedDevices.current.has(device.id)) {
             alertedDevices.current.add(device.id); // Mark as alerted
 
-            // NEW: Tell Supabase we hit the limit RIGHT NOW using a Timestamp
+            // Tell Supabase we hit the limit RIGHT NOW using a Timestamp
             const triggerTime = new Date().toISOString();
             await supabase
               .from("devices")

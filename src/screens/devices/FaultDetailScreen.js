@@ -14,8 +14,9 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { supabase } from "../../lib/supabase";
 
 if (
   Platform.OS === "android" &&
@@ -26,8 +27,13 @@ if (
 
 export default function FaultDetailScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { theme, fontScale, isDarkMode } = useTheme();
   const scaledSize = (size) => size * fontScale;
+
+  // Get the device info passed from AppNavigator
+  const { deviceId, deviceName } = route.params || {};
+  const displayName = deviceName || "Unknown Device";
 
   const [checks, setChecks] = useState([false, false, false]);
   const [showModal, setShowModal] = useState(false);
@@ -42,14 +48,26 @@ export default function FaultDetailScreen() {
 
   const allChecked = checks.every(Boolean);
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (!allChecked) return;
     setIsResetting(true);
+
+    try {
+      if (deviceId) {
+        // Sync with Supabase: Reset the fault status to "off" so the ESP32 unlocks
+        await supabase
+          .from("devices")
+          .update({ status: "off" })
+          .eq("id", deviceId);
+      }
+    } catch (error) {
+      console.log("Error clearing fault:", error);
+    }
 
     setTimeout(() => {
       setIsResetting(false);
       setShowModal(true);
-    }, 2000);
+    }, 1500);
   };
 
   const styles = StyleSheet.create({
@@ -234,7 +252,7 @@ export default function FaultDetailScreen() {
           >
             <View>
               <Text style={styles.detailLabel}>Affected Device</Text>
-              <Text style={styles.detailValue}>Outlet 3</Text>
+              <Text style={styles.detailValue}>{displayName}</Text>
             </View>
             <View style={{ alignItems: "flex-end" }}>
               <Text style={styles.detailLabel}>Status</Text>
@@ -255,11 +273,11 @@ export default function FaultDetailScreen() {
           >
             <View>
               <Text style={styles.detailLabel}>Peak Current</Text>
-              <Text style={styles.detailValue}>45.2 A</Text>
+              <Text style={styles.detailValue}>&gt; 10.5 A</Text>
             </View>
             <View style={{ alignItems: "flex-end" }}>
               <Text style={styles.detailLabel}>Time of Fault</Text>
-              <Text style={styles.detailValue}>10:42 AM</Text>
+              <Text style={styles.detailValue}>Just Now</Text>
             </View>
           </View>
         </View>
@@ -280,7 +298,7 @@ export default function FaultDetailScreen() {
             />
             <Text style={styles.detailLabel}>Fault Type</Text>
             <Text style={[styles.detailValue, { fontSize: scaledSize(13) }]}>
-              Short Circuit
+              Overload
             </Text>
           </View>
           <View
@@ -296,14 +314,14 @@ export default function FaultDetailScreen() {
               style={{ marginBottom: 8 }}
             />
             <Text style={styles.detailLabel}>Last Active</Text>
-            <Text style={styles.detailValue}>10:41 AM</Text>
+            <Text style={styles.detailValue}>Just Now</Text>
           </View>
         </View>
 
         <Text style={styles.sectionTitle}>Required Safety Checks</Text>
 
         <CheckItem
-          text="I have unplugged the faulty appliance connected to Outlet 3."
+          text={`I have unplugged the faulty appliance connected to ${displayName}.`}
           checked={checks[0]}
           onPress={() => toggleCheck(0)}
           theme={theme}
@@ -411,8 +429,8 @@ export default function FaultDetailScreen() {
                 fontSize: scaledSize(12),
               }}
             >
-              Safety protocols verified. Power has been safely restored to
-              Outlet 3.
+              Safety protocols verified. Power has been safely restored to{" "}
+              {displayName}.
             </Text>
             <TouchableOpacity
               style={{

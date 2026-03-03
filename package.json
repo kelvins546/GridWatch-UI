@@ -50,8 +50,11 @@
   },
   "devDependencies": {
     "@react-native-community/cli": "latest",
+    "@types/react": "~19.1.10",
     "patch-package": "^8.0.1",
-    "postinstall-postinstall": "^2.1.0"
+    "postinstall-postinstall": "^2.1.0",
+    "supabase": "^2.76.14",
+    "typescript": "~5.9.2"
   },
   "private": true
 }
