@@ -79,41 +79,23 @@ const getRefinedSecurityMessage = (title, body) => {
   const t = title ? title.toLowerCase() : "";
   const b = body ? body.toLowerCase() : "";
 
-  if (t.includes("login successful")) {
-    return {
-      title: "Security Alert",
-      body: "New Login Detected: Did you just log in on another device? If not, please change your password immediately.",
-    };
-  }
-
   if (
+    t.includes("login successful") ||
     t.includes("other device") ||
-    b.includes("other device") ||
-    t.includes("new device") ||
-    b.includes("new device") ||
-    t.includes("someone login") ||
-    t.includes("security")
+    t.includes("new device")
   ) {
     return {
       title: "Security Alert",
       body: "New Login Detected: Did you just log in on another device? If not, please change your password immediately.",
     };
   }
-
-  if (t.includes("accepted")) {
-    return { title: "Invite Accepted", body: body };
-  }
-
-  if (t.includes("declined")) {
-    return { title: "Invite Declined", body: body };
-  }
-
+  if (t.includes("accepted")) return { title: "Invite Accepted", body: body };
+  if (t.includes("declined")) return { title: "Invite Declined", body: body };
   return { title, body };
 };
 
 async function registerForPushNotificationsAsync() {
   let token;
-
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("default", {
       name: "default",
@@ -125,30 +107,18 @@ async function registerForPushNotificationsAsync() {
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
-
   if (existingStatus !== "granted") {
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
   }
-
-  if (finalStatus !== "granted") {
-    console.log("Failed to get push token for push notification!");
-    return;
-  }
+  if (finalStatus !== "granted") return;
 
   try {
     const projectId =
       Constants?.expoConfig?.extra?.eas?.projectId ||
       Constants?.easConfig?.projectId;
-    token = (
-      await Notifications.getExpoPushTokenAsync({
-        projectId: projectId,
-      })
-    ).data;
-    console.log("Expo Push Token:", token);
-  } catch (e) {
-    console.log("Error fetching token:", e);
-  }
+    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+  } catch (e) {}
 
   return token;
 }
@@ -215,18 +185,13 @@ function BottomTabNavigator() {
     const subscription = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const data = response.notification.request.content.data;
-        if (data?.screen === "Invitations") {
-          navigation.navigate("Invitations");
-        } else if (data?.screen === "LimitDetail" && data?.deviceId) {
+        if (data?.screen === "Invitations") navigation.navigate("Invitations");
+        else if (data?.screen === "LimitDetail" && data?.deviceId) {
           navigation.navigate("LimitDetail", {
             deviceId: data.deviceId,
             deviceName: data.deviceName || "Device",
           });
-        } else if (data?.screen === "Notifications") {
-          navigation.navigate("Notifications");
-        } else {
-          navigation.navigate("Notifications");
-        }
+        } else navigation.navigate("Notifications");
       },
     );
     return () => subscription.remove();
@@ -246,10 +211,7 @@ function BottomTabNavigator() {
           elevation: 0,
         },
         tabBarActiveTintColor: theme.buttonPrimary,
-        tabBarLabelStyle: {
-          fontSize: 10,
-          marginBottom: 0,
-        },
+        tabBarLabelStyle: { fontSize: 10, marginBottom: 0 },
       }}
     >
       <Tab.Screen
@@ -319,12 +281,14 @@ export default function AppNavigator() {
   const notifiedIds = useRef(new Set());
   const isJustLoggedIn = useRef(true);
 
-  // Track devices that have already triggered a limit alert
   const alertedDevices = useRef(new Set());
-  // Track devices currently in a fault state
   const alertedFaults = useRef(new Set());
 
   const [initialRoute, setInitialRoute] = useState(null);
+
+  // 🔥 NEW: State bridge to force the UI to react to background events
+  const [immediateFault, setImmediateFault] = useState(null);
+  const [immediateLimit, setImmediateLimit] = useState(null);
 
   useEffect(() => {
     const determineInitialRoute = async () => {
@@ -332,118 +296,95 @@ export default function AppNavigator() {
         setInitialRoute(null);
         return;
       }
-
       try {
         const { count, error } = await supabase
           .from("hubs")
           .select("*", { count: "exact", head: true })
           .eq("user_id", authUser.id);
 
-        if (!error && count === 0) {
-          console.log("No hubs found -> Starting at SetupHub");
-          setInitialRoute("SetupHub");
-        } else {
-          setInitialRoute("MainApp");
-        }
+        if (!error && count === 0) setInitialRoute("SetupHub");
+        else setInitialRoute("MainApp");
       } catch (e) {
-        console.log("Error checking hubs, defaulting to MainApp", e);
         setInitialRoute("MainApp");
       }
     };
-
-    if (!isLoading) {
-      determineInitialRoute();
-    }
+    if (!isLoading) determineInitialRoute();
   }, [authUser, isLoading]);
 
   useEffect(() => {
     registerForPushNotificationsAsync().then(async (token) => {
       if (token && authUser) {
-        console.log("Push Token ready:", token);
-
-        // Actually save the token to the Supabase users table!
-        const { error } = await supabase
+        await supabase
           .from("users")
           .update({ expo_push_token: token })
           .eq("id", authUser.id);
-
-        if (error) {
-          console.log("Error saving push token:", error);
-        }
       }
     });
 
     const loadHistory = async () => {
       try {
         const history = await AsyncStorage.getItem("gridwatch_pushed_ids");
-        if (history) {
-          const parsedIds = JSON.parse(history);
-          parsedIds.forEach((id) => notifiedIds.current.add(id));
-        }
-      } catch (error) {
-        console.log("Failed to load notification history", error);
-      }
+        if (history)
+          JSON.parse(history).forEach((id) => notifiedIds.current.add(id));
+      } catch (error) {}
     };
     loadHistory();
 
-    if (authUser) {
-      isJustLoggedIn.current = true;
-    }
-
+    if (authUser) isJustLoggedIn.current = true;
     const timer = setTimeout(() => {
       isJustLoggedIn.current = false;
     }, 15000);
-
     return () => clearTimeout(timer);
   }, [authUser]);
 
-  const shouldSuppressNotification = async (title, body) => {
-    try {
-      const savedSettings = await AsyncStorage.getItem(NOTIF_SETTINGS_KEY);
-      if (!savedSettings) return false;
+  // =================================================================
+  // ⚡ UI THREAD HIJACKER (Safely processes the background alerts)
+  // =================================================================
+  useEffect(() => {
+    if (immediateFault) {
+      console.log("🚨 FORCING UI REDIRECT TO FAULT SCREEN");
+      Vibration.vibrate([0, 500, 200, 500, 200, 1000]); // SOS Buzz
 
-      const settings = JSON.parse(savedSettings);
-      if (!settings.pushEnabled) return true;
-
-      const text = (title + " " + body).toLowerCase();
-
-      if (
-        (text.includes("budget") ||
-          text.includes("cost") ||
-          text.includes("limit") ||
-          text.includes("bill") ||
-          text.includes("exceeded")) &&
-        !settings.budgetAlerts
-      ) {
-        return true;
+      try {
+        if (navigationRef.isReady()) {
+          navigationRef.navigate("FaultDetail", {
+            deviceId: immediateFault.id,
+            deviceName: immediateFault.name,
+          });
+        } else if (rootNavigation) {
+          rootNavigation.navigate("FaultDetail", {
+            deviceId: immediateFault.id,
+            deviceName: immediateFault.name,
+          });
+        }
+      } catch (e) {
+        console.log("Hijack Failed:", e);
       }
 
-      if (
-        (text.includes("offline") ||
-          text.includes("online") ||
-          text.includes("connected") ||
-          text.includes("hub") ||
-          text.includes("device")) &&
-        !settings.deviceStatus
-      ) {
-        return true;
-      }
-
-      if (
-        (text.includes("tip") ||
-          text.includes("news") ||
-          text.includes("update") ||
-          text.includes("smart")) &&
-        !settings.tipsNews
-      ) {
-        return true;
-      }
-
-      return false;
-    } catch (e) {
-      return false;
+      // Clear state so it can trigger again in the future
+      setTimeout(() => setImmediateFault(null), 2000);
     }
-  };
+  }, [immediateFault, rootNavigation]);
+
+  useEffect(() => {
+    if (immediateLimit) {
+      try {
+        if (navigationRef.isReady()) {
+          navigationRef.navigate("LimitDetail", {
+            deviceId: immediateLimit.id,
+            deviceName: immediateLimit.name,
+          });
+        } else if (rootNavigation) {
+          rootNavigation.navigate("LimitDetail", {
+            deviceId: immediateLimit.id,
+            deviceName: immediateLimit.name,
+          });
+        }
+      } catch (e) {}
+      setTimeout(() => setImmediateLimit(null), 2000);
+    }
+  }, [immediateLimit, rootNavigation]);
+  // =================================================================
 
   const sendUniqueNotification = async (
     id,
@@ -453,43 +394,23 @@ export default function AppNavigator() {
     silent = false,
     extraData = {},
   ) => {
-    if (notifiedIds.current.has(id)) {
-      return false;
-    }
-
-    const suppressed = await shouldSuppressNotification(title, body);
-    if (suppressed && !silent) {
-      silent = true;
-      console.log(`Suppressed notification by user settings: ${title}`);
-    }
-
+    if (notifiedIds.current.has(id)) return false;
     notifiedIds.current.add(id);
     try {
       await AsyncStorage.setItem(
         "gridwatch_pushed_ids",
         JSON.stringify(Array.from(notifiedIds.current)),
       );
-    } catch (e) {
-      console.log("Failed to save history", e);
-    }
+    } catch (e) {}
 
-    if (silent) {
-      return true;
-    }
-
+    if (silent) return true;
     await Notifications.scheduleNotificationAsync({
-      content: {
-        title: title,
-        body: body,
-        sound: true,
-        data: { screen: screen, ...extraData },
-      },
+      content: { title, body, sound: true, data: { screen, ...extraData } },
       trigger: null,
     });
     return true;
   };
 
-  // --- REWIRED BUDGET MONITORING LOGIC ---
   const checkDeviceBudgets = async () => {
     if (!authUser) return;
 
@@ -499,72 +420,49 @@ export default function AppNavigator() {
         .select("bill_cycle_day")
         .eq("id", authUser.id)
         .single();
-
       const billDay = userData?.bill_cycle_day || 1;
       const now = new Date();
       let startDate = new Date(now.getFullYear(), now.getMonth(), billDay);
-      if (now.getDate() < billDay) {
+      if (now.getDate() < billDay)
         startDate = new Date(now.getFullYear(), now.getMonth() - 1, billDay);
-      }
+
+      const { data: ownedHubs } = await supabase
+        .from("hubs")
+        .select("id")
+        .eq("user_id", authUser.id);
+      const { data: sharedHubs } = await supabase
+        .from("hub_access")
+        .select("hub_id")
+        .eq("user_id", authUser.id);
+
+      let hubIds = [];
+      if (ownedHubs) ownedHubs.forEach((h) => hubIds.push(h.id));
+      if (sharedHubs) sharedHubs.forEach((h) => hubIds.push(h.hub_id));
+
+      if (hubIds.length === 0) return;
 
       const { data: devices, error: devError } = await supabase
         .from("devices")
         .select(
-          "id, name, budget_limit, is_monitored, auto_popup, last_budget_alert_date, status",
+          "id, name, budget_limit, is_monitored, auto_popup, auto_cutoff, last_budget_alert_date, status",
         )
-        .eq("user_id", authUser.id);
+        .in("hub_id", hubIds);
 
-      if (devError || !devices) {
-        console.log("DB columns missing! Please run the SQL command.");
-        return;
-      }
+      if (devError || !devices) return;
 
       for (const device of devices) {
-        // ==========================================
-        // 🚨 NEW FAULT DETECTION & EMERGENCY BUZZ 🚨
-        // ==========================================
         if (device.status === "fault") {
           if (!alertedFaults.current.has(device.id)) {
             alertedFaults.current.add(device.id);
-
-            console.log(`CRITICAL FAULT ON ${device.name} - Hijacking screen!`);
-
-            // 1. Emergency Buzz Pattern: (Wait 0ms, Buzz 500ms, Pause 200ms, Buzz 500ms, Pause 200ms, Long Buzz 1000ms)
-            Vibration.vibrate([0, 500, 200, 500, 200, 1000]);
-
-            // 2. Force Screen Hijack using global navigationRef
-            if (navigationRef.isReady()) {
-              navigationRef.navigate("FaultDetail", {
-                deviceId: device.id,
-                deviceName: device.name,
-              });
-            } else if (rootNavigation) {
-              rootNavigation.navigate("FaultDetail", {
-                deviceId: device.id,
-                deviceName: device.name,
-              });
-            }
+            setImmediateFault({ id: device.id, name: device.name }); // Triggers the UI bridge
           }
-          continue; // Skip the budget check if the device is currently exploding
+          continue;
         } else {
-          // If the fault is fixed (status back to 'on' or 'off'), remove the lock
           alertedFaults.current.delete(device.id);
         }
-        // ==========================================
 
-        // Skip only if there is strictly no budget set.
-        if (
-          device.budget_limit === null ||
-          device.budget_limit === undefined ||
-          device.budget_limit <= 0
-        ) {
+        if (!device.budget_limit || device.budget_limit <= 0) {
           alertedDevices.current.delete(device.id);
-          if (device.last_budget_alert_date != null) {
-            await supabase
-              .from("devices")
-              .update({ last_budget_alert_date: null })
-              .eq("id", device.id);
-          }
           continue;
         }
 
@@ -580,45 +478,30 @@ export default function AppNavigator() {
             0,
           ) || 0;
 
-        console.log(
-          `[Budget Check] ${device.name}: Used ₱${totalUsed.toFixed(2)} / Limit ₱${device.budget_limit}`,
-        );
-
         if (totalUsed >= device.budget_limit) {
-          // Create today's string to check for the ignore flag
           const todayStr = new Date().toISOString().split("T")[0];
-          const ignoredFlag = todayStr + "_ignored";
-
-          // If the user already clicked "Ignore" today, skip everything!
-          if (device.last_budget_alert_date === ignoredFlag) {
-            continue;
-          }
+          if (device.last_budget_alert_date === todayStr + "_ignored") continue;
 
           if (!alertedDevices.current.has(device.id)) {
-            alertedDevices.current.add(device.id); // Mark as alerted
+            alertedDevices.current.add(device.id);
 
-            // Tell Supabase we hit the limit RIGHT NOW using a Timestamp
             const triggerTime = new Date().toISOString();
+            const dbUpdates = { last_budget_alert_date: triggerTime };
+
+            if (device.auto_cutoff === true) dbUpdates.status = "off";
+
             await supabase
               .from("devices")
-              .update({ last_budget_alert_date: triggerTime })
+              .update(dbUpdates)
               .eq("id", device.id);
 
-            // Trigger the App Popup / Notification
             if (device.auto_popup === true) {
-              console.log("Triggering Auto-Popup Screen Hijack!");
-              if (navigationRef.isReady()) {
-                navigationRef.navigate("LimitDetail", {
-                  deviceId: device.id,
-                  deviceName: device.name,
-                });
-              }
+              setImmediateLimit({ id: device.id, name: device.name }); // Triggers the UI bridge
             } else if (device.is_monitored === true) {
-              console.log("Triggering Push Notification Banner!");
               await sendUniqueNotification(
                 `limit_hit_${device.id}_${now.getTime()}`,
                 "Budget Limit Reached ⚠️",
-                `${device.name} has exceeded its set limit of ₱${device.budget_limit}. Tap to manage.`,
+                `${device.name} has exceeded its set limit.`,
                 "LimitDetail",
                 false,
                 { deviceId: device.id, deviceName: device.name },
@@ -626,19 +509,10 @@ export default function AppNavigator() {
             }
           }
         } else {
-          // If the limit is safe again, clear the locks!
           alertedDevices.current.delete(device.id);
-          if (device.last_budget_alert_date != null) {
-            await supabase
-              .from("devices")
-              .update({ last_budget_alert_date: null })
-              .eq("id", device.id);
-          }
         }
       }
-    } catch (err) {
-      console.log("Budget monitor error:", err);
-    }
+    } catch (err) {}
   };
 
   useEffect(() => {
@@ -653,8 +527,7 @@ export default function AppNavigator() {
           .from("hub_invites")
           .select("id, email, status")
           .eq("status", "pending");
-
-        if (invites && invites.length > 0) {
+        if (invites)
           invites.forEach(async (invite) => {
             if (invite.email.trim().toLowerCase() === myEmail) {
               await sendUniqueNotification(
@@ -665,24 +538,20 @@ export default function AppNavigator() {
               );
             }
           });
-        }
 
         const { data: appNotifs } = await supabase
           .from("app_notifications")
           .select("*")
           .eq("user_id", myId)
           .eq("is_read", false);
-
-        if (appNotifs && appNotifs.length > 0) {
+        if (appNotifs)
           appNotifs.forEach(async (notif) => {
             const { title, body } = getRefinedSecurityMessage(
               notif.title,
               notif.body,
             );
-
             const isSelfLogin =
               title === "Security Alert" && isJustLoggedIn.current;
-
             await sendUniqueNotification(
               notif.id,
               title,
@@ -691,14 +560,15 @@ export default function AppNavigator() {
               isSelfLogin,
             );
           });
-        }
-      } catch (err) {
-        console.log("Polling Exception:", err);
-      }
+      } catch (err) {}
     };
 
     checkDatabase();
     checkDeviceBudgets();
+
+    const faultScannerInterval = setInterval(() => {
+      checkDeviceBudgets();
+    }, 5000);
 
     const channel = supabase
       .channel("global_alerts")
@@ -706,8 +576,7 @@ export default function AppNavigator() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "hub_invites" },
         async (payload) => {
-          if (!payload.new || !payload.new.email) return;
-          if (payload.new.email.trim().toLowerCase() === myEmail) {
+          if (payload.new?.email?.trim().toLowerCase() === myEmail) {
             await sendUniqueNotification(
               payload.new.id,
               "New Invitation",
@@ -726,10 +595,8 @@ export default function AppNavigator() {
               payload.new.title,
               payload.new.body,
             );
-
             const isSelfLogin =
               title === "Security Alert" && isJustLoggedIn.current;
-
             await sendUniqueNotification(
               payload.new.id,
               title,
@@ -740,24 +607,27 @@ export default function AppNavigator() {
           }
         },
       )
-      // TRIGGERS INSTANTLY WHEN ENERGY USAGE GOES UP OR BUDGET EDITED
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "usage_analytics" },
-        () => {
-          checkDeviceBudgets();
-        },
+        () => checkDeviceBudgets(),
       )
+
+      // 🔥 REALTIME BYPASS: Instantly catch database updates
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "devices" },
-        () => {
+        (payload) => {
+          if (payload.new && payload.new.status === "fault") {
+            setImmediateFault({ id: payload.new.id, name: payload.new.name });
+          }
           checkDeviceBudgets();
         },
       )
       .subscribe();
 
     return () => {
+      clearInterval(faultScannerInterval);
       supabase.removeChannel(channel);
     };
   }, [authUser]);
@@ -783,9 +653,7 @@ export default function AppNavigator() {
             marginTop: 15,
             fontWeight: "500",
             fontSize: 12,
-            letterSpacing: 0.5,
             textAlign: "center",
-            width: "100%",
           }}
         >
           Loading GridWatch...
