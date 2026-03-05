@@ -14,6 +14,7 @@ import {
   UIManager,
   Image,
   Keyboard,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -45,6 +46,7 @@ export default function FamilyAccessScreen() {
   const [searchTimer, setSearchTimer] = useState(null);
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [isInviting, setIsInviting] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -77,8 +79,8 @@ export default function FamilyAccessScreen() {
     setAlertModalVisible(true);
   };
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
     try {
       const {
         data: { user },
@@ -177,6 +179,12 @@ export default function FamilyAccessScreen() {
       fetchData();
     }, []),
   );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchData(true);
+    setRefreshing(false);
+  };
 
   const handleTextChange = (text) => {
     setEmail(text);
@@ -443,6 +451,13 @@ export default function FamilyAccessScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.buttonPrimary}
+          />
+        }
       >
         <View className="p-6">
           <Text

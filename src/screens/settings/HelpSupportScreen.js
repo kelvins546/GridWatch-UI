@@ -26,9 +26,9 @@ import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
 
 import * as FileSystem from "expo-file-system/legacy";
+import { supabase } from "../../lib/supabase"; // Make sure Supabase is imported!
 
-const GEMINI_API_KEY = "AIzaSyAZbf-xiS7aEdvgQfF_aychB4T59jcHdLo";
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+// API Key and URL are completely removed from the frontend!
 
 const SYSTEM_PROMPT = `
 You are the GridWatch AI Support Assistant.
@@ -404,10 +404,9 @@ export default function HelpSupportScreen() {
         });
       }
 
-      const response = await fetch(GEMINI_API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // --- NEW SECURE EDGE FUNCTION CALL ---
+      const { data, error } = await supabase.functions.invoke("chat-support", {
+        body: {
           system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
           contents: [{ role: "user", parts: currentParts }],
           safetySettings: [
@@ -428,11 +427,12 @@ export default function HelpSupportScreen() {
               threshold: "BLOCK_LOW_AND_ABOVE",
             },
           ],
-        }),
+        },
       });
 
-      const data = await response.json();
+      if (error) throw new Error(error.message);
       if (data.error) throw new Error(data.error.message);
+      // -------------------------------------
 
       // 1. Check if Gemini's strict safety API blocked it
       const isApiBlocked =

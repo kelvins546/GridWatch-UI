@@ -530,8 +530,9 @@ export default function AppNavigator() {
         if (invites)
           invites.forEach(async (invite) => {
             if (invite.email.trim().toLowerCase() === myEmail) {
+              // FIX: Prepended "invite_" to prevent ID collisions
               await sendUniqueNotification(
-                invite.id,
+                `invite_${invite.id}`,
                 "New Invitation",
                 "You have a pending GridWatch invitation!",
                 "Invitations",
@@ -552,8 +553,10 @@ export default function AppNavigator() {
             );
             const isSelfLogin =
               title === "Security Alert" && isJustLoggedIn.current;
+
+            // FIX: Prepended "notif_" to prevent ID collisions
             await sendUniqueNotification(
-              notif.id,
+              `notif_${notif.id}`,
               title,
               body,
               "Notifications",
@@ -577,8 +580,9 @@ export default function AppNavigator() {
         { event: "INSERT", schema: "public", table: "hub_invites" },
         async (payload) => {
           if (payload.new?.email?.trim().toLowerCase() === myEmail) {
+            // FIX: Prepended "invite_"
             await sendUniqueNotification(
-              payload.new.id,
+              `invite_${payload.new.id}`,
               "New Invitation",
               "You have been invited to join a Hub!",
               "Invitations",
@@ -597,8 +601,10 @@ export default function AppNavigator() {
             );
             const isSelfLogin =
               title === "Security Alert" && isJustLoggedIn.current;
+
+            // FIX: Prepended "notif_"
             await sendUniqueNotification(
-              payload.new.id,
+              `notif_${payload.new.id}`,
               title,
               body,
               "Notifications",

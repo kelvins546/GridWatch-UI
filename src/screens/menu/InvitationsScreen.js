@@ -41,14 +41,12 @@ export default function InvitationsScreen() {
   const { theme, fontScale, isDarkMode } = useTheme();
   const scaledSize = (size) => size * fontScale;
 
-  // NEW: Tab state to toggle between Pending Invites and Joined Hubs
   const [activeTab, setActiveTab] = useState("pending");
-  const [joinedHubs, setJoinedHubs] = useState([]); // NEW: State for hubs the user is a guest in
+  const [joinedHubs, setJoinedHubs] = useState([]);
 
   const [invitations, setInvitations] = useState([]);
   const [selectedInvite, setSelectedInvite] = useState(null);
 
-  // NEW: State for the Leave Hub functionality
   const [hubToLeave, setHubToLeave] = useState(null);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
 
@@ -99,7 +97,7 @@ export default function InvitationsScreen() {
               },
               trigger: null,
             });
-            fetchData(); // Updated to fetch both invites and joined hubs
+            fetchData();
           },
         )
         .subscribe();
@@ -112,7 +110,6 @@ export default function InvitationsScreen() {
     };
   }, []);
 
-  // UPDATED: Fetches both pending invites AND joined hubs
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -121,7 +118,7 @@ export default function InvitationsScreen() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. FETCH PENDING INVITES (Original Logic)
+      // 1. FETCH PENDING INVITES
       const { data: invites, error: inviteError } = await supabase
         .from("hub_invites")
         .select("*")
@@ -178,12 +175,12 @@ export default function InvitationsScreen() {
 
       setInvitations(enrichedInvites);
 
-      // 2. NEW: FETCH JOINED HUBS (Where user is a guest)
+      // 2. FETCH JOINED HUBS
       const { data: accessData, error: accessError } = await supabase
         .from("hub_access")
         .select("hub_id, role, hubs(name, user_id)")
         .eq("user_id", user.id)
-        .eq("role", "guest"); // Only fetch hubs they don't own
+        .eq("role", "guest");
 
       if (accessError) throw accessError;
 
@@ -203,6 +200,7 @@ export default function InvitationsScreen() {
             hub_id: acc.hub_id,
             hubName: acc.hubs.name,
             ownerName: ownerName,
+            ownerId: acc.hubs.user_id, // FIX: Save the owner's ID so we can notify them later
             initial: ownerName.charAt(0).toUpperCase(),
             role: acc.role,
           };
@@ -233,7 +231,6 @@ export default function InvitationsScreen() {
     setShowDeclineModal(true);
   };
 
-  // NEW: Handler for clicking Leave
   const onPressLeave = (hub) => {
     setHubToLeave(hub);
     setShowLeaveModal(true);
@@ -280,7 +277,6 @@ export default function InvitationsScreen() {
       setShowAcceptModal(false);
       setSelectedInvite(null);
 
-      // NEW: Refresh data so the new hub appears in the Joined tab
       fetchData();
 
       showAlert("success", "Success", "You have joined the hub!");
@@ -324,7 +320,6 @@ export default function InvitationsScreen() {
     }
   };
 
-  // NEW: Confirm Leave Logic
   const confirmLeave = async () => {
     if (!hubToLeave) return;
     setProcessing(true);
@@ -333,6 +328,13 @@ export default function InvitationsScreen() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
+      // FIX: Send a notification to the owner BEFORE deleting the access
+      await supabase.from("app_notifications").insert({
+        user_id: hubToLeave.ownerId,
+        title: "Member Left Hub",
+        body: `${user.email} has left ${hubToLeave.hubName}.`,
+      });
 
       const { error } = await supabase
         .from("hub_access")
@@ -450,13 +452,13 @@ export default function InvitationsScreen() {
         refreshControl={
           <RefreshControl
             refreshing={loading}
-            onRefresh={fetchData} // Updated
+            onRefresh={fetchData}
             tintColor={theme.primary}
           />
         }
       >
         <View className="p-6">
-          {/* NEW: TABS UI */}
+          {/* TABS UI */}
           <View
             className="flex-row mb-6 border-b"
             style={{ borderColor: theme.cardBorder }}
@@ -653,7 +655,7 @@ export default function InvitationsScreen() {
                 </View>
               ))
             )
-          ) : /* --- NEW: JOINED HUBS TAB CONTENT --- */
+          ) : /* --- JOINED HUBS TAB CONTENT --- */
           joinedHubs.length === 0 ? (
             <View className="items-center justify-center py-10 opacity-50">
               <MaterialIcons
@@ -821,7 +823,7 @@ export default function InvitationsScreen() {
         </View>
       </Modal>
 
-      {/* NEW: LEAVE MODAL */}
+      {/* LEAVE MODAL */}
       <Modal visible={showLeaveModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>

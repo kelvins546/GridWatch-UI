@@ -41,6 +41,7 @@
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-android-widget": "^0.20.1",
+    "react-native-dotenv": "^3.4.11",
     "react-native-ringer-mode": "^2.0.1",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
