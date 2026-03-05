@@ -11,7 +11,6 @@ import {
   UIManager,
   ActivityIndicator,
   RefreshControl,
-  Alert,
   StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -42,8 +41,17 @@ export default function InvitationsScreen() {
   const { theme, fontScale, isDarkMode } = useTheme();
   const scaledSize = (size) => size * fontScale;
 
+  // NEW: Tab state to toggle between Pending Invites and Joined Hubs
+  const [activeTab, setActiveTab] = useState("pending");
+  const [joinedHubs, setJoinedHubs] = useState([]); // NEW: State for hubs the user is a guest in
+
   const [invitations, setInvitations] = useState([]);
   const [selectedInvite, setSelectedInvite] = useState(null);
+
+  // NEW: State for the Leave Hub functionality
+  const [hubToLeave, setHubToLeave] = useState(null);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
@@ -91,7 +99,7 @@ export default function InvitationsScreen() {
               },
               trigger: null,
             });
-            fetchInvitations();
+            fetchData(); // Updated to fetch both invites and joined hubs
           },
         )
         .subscribe();
@@ -104,7 +112,8 @@ export default function InvitationsScreen() {
     };
   }, []);
 
-  const fetchInvitations = async () => {
+  // UPDATED: Fetches both pending invites AND joined hubs
+  const fetchData = async () => {
     setLoading(true);
     try {
       const {
@@ -112,14 +121,15 @@ export default function InvitationsScreen() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: invites, error } = await supabase
+      // 1. FETCH PENDING INVITES (Original Logic)
+      const { data: invites, error: inviteError } = await supabase
         .from("hub_invites")
         .select("*")
         .eq("email", user.email)
         .eq("status", "pending")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (inviteError) throw inviteError;
 
       const enrichedInvites = await Promise.all(
         invites.map(async (invite) => {
@@ -167,6 +177,39 @@ export default function InvitationsScreen() {
       );
 
       setInvitations(enrichedInvites);
+
+      // 2. NEW: FETCH JOINED HUBS (Where user is a guest)
+      const { data: accessData, error: accessError } = await supabase
+        .from("hub_access")
+        .select("hub_id, role, hubs(name, user_id)")
+        .eq("user_id", user.id)
+        .eq("role", "guest"); // Only fetch hubs they don't own
+
+      if (accessError) throw accessError;
+
+      const enrichedJoinedHubs = await Promise.all(
+        (accessData || []).map(async (acc) => {
+          const { data: owner } = await supabase
+            .from("users")
+            .select("first_name, last_name")
+            .eq("id", acc.hubs.user_id)
+            .single();
+
+          const ownerName = owner
+            ? `${owner.first_name} ${owner.last_name}`
+            : "Unknown User";
+
+          return {
+            hub_id: acc.hub_id,
+            hubName: acc.hubs.name,
+            ownerName: ownerName,
+            initial: ownerName.charAt(0).toUpperCase(),
+            role: acc.role,
+          };
+        }),
+      );
+
+      setJoinedHubs(enrichedJoinedHubs);
     } catch (err) {
       console.log("Fetch Error:", err.message);
     } finally {
@@ -176,7 +219,7 @@ export default function InvitationsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchInvitations();
+      fetchData();
     }, []),
   );
 
@@ -188,6 +231,12 @@ export default function InvitationsScreen() {
   const onPressDecline = (invite) => {
     setSelectedInvite(invite);
     setShowDeclineModal(true);
+  };
+
+  // NEW: Handler for clicking Leave
+  const onPressLeave = (hub) => {
+    setHubToLeave(hub);
+    setShowLeaveModal(true);
   };
 
   const confirmAccept = async () => {
@@ -230,6 +279,10 @@ export default function InvitationsScreen() {
       setInvitations((prev) => prev.filter((i) => i.id !== selectedInvite.id));
       setShowAcceptModal(false);
       setSelectedInvite(null);
+
+      // NEW: Refresh data so the new hub appears in the Joined tab
+      fetchData();
+
       showAlert("success", "Success", "You have joined the hub!");
     } catch (err) {
       showAlert("error", "Error", err.message);
@@ -266,6 +319,41 @@ export default function InvitationsScreen() {
       setSelectedInvite(null);
     } catch (err) {
       showAlert("error", "Error", err.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // NEW: Confirm Leave Logic
+  const confirmLeave = async () => {
+    if (!hubToLeave) return;
+    setProcessing(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const { error } = await supabase
+        .from("hub_access")
+        .delete()
+        .match({ hub_id: hubToLeave.hub_id, user_id: user.id });
+
+      if (error) throw error;
+
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setJoinedHubs((prev) =>
+        prev.filter((h) => h.hub_id !== hubToLeave.hub_id),
+      );
+      setShowLeaveModal(false);
+      setHubToLeave(null);
+      showAlert(
+        "success",
+        "Left Hub",
+        `You have successfully left ${hubToLeave.hubName}.`,
+      );
+    } catch (err) {
+      showAlert("error", "Error", "Failed to leave hub. Please try again.");
     } finally {
       setProcessing(false);
     }
@@ -336,7 +424,7 @@ export default function InvitationsScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
+      {/* Header */}
       <View
         className="flex-row items-center px-6 py-5 border-b"
         style={{ borderBottomColor: theme.cardBorder }}
@@ -362,67 +450,250 @@ export default function InvitationsScreen() {
         refreshControl={
           <RefreshControl
             refreshing={loading}
-            onRefresh={fetchInvitations}
+            onRefresh={fetchData} // Updated
             tintColor={theme.primary}
           />
         }
       >
         <View className="p-6">
-          <Text
-            className="font-bold uppercase tracking-widest mb-4"
-            style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+          {/* NEW: TABS UI */}
+          <View
+            className="flex-row mb-6 border-b"
+            style={{ borderColor: theme.cardBorder }}
           >
-            Incoming Requests
-          </Text>
+            <TouchableOpacity
+              onPress={() => setActiveTab("pending")}
+              className="mr-6 pb-2"
+              style={{
+                borderBottomWidth: activeTab === "pending" ? 2 : 0,
+                borderBottomColor: theme.buttonPrimary,
+              }}
+            >
+              <Text
+                className="font-bold uppercase tracking-widest"
+                style={{
+                  color:
+                    activeTab === "pending"
+                      ? theme.buttonPrimary
+                      : theme.textSecondary,
+                  fontSize: scaledSize(12),
+                }}
+              >
+                Pending ({invitations.length})
+              </Text>
+            </TouchableOpacity>
 
-          {loading && invitations.length === 0 ? (
+            <TouchableOpacity
+              onPress={() => setActiveTab("joined")}
+              className="pb-2"
+              style={{
+                borderBottomWidth: activeTab === "joined" ? 2 : 0,
+                borderBottomColor: theme.buttonPrimary,
+              }}
+            >
+              <Text
+                className="font-bold uppercase tracking-widest"
+                style={{
+                  color:
+                    activeTab === "joined"
+                      ? theme.buttonPrimary
+                      : theme.textSecondary,
+                  fontSize: scaledSize(12),
+                }}
+              >
+                Joined ({joinedHubs.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* LOADING STATE */}
+          {loading && invitations.length === 0 && joinedHubs.length === 0 ? (
             <ActivityIndicator
               size="large"
               color={theme.buttonPrimary}
               style={{ marginTop: 20 }}
             />
-          ) : invitations.length === 0 ? (
+          ) : activeTab === "pending" ? (
+            /* --- PENDING TAB CONTENT --- */
+            invitations.length === 0 ? (
+              <View className="items-center justify-center py-10 opacity-50">
+                <MaterialIcons
+                  name="mail-outline"
+                  size={scaledSize(48)}
+                  color={theme.textSecondary}
+                />
+                <Text
+                  className="mt-3 font-medium"
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(14),
+                  }}
+                >
+                  No pending invitations
+                </Text>
+              </View>
+            ) : (
+              invitations.map((invite) => (
+                <View
+                  key={invite.id}
+                  className="p-5 rounded-2xl border mb-4"
+                  style={{
+                    backgroundColor: theme.card,
+                    borderColor: theme.cardBorder,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}
+                >
+                  <View className="flex-row justify-between items-start mb-4">
+                    <View className="flex-row items-center flex-1">
+                      <View
+                        className="w-10 h-10 rounded-full justify-center items-center mr-3"
+                        style={{ backgroundColor: theme.buttonPrimary }}
+                      >
+                        <Text
+                          className="font-bold"
+                          style={{ color: "#fff", fontSize: scaledSize(14) }}
+                        >
+                          {invite.initial}
+                        </Text>
+                      </View>
+                      <View className="flex-1 pr-2">
+                        <Text
+                          className="font-bold"
+                          style={{
+                            color: theme.text,
+                            fontSize: scaledSize(14),
+                          }}
+                        >
+                          {invite.inviterName}
+                        </Text>
+                        <Text
+                          style={{
+                            color: theme.textSecondary,
+                            fontSize: scaledSize(12),
+                          }}
+                        >
+                          invited you to join
+                        </Text>
+                      </View>
+                    </View>
+                    <Text
+                      style={{
+                        color: theme.textSecondary,
+                        fontSize: scaledSize(10),
+                      }}
+                    >
+                      {invite.date}
+                    </Text>
+                  </View>
+
+                  <View
+                    className="p-3 rounded-xl mb-5 flex-row items-center"
+                    style={{ backgroundColor: theme.background }}
+                  >
+                    <View
+                      className="w-8 h-8 rounded-lg items-center justify-center mr-3"
+                      style={{ backgroundColor: `${theme.buttonPrimary}15` }}
+                    >
+                      <MaterialIcons
+                        name="router"
+                        size={scaledSize(18)}
+                        color={theme.buttonPrimary}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        className="font-bold"
+                        numberOfLines={1}
+                        style={{ color: theme.text, fontSize: scaledSize(13) }}
+                      >
+                        {invite.hubName}
+                      </Text>
+                      <Text
+                        style={{
+                          color: theme.textSecondary,
+                          fontSize: scaledSize(11),
+                        }}
+                      >
+                        Access Level: {invite.role}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View className="flex-row gap-3">
+                    <TouchableOpacity
+                      onPress={() => onPressDecline(invite)}
+                      className="flex-1 py-3 rounded-xl border items-center justify-center"
+                      style={{ borderColor: theme.cardBorder }}
+                    >
+                      <Text
+                        className="font-bold"
+                        style={{ color: theme.text, fontSize: scaledSize(13) }}
+                      >
+                        Decline
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => onPressAccept(invite)}
+                      className="flex-1 py-3 rounded-xl items-center justify-center"
+                      style={{ backgroundColor: theme.buttonPrimary }}
+                    >
+                      <Text
+                        className="font-bold"
+                        style={{ color: "#fff", fontSize: scaledSize(13) }}
+                      >
+                        Accept
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            )
+          ) : /* --- NEW: JOINED HUBS TAB CONTENT --- */
+          joinedHubs.length === 0 ? (
             <View className="items-center justify-center py-10 opacity-50">
               <MaterialIcons
-                name="mail-outline"
+                name="group"
                 size={scaledSize(48)}
                 color={theme.textSecondary}
               />
               <Text
-                className="mt-3 font-medium"
+                className="mt-3 font-medium text-center px-4"
                 style={{
                   color: theme.textSecondary,
                   fontSize: scaledSize(14),
                 }}
               >
-                No pending invitations
+                You haven't joined any family hubs yet.
               </Text>
             </View>
           ) : (
-            invitations.map((invite) => (
+            joinedHubs.map((hub) => (
               <View
-                key={invite.id}
+                key={hub.hub_id}
                 className="p-5 rounded-2xl border mb-4"
                 style={{
                   backgroundColor: theme.card,
                   borderColor: theme.cardBorder,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.05,
-                  shadowRadius: 4,
-                  elevation: 2,
                 }}
               >
                 <View className="flex-row items-center mb-4">
                   <View
                     className="w-10 h-10 rounded-full justify-center items-center mr-3"
-                    style={{ backgroundColor: theme.buttonPrimary }}
+                    style={{ backgroundColor: `${theme.buttonPrimary}22` }}
                   >
                     <Text
                       className="font-bold"
-                      style={{ color: "#fff", fontSize: scaledSize(14) }}
+                      style={{
+                        color: theme.buttonPrimary,
+                        fontSize: scaledSize(14),
+                      }}
                     >
-                      {invite.initial}
+                      {hub.initial}
                     </Text>
                   </View>
                   <View className="flex-1">
@@ -430,7 +701,7 @@ export default function InvitationsScreen() {
                       className="font-bold"
                       style={{ color: theme.text, fontSize: scaledSize(14) }}
                     >
-                      {invite.inviterName}
+                      {hub.hubName}
                     </Text>
                     <Text
                       style={{
@@ -438,86 +709,33 @@ export default function InvitationsScreen() {
                         fontSize: scaledSize(12),
                       }}
                     >
-                      invited you to join
+                      Owner: {hub.ownerName}
                     </Text>
                   </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => onPressLeave(hub)}
+                  className="w-full py-3 rounded-xl items-center justify-center"
+                  style={{ backgroundColor: `${theme.buttonDangerText}15` }}
+                >
                   <Text
+                    className="font-bold"
                     style={{
-                      color: theme.textSecondary,
-                      fontSize: scaledSize(10),
+                      color: theme.buttonDangerText,
+                      fontSize: scaledSize(13),
                     }}
                   >
-                    {invite.date}
+                    Leave Hub
                   </Text>
-                </View>
-
-                <View
-                  className="p-3 rounded-xl mb-5 flex-row items-center"
-                  style={{ backgroundColor: theme.background }}
-                >
-                  <View
-                    className="w-8 h-8 rounded-lg items-center justify-center mr-3"
-                    style={{ backgroundColor: `${theme.buttonPrimary}15` }}
-                  >
-                    <MaterialIcons
-                      name="router"
-                      size={scaledSize(18)}
-                      color={theme.buttonPrimary}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      className="font-bold"
-                      numberOfLines={1}
-                      style={{ color: theme.text, fontSize: scaledSize(13) }}
-                    >
-                      {invite.hubName}
-                    </Text>
-                    <Text
-                      style={{
-                        color: theme.textSecondary,
-                        fontSize: scaledSize(11),
-                      }}
-                    >
-                      Access Level: {invite.role}
-                    </Text>
-                  </View>
-                </View>
-
-                <View className="flex-row gap-3">
-                  <TouchableOpacity
-                    onPress={() => onPressDecline(invite)}
-                    className="flex-1 py-3 rounded-xl border items-center justify-center"
-                    style={{ borderColor: theme.cardBorder }}
-                  >
-                    <Text
-                      className="font-bold"
-                      style={{ color: theme.text, fontSize: scaledSize(13) }}
-                    >
-                      Decline
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => onPressAccept(invite)}
-                    className="flex-1 py-3 rounded-xl items-center justify-center"
-                    style={{ backgroundColor: theme.buttonPrimary }}
-                  >
-                    <Text
-                      className="font-bold"
-                      style={{ color: "#fff", fontSize: scaledSize(13) }}
-                    >
-                      Accept
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                </TouchableOpacity>
               </View>
             ))
           )}
         </View>
       </ScrollView>
 
-      {}
+      {/* ACCEPT MODAL */}
       <Modal visible={showAcceptModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -560,7 +778,7 @@ export default function InvitationsScreen() {
         </View>
       </Modal>
 
-      {}
+      {/* DECLINE MODAL */}
       <Modal visible={showDeclineModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -603,6 +821,50 @@ export default function InvitationsScreen() {
         </View>
       </Modal>
 
+      {/* NEW: LEAVE MODAL */}
+      <Modal visible={showLeaveModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Leave Hub?</Text>
+            <Text style={styles.modalBody}>
+              Are you sure you want to remove your access to{" "}
+              <Text style={{ fontWeight: "bold", color: theme.text }}>
+                {hubToLeave?.hubName}
+              </Text>
+              ? You will need a new invitation to rejoin.
+            </Text>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                onPress={() => setShowLeaveModal(false)}
+                disabled={processing}
+                style={styles.modalCancelBtn}
+              >
+                <Text style={[styles.modalButtonText, { color: theme.text }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={confirmLeave}
+                disabled={processing}
+                style={[
+                  styles.modalConfirmBtn,
+                  { backgroundColor: isDarkMode ? "#ff4444" : "#cc0000" },
+                ]}
+              >
+                {processing ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                    Leave
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ALERT MODAL */}
       <Modal visible={alertModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>

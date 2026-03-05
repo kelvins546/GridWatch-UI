@@ -12,10 +12,15 @@ import {
   RefreshControl,
   Platform,
   UIManager,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import {
+  useNavigation,
+  useRoute,
+  useFocusEffect,
+} from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import { supabase } from "../../lib/supabase";
 
@@ -46,30 +51,6 @@ export default function BudgetDeviceListScreen() {
 
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedUnusedDevice, setSelectedUnusedDevice] = useState(null);
-
-  // --- MOCK DEVICES ---
-  const mockDevices = [
-    {
-      id: "tv",
-      name: "Smart TV",
-      icon: "tv",
-      currentLoad: "₱ 452.00",
-      limit: "₱ 400.00",
-      statusText: "Over Limit (113%)",
-      type: "warn",
-      dbType: "Television",
-    },
-    {
-      id: "outlet",
-      name: "Outlet 3",
-      icon: "power-off",
-      currentLoad: "₱ 0.00",
-      limit: "₱ 500.00",
-      statusText: "Offline - Short Circuit",
-      type: "critical",
-      dbType: "Outlet",
-    },
-  ];
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -106,7 +87,7 @@ export default function BudgetDeviceListScreen() {
   }, [hubId]);
 
   const fetchRealData = async (isRefresh = false) => {
-    if (!isRefresh) setLoading(true);
+    if (!isRefresh && realDevices.length === 0) setLoading(true);
     try {
       const { data: hubInfo } = await supabase
         .from("hubs")
@@ -154,10 +135,15 @@ export default function BudgetDeviceListScreen() {
     }
   };
 
-  useEffect(() => {
-    if (hubId) fetchRealData();
-    else setLoading(false);
-  }, [hubId]);
+  useFocusEffect(
+    useCallback(() => {
+      if (hubId) {
+        fetchRealData(true);
+      } else {
+        setLoading(false);
+      }
+    }, [hubId]),
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -179,10 +165,11 @@ export default function BudgetDeviceListScreen() {
     }
 
     const isOn = d.status?.toLowerCase() === "on";
+    const isFault = d.status?.toLowerCase() === "fault";
     let type = "neutral";
     let statusText = "Off";
+    let icon = "power";
 
-    // --- CHECK FOR BUDGET OVERAGE ---
     const budgetLimit = d.budget_limit || 0;
     const currentCost = d.totalCost || 0;
     const isOverBudget = budgetLimit > 0 && currentCost >= budgetLimit;
@@ -191,8 +178,11 @@ export default function BudgetDeviceListScreen() {
       statusText = "Offline";
     } else if (d.type === "Unused") {
       statusText = "Not Configured";
+    } else if (isFault) {
+      type = "critical";
+      statusText = "Offline - Short Circuit";
+      icon = "power-off";
     } else if (isOverBudget) {
-      // Show warning color if it's over budget
       type = "warn";
       statusText = "Budget Exceeded!";
     } else if (isOn) {
@@ -207,7 +197,7 @@ export default function BudgetDeviceListScreen() {
     return {
       id: d.id,
       name: d.name || `Outlet ${d.outlet_number}`,
-      icon: "power",
+      icon: icon,
       currentLoad: d.type === "Unused" ? "---" : `₱ ${currentCost.toFixed(2)}`,
       limit:
         d.type === "Unused"
@@ -219,14 +209,14 @@ export default function BudgetDeviceListScreen() {
       type: type,
       isReal: true,
       dbType: d.type,
+      dbStatus: d.status?.toLowerCase(),
       rawLimit: budgetLimit,
       totalCost: currentCost,
     };
   });
 
-  const displayList = [...processedRealDevices, ...mockDevices];
+  const displayList = [...processedRealDevices];
 
-  // --- AUTOMATIC REDIRECT LOGIC HERE ---
   const handleDevicePress = (device) => {
     if (device.dbType === "Unused") {
       setSelectedUnusedDevice(device);
@@ -234,20 +224,14 @@ export default function BudgetDeviceListScreen() {
       return;
     }
 
-    if (device.id === "tv") {
-      navigation.navigate("LimitDetail", {
-        deviceId: "tv",
-        deviceName: "Smart TV",
+    if (device.dbStatus === "fault") {
+      navigation.navigate("FaultDetail", {
+        deviceId: device.id,
+        deviceName: device.name,
       });
       return;
     }
 
-    if (device.id === "outlet") {
-      navigation.navigate("FaultDetail");
-      return;
-    }
-
-    // --- TRIGGER: IF BUDGET IS REACHED, SEND TO LIMIT DETAIL ---
     if (
       device.isReal &&
       device.rawLimit > 0 &&
@@ -260,7 +244,6 @@ export default function BudgetDeviceListScreen() {
       return;
     }
 
-    // Otherwise go to standard details
     navigation.navigate("BudgetDetail", {
       deviceName: device.name,
       deviceId: device.id,
@@ -270,6 +253,37 @@ export default function BudgetDeviceListScreen() {
   const handleGoToConfig = () => {
     setShowConfigModal(false);
     navigation.navigate("HubConfig", { hubId: hubId, fromBudget: true });
+  };
+
+  // --- SECRET PRESENTATION DEMO BUTTON LOGIC ---
+  const triggerDemoFault = async () => {
+    if (!hubId || displayList.length === 0) return;
+
+    const deviceToFault = displayList.find(
+      (d) => d.dbType !== "Unused" && d.isReal,
+    );
+
+    if (!deviceToFault) {
+      Alert.alert(
+        "Notice",
+        "Please configure at least one outlet first to test the fault!",
+      );
+      return;
+    }
+
+    try {
+      await supabase
+        .from("devices")
+        .update({ status: "fault" })
+        .eq("id", deviceToFault.id);
+
+      navigation.navigate("FaultDetail", {
+        deviceId: deviceToFault.id,
+        deviceName: deviceToFault.name,
+      });
+    } catch (error) {
+      console.log("Demo Fault Error:", error);
+    }
   };
 
   const styles = StyleSheet.create({
@@ -377,15 +391,21 @@ export default function BudgetDeviceListScreen() {
             color={theme.textSecondary}
           />
         </TouchableOpacity>
-        <Text
-          style={{
-            color: theme.text,
-            fontSize: scaledSize(18),
-            fontWeight: "bold",
-          }}
-        >
-          Budget Management
-        </Text>
+
+        {/* --- SECRET BUTTON IS NOW THE HEADER TEXT --- */}
+        <TouchableOpacity activeOpacity={1} onPress={triggerDemoFault}>
+          <Text
+            style={{
+              color: theme.text,
+              fontSize: scaledSize(18),
+              fontWeight: "bold",
+            }}
+          >
+            Budget Management
+          </Text>
+        </TouchableOpacity>
+        {/* ------------------------------------------- */}
+
         <View style={{ width: scaledSize(20) + 8 }} />
       </View>
 

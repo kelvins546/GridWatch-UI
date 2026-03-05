@@ -13,12 +13,13 @@ import {
   UIManager,
   LayoutAnimation,
   ActivityIndicator,
+  KeyboardAvoidingView, // <-- NEW: Imported KeyboardAvoidingView
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
-import { supabase } from "../../lib/supabase"; // Make sure path is correct
+import { supabase } from "../../lib/supabase";
 
 if (
   Platform.OS === "android" &&
@@ -59,6 +60,7 @@ export default function LimitDetailScreen() {
       // Mock data for presentation
       setDeviceData({ name: "Smart TV", auto_cutoff: true });
       setDbLimit(400);
+      setAmount("400"); // Pre-fill the input with the current limit
       setUsedAmount(452);
       setAutoOff(true);
       setIsLoading(false);
@@ -78,6 +80,8 @@ export default function LimitDetailScreen() {
       if (dev) {
         setDeviceData(dev);
         setDbLimit(dev.budget_limit || 0);
+        // Pre-fill the input with the current limit
+        setAmount(dev.budget_limit ? dev.budget_limit.toString() : "");
         setAutoOff(dev.auto_cutoff || false);
       }
 
@@ -120,8 +124,8 @@ export default function LimitDetailScreen() {
   };
 
   const handleExtension = async () => {
-    const addedAmount = parseFloat(amount);
-    if (!addedAmount || isNaN(addedAmount) || addedAmount <= 0) {
+    const newLimit = parseFloat(amount);
+    if (!newLimit || isNaN(newLimit) || newLimit <= 0) {
       setModalContent({
         title: "Invalid Amount",
         msg: "Please enter a valid amount greater than 0.",
@@ -133,21 +137,19 @@ export default function LimitDetailScreen() {
 
     // Update real database if not a mock device
     if (deviceId !== "tv") {
-      const newLimit = dbLimit + addedAmount;
       await supabase
         .from("devices")
-        // NEW: Clear the alert date so it can trigger again if the NEW limit is hit!
+        // Clear the alert date so it can trigger again if the NEW limit is hit
         .update({ budget_limit: newLimit, last_budget_alert_date: null })
         .eq("id", deviceId);
       setDbLimit(newLimit); // Update UI
     } else {
-      setDbLimit(dbLimit + addedAmount);
+      setDbLimit(newLimit);
     }
 
-    setAmount("");
     setModalContent({
-      title: "Limit Extended",
-      msg: `Your budget has been safely increased by ₱${addedAmount.toFixed(2)}.`,
+      title: "Limit Updated",
+      msg: `Your budget limit has been safely updated to ₱${newLimit.toFixed(2)}.`,
       redirect: "GoBack",
     });
     setModalVisible(true);
@@ -383,196 +385,211 @@ export default function LimitDetailScreen() {
         </Text>
       </LinearGradient>
 
-      <ScrollView contentContainerStyle={{ padding: 24 }}>
-        <View style={styles.card}>
-          <Text style={styles.detailLabel}>Daily Consumption</Text>
+      {/* --- NEW: KeyboardAvoidingView added here --- */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={{ padding: 24 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.card}>
+            <Text style={styles.detailLabel}>Daily Consumption</Text>
 
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "flex-end",
-              marginBottom: 10,
-            }}
-          >
-            <Text
+            <View
               style={{
-                fontSize: scaledSize(32),
-                fontWeight: "800",
-                color: theme.text,
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "flex-end",
+                marginBottom: 10,
               }}
             >
-              ₱ {usedAmount.toFixed(2)}
+              <Text
+                style={{
+                  fontSize: scaledSize(32),
+                  fontWeight: "800",
+                  color: theme.text,
+                }}
+              >
+                ₱ {usedAmount.toFixed(2)}
+              </Text>
+              <Text
+                style={{
+                  fontSize: scaledSize(14),
+                  color: theme.textSecondary,
+                  fontWeight: "600",
+                  paddingBottom: 6,
+                }}
+              >
+                Limit: ₱ {dbLimit.toFixed(2)}
+              </Text>
+            </View>
+
+            <View
+              style={{
+                height: 12,
+                backgroundColor: isDarkMode ? "#333" : "#e0e0e0",
+                borderRadius: 6,
+                overflow: "hidden",
+                marginBottom: 8,
+              }}
+            >
+              <LinearGradient
+                colors={["#ffcc00", "#ff4444"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ height: "100%", width: `${progressWidth}%` }}
+              />
+            </View>
+
+            <Text
+              style={{
+                textAlign: "right",
+                fontSize: scaledSize(14),
+                color: "#ff4444",
+                fontWeight: "700",
+              }}
+            >
+              {percentage}% Used
             </Text>
+
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                marginTop: 15,
+                borderTopWidth: 1,
+                borderTopColor: theme.cardBorder,
+                paddingTop: 15,
+              }}
+            >
+              <Text
+                style={{ fontSize: scaledSize(13), color: theme.textSecondary }}
+              >
+                {deviceId === "tv"
+                  ? "Duration: 6h 30m"
+                  : "Realtime Monitor Active"}
+              </Text>
+              <Text
+                style={{ fontSize: scaledSize(13), color: theme.textSecondary }}
+              >
+                {deviceId === "tv" ? "Avg: 120 Watts" : ""}
+              </Text>
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.card,
+              {
+                flexDirection: "row",
+                alignItems: "center",
+                paddingVertical: 16,
+              },
+            ]}
+          >
+            <MaterialIcons
+              name="settings-power"
+              size={scaledSize(32)}
+              color={theme.icon}
+            />
+            <View style={{ flex: 1, marginLeft: 18 }}>
+              <Text
+                style={{
+                  fontSize: scaledSize(16),
+                  fontWeight: "700",
+                  color: theme.text,
+                  marginBottom: 4,
+                }}
+              >
+                {autoOff ? "Auto-Off Enabled" : "Auto-Off Disabled"}
+              </Text>
+              <Text
+                style={{ fontSize: scaledSize(13), color: theme.textSecondary }}
+              >
+                {autoOff
+                  ? "Device will turn off in 5 mins."
+                  : "Manual control active."}
+              </Text>
+            </View>
+
+            <CustomSwitch
+              value={autoOff}
+              onToggle={handleToggleAutoOff}
+              theme={theme}
+            />
+          </View>
+
+          <View style={styles.card}>
+            <Text style={[styles.detailLabel, { color: "#ffaa00" }]}>
+              Extend Budget (Pesos)
+            </Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="New Limit (e.g. 500)"
+                placeholderTextColor={theme.textSecondary}
+                keyboardType="numeric"
+                value={amount}
+                onChangeText={setAmount}
+              />
+              <TouchableOpacity onPress={handleExtension} activeOpacity={0.8}>
+                <View style={styles.addButton}>
+                  <Text style={styles.addButtonText}>UPDATE</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.turnOffButton}
+            onPress={handleTurnOff}
+          >
+            <MaterialIcons
+              name="power-settings-new"
+              size={scaledSize(24)}
+              color={theme.text}
+            />
+            <Text
+              style={{
+                color: theme.text,
+                fontWeight: "600",
+                fontSize: scaledSize(16),
+                marginLeft: 8,
+              }}
+            >
+              Turn Off Now
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{ marginTop: 24, alignItems: "center" }}
+            onPress={async () => {
+              if (deviceId !== "tv") {
+                const todayStr = new Date().toISOString().split("T")[0];
+                await supabase
+                  .from("devices")
+                  .update({ last_budget_alert_date: todayStr + "_ignored" })
+                  .eq("id", deviceId);
+              }
+              navigation.goBack();
+            }}
+          >
             <Text
               style={{
                 fontSize: scaledSize(14),
                 color: theme.textSecondary,
-                fontWeight: "600",
-                paddingBottom: 6,
+                textDecorationLine: "underline",
               }}
             >
-              Limit: ₱ {dbLimit.toFixed(2)}
+              Ignore warning for today
             </Text>
-          </View>
+          </TouchableOpacity>
 
-          <View
-            style={{
-              height: 12,
-              backgroundColor: isDarkMode ? "#333" : "#e0e0e0",
-              borderRadius: 6,
-              overflow: "hidden",
-              marginBottom: 8,
-            }}
-          >
-            <LinearGradient
-              colors={["#ffcc00", "#ff4444"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={{ height: "100%", width: `${progressWidth}%` }}
-            />
-          </View>
-
-          <Text
-            style={{
-              textAlign: "right",
-              fontSize: scaledSize(14),
-              color: "#ff4444",
-              fontWeight: "700",
-            }}
-          >
-            {percentage}% Used
-          </Text>
-
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              marginTop: 15,
-              borderTopWidth: 1,
-              borderTopColor: theme.cardBorder,
-              paddingTop: 15,
-            }}
-          >
-            <Text
-              style={{ fontSize: scaledSize(13), color: theme.textSecondary }}
-            >
-              {deviceId === "tv"
-                ? "Duration: 6h 30m"
-                : "Realtime Monitor Active"}
-            </Text>
-            <Text
-              style={{ fontSize: scaledSize(13), color: theme.textSecondary }}
-            >
-              {deviceId === "tv" ? "Avg: 120 Watts" : ""}
-            </Text>
-          </View>
-        </View>
-
-        <View
-          style={[
-            styles.card,
-            { flexDirection: "row", alignItems: "center", paddingVertical: 16 },
-          ]}
-        >
-          <MaterialIcons
-            name="settings-power"
-            size={scaledSize(32)}
-            color={theme.icon}
-          />
-          <View style={{ flex: 1, marginLeft: 18 }}>
-            <Text
-              style={{
-                fontSize: scaledSize(16),
-                fontWeight: "700",
-                color: theme.text,
-                marginBottom: 4,
-              }}
-            >
-              {autoOff ? "Auto-Off Enabled" : "Auto-Off Disabled"}
-            </Text>
-            <Text
-              style={{ fontSize: scaledSize(13), color: theme.textSecondary }}
-            >
-              {autoOff
-                ? "Device will turn off in 5 mins."
-                : "Manual control active."}
-            </Text>
-          </View>
-
-          <CustomSwitch
-            value={autoOff}
-            onToggle={handleToggleAutoOff}
-            theme={theme}
-          />
-        </View>
-
-        <View style={styles.card}>
-          <Text style={[styles.detailLabel, { color: "#ffaa00" }]}>
-            Extend Budget (Pesos)
-          </Text>
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Amount (e.g. 20)"
-              placeholderTextColor={theme.textSecondary}
-              keyboardType="numeric"
-              value={amount}
-              onChangeText={setAmount}
-            />
-            <TouchableOpacity onPress={handleExtension} activeOpacity={0.8}>
-              <View style={styles.addButton}>
-                <Text style={styles.addButtonText}>ADD</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.turnOffButton} onPress={handleTurnOff}>
-          <MaterialIcons
-            name="power-settings-new"
-            size={scaledSize(24)}
-            color={theme.text}
-          />
-          <Text
-            style={{
-              color: theme.text,
-              fontWeight: "600",
-              fontSize: scaledSize(16),
-              marginLeft: 8,
-            }}
-          >
-            Turn Off Now
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={{ marginTop: 24, alignItems: "center" }}
-          onPress={async () => {
-            // NEW: Set the ignore flag for today in Supabase
-            if (deviceId !== "tv") {
-              const todayStr = new Date().toISOString().split("T")[0];
-              await supabase
-                .from("devices")
-                .update({ last_budget_alert_date: todayStr + "_ignored" })
-                .eq("id", deviceId);
-            }
-            navigation.goBack();
-          }}
-        >
-          <Text
-            style={{
-              fontSize: scaledSize(14),
-              color: theme.textSecondary,
-              textDecorationLine: "underline",
-            }}
-          >
-            Ignore warning for today
-          </Text>
-        </TouchableOpacity>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <Modal
         animationType="fade"

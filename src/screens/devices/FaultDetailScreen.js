@@ -54,10 +54,10 @@ export default function FaultDetailScreen() {
 
     try {
       if (deviceId) {
-        // Sync with Supabase: Reset the fault status to "off" so the ESP32 unlocks
+        // Sync with Supabase: Clear the fault AND tell the ESP32 to turn the relay back ON
         await supabase
           .from("devices")
-          .update({ status: "off" })
+          .update({ status: "on" })
           .eq("id", deviceId);
       }
     } catch (error) {

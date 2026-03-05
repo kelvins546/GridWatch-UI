@@ -237,12 +237,8 @@ export default function BudgetDetailScreen() {
         auto_popup: autoPopup, // NEW: Update local device state
       }));
 
-      setStatusModal({
-        visible: true,
-        title: "Success",
-        message: "Device budget settings updated.",
-        type: "success",
-      });
+      // Redirect immediately back to the list screen upon successful save
+      navigation.goBack();
     } catch (error) {
       setStatusModal({
         visible: true,
