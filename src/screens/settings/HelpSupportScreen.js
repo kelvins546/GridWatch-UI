@@ -20,15 +20,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
 
 import * as FileSystem from "expo-file-system/legacy";
-import { supabase } from "../../lib/supabase"; // Make sure Supabase is imported!
-
-// API Key and URL are completely removed from the frontend!
+import { supabase } from "../../lib/supabase";
 
 const SYSTEM_PROMPT = `
 You are the GridWatch AI Support Assistant.
@@ -90,6 +88,7 @@ const getDayLabel = (timestamp) => {
 
 export default function HelpSupportScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { theme } = useTheme();
   const scaledSize = (size) => size;
 
@@ -151,6 +150,21 @@ export default function HelpSupportScreen() {
   const filteredIssues = commonIssues.filter((issue) =>
     issue.title.toLowerCase().includes(searchQuery.toLowerCase()),
   );
+
+  useEffect(() => {
+    if (route.params?.openChat) {
+      setChatModalVisible(true);
+    }
+  }, [route.params]);
+
+  // SMART CLOSE FUNCTION
+  const handleCloseChat = () => {
+    setChatModalVisible(false);
+    // If the user entered via the Home Screen shortcut, send them back to the Home Screen
+    if (route.params?.openChat) {
+      navigation.goBack();
+    }
+  };
 
   useEffect(() => {
     let animation;
@@ -404,7 +418,6 @@ export default function HelpSupportScreen() {
         });
       }
 
-      // --- NEW SECURE EDGE FUNCTION CALL ---
       const { data, error } = await supabase.functions.invoke("chat-support", {
         body: {
           system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
@@ -432,9 +445,7 @@ export default function HelpSupportScreen() {
 
       if (error) throw new Error(error.message);
       if (data.error) throw new Error(data.error.message);
-      // -------------------------------------
 
-      // 1. Check if Gemini's strict safety API blocked it
       const isApiBlocked =
         (data.promptFeedback && data.promptFeedback.blockReason) ||
         (data.candidates && data.candidates[0].finishReason === "SAFETY");
@@ -443,20 +454,18 @@ export default function HelpSupportScreen() {
         data.candidates?.[0]?.content?.parts?.[0]?.text ||
         "I couldn't process that.";
 
-      // 2. Check if our System Prompt blocked it (useful for Tagalog slang)
       const isPromptBlocked = aiText.includes(
         "Please keep the conversation professional",
       );
 
       if (isApiBlocked || isPromptBlocked) {
-        // MARK THE MESSAGE AS BLOCKED INSTEAD OF DELETING IT
         setChatHistory((prev) =>
           prev.map((msg) =>
             msg.id === currentUserMsg.id ? { ...msg, isBlocked: true } : msg,
           ),
         );
         setIsTyping(false);
-        return; // Exit the function early so NO bot reply is sent
+        return;
       }
 
       setChatHistory((prev) => [
@@ -512,7 +521,6 @@ export default function HelpSupportScreen() {
   );
 
   const renderBubbleContent = (item, isUser) => {
-    // If the user's message is blocked, text turns to theme.text instead of white
     const bubbleTextColor = isUser
       ? item.isBlocked
         ? theme.text
@@ -791,11 +799,11 @@ export default function HelpSupportScreen() {
         </View>
       </ScrollView>
 
-      {}
+      {/* CHAT MODAL */}
       <Modal
         animationType="slide"
         visible={chatModalVisible}
-        onRequestClose={() => setChatModalVisible(false)}
+        onRequestClose={handleCloseChat} // Trigger smart close here too
       >
         <SafeAreaView
           style={[styles.container, { backgroundColor: theme.background }]}
@@ -804,7 +812,8 @@ export default function HelpSupportScreen() {
           <View
             style={[styles.header, { borderBottomColor: theme.cardBorder }]}
           >
-            <TouchableOpacity onPress={() => setChatModalVisible(false)}>
+            {/* USE SMART CLOSE FUNCTION HERE */}
+            <TouchableOpacity onPress={handleCloseChat}>
               <MaterialIcons name="close" size={24} color={theme.text} />
             </TouchableOpacity>
             <View style={{ alignItems: "center" }}>
@@ -905,7 +914,6 @@ export default function HelpSupportScreen() {
                             styles.bubble,
                             isUser
                               ? {
-                                  // Turns transparent with red border if blocked
                                   backgroundColor: item.isBlocked
                                     ? "transparent"
                                     : theme.buttonPrimary,
@@ -926,7 +934,6 @@ export default function HelpSupportScreen() {
                           {renderBubbleContent(item, isUser)}
                         </View>
 
-                        {/* Status / Timestamp Row */}
                         <View
                           style={{
                             flexDirection: "row",
@@ -967,7 +974,6 @@ export default function HelpSupportScreen() {
               }}
             />
 
-            {}
             <View
               style={[
                 styles.inputContainer,

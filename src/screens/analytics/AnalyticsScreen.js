@@ -72,24 +72,9 @@ export default function AnalyticsScreen() {
   const [chartLabels, setChartLabels] = useState([]);
   const [dateRangeText, setDateRangeText] = useState("");
 
-  const faultLogs = [
-    {
-      id: 1,
-      type: "Limit",
-      device: "Air Conditioner",
-      msg: "Daily budget limit (₱150) reached. Auto-cutoff triggered.",
-      date: "Feb 16, 2026 • 14:30",
-      color: "#ffaa00",
-    },
-    {
-      id: 2,
-      type: "Fault",
-      device: "Washing Machine",
-      msg: "Short circuit detected on Outlet 2. Safe shutdown completed.",
-      date: "Feb 14, 2026 • 09:15",
-      color: "#ff4444",
-    },
-  ];
+  // AI Summary State
+  const [aiSummary, setAiSummary] = useState("");
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
   const getBarColor = (percent) => {
     if (percent > 80) return isDarkMode ? "#ff4444" : "#cc0000"; // Red
@@ -115,6 +100,7 @@ export default function AnalyticsScreen() {
 
   const fetchAnalytics = async () => {
     setIsLoading(true);
+    setAiSummary(""); // Clear old AI summary when fetching new data
     try {
       const {
         data: { user },
@@ -291,8 +277,6 @@ export default function AnalyticsScreen() {
           const monthIdx = rowDate.getMonth();
           if (buckets[monthIdx] !== undefined) buckets[monthIdx] += cost;
         } else if (activeTab === "This Day") {
-          // --- AS REQUESTED: PUT ALL DATA INTO 12PM BUCKET ---
-          // Index 3 corresponds to the "12pm" label in the labels array
           buckets[3] += cost;
         }
       });
@@ -326,6 +310,69 @@ export default function AnalyticsScreen() {
       fetchAnalytics();
     }, [activeScope, activeTab, activeHubFilter, dateOffset]),
   );
+
+  // --- AI GENERATOR FUNCTION ---
+  const generateAISummary = async () => {
+    if (breakdownData.length === 0 || totalValue === 0) {
+      setAiSummary(
+        "There is not enough energy usage data to generate an insight for this period.",
+      );
+      return;
+    }
+    setIsGeneratingSummary(true);
+    setAiSummary("");
+    try {
+      // Constructing a detailed prompt using the exact state variables on screen
+      const dataContext = breakdownData
+        .map((d) => `${d.name} (₱${d.cost.toFixed(2)}, ${d.percent})`)
+        .join(", ");
+      const prompt = `You are the GridWatch AI Energy Analyst. Analyze this data:\nPeriod: ${dateRangeText}\nTotal Cost: ₱${totalValue.toFixed(2)}\nBreakdown: ${dataContext}.\n\nKeep your response to 2 to 3 short sentences. Point out the biggest energy consumer and provide one practical, actionable tip to reduce its usage cost.`;
+
+      const { data, error } = await supabase.functions.invoke("chat-support", {
+        body: {
+          system_instruction: {
+            parts: [
+              {
+                text: "You are a helpful, professional energy analyst assistant.",
+              },
+            ],
+          },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          safetySettings: [
+            {
+              category: "HARM_CATEGORY_HARASSMENT",
+              threshold: "BLOCK_LOW_AND_ABOVE",
+            },
+            {
+              category: "HARM_CATEGORY_HATE_SPEECH",
+              threshold: "BLOCK_LOW_AND_ABOVE",
+            },
+            {
+              category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+              threshold: "BLOCK_LOW_AND_ABOVE",
+            },
+            {
+              category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+              threshold: "BLOCK_LOW_AND_ABOVE",
+            },
+          ],
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error.message);
+
+      const aiText =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+        "I couldn't analyze the data at this moment. Please try again.";
+      setAiSummary(aiText.trim());
+    } catch (error) {
+      console.log("AI Summary Error:", error);
+      setAiSummary("Failed to generate insights. Please try again later.");
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
 
   const sourceHubs = activeScope === "personal" ? personalHubs : sharedHubs;
 
@@ -624,46 +671,120 @@ export default function AnalyticsScreen() {
           ))}
         </View>
 
+        {/* --- AI SUMMARY SECTION --- */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            Limit & Fault Events
-          </Text>
-          {faultLogs.map((log) => (
-            <View
-              key={log.id}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 15,
+            }}
+          >
+            <Text
               style={[
-                styles.logCard,
-                { backgroundColor: theme.card, borderColor: theme.cardBorder },
+                styles.sectionTitle,
+                { color: theme.text, marginBottom: 0 },
               ]}
             >
-              <View
-                style={[styles.logIndicator, { backgroundColor: log.color }]}
-              />
-              <View style={{ flex: 1, paddingLeft: 12 }}>
+              AI Summary
+            </Text>
+            <MaterialIcons
+              name="auto-awesome"
+              size={20}
+              color={theme.buttonPrimary}
+            />
+          </View>
+
+          <View
+            style={[
+              styles.aiCard,
+              { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            ]}
+          >
+            {isGeneratingSummary ? (
+              <View style={{ padding: 20, alignItems: "center" }}>
+                <ActivityIndicator size="small" color={theme.buttonPrimary} />
+                <Text
+                  style={{
+                    color: theme.textSecondary,
+                    marginTop: 10,
+                    fontSize: 12,
+                  }}
+                >
+                  Analyzing your energy data...
+                </Text>
+              </View>
+            ) : aiSummary ? (
+              <View style={{ padding: 16 }}>
                 <Text
                   style={{
                     color: theme.text,
-                    fontWeight: "bold",
+                    lineHeight: 22,
                     fontSize: 13,
                   }}
                 >
-                  {log.device} - {log.type}
+                  {aiSummary}
                 </Text>
-                <Text style={{ color: theme.textSecondary, fontSize: 11 }}>
-                  {log.msg}
+                <TouchableOpacity
+                  onPress={generateAISummary}
+                  style={{ marginTop: 12, alignSelf: "flex-end" }}
+                >
+                  <Text
+                    style={{
+                      color: theme.buttonPrimary,
+                      fontWeight: "bold",
+                      fontSize: 12,
+                    }}
+                  >
+                    Regenerate
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={generateAISummary}
+                style={{ padding: 20, alignItems: "center" }}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: `${theme.buttonPrimary}20`,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginBottom: 10,
+                  }}
+                >
+                  <MaterialIcons
+                    name="analytics"
+                    size={20}
+                    color={theme.buttonPrimary}
+                  />
+                </View>
+                <Text
+                  style={{
+                    color: theme.text,
+                    fontWeight: "600",
+                    marginBottom: 4,
+                  }}
+                >
+                  Generate Energy Insights
                 </Text>
                 <Text
                   style={{
                     color: theme.textSecondary,
-                    fontSize: 10,
-                    marginTop: 4,
+                    fontSize: 12,
+                    textAlign: "center",
                   }}
                 >
-                  {log.date}
+                  Get personalized tips to lower your bill based on this
+                  period's usage pattern.
                 </Text>
-              </View>
-            </View>
-          ))}
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -730,13 +851,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 15,
   },
-  logCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 10,
+  aiCard: {
+    borderRadius: 16,
     borderWidth: 1,
+    overflow: "hidden",
   },
-  logIndicator: { width: 4, height: "100%", borderRadius: 2 },
 });

@@ -1861,6 +1861,32 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Chatbot/Support Shortcut FAB */}
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => navigation.navigate("HelpSupport", { openChat: true })}
+        style={{
+          position: "absolute",
+          bottom: 30,
+          right: 24,
+          width: 48,
+          height: 48,
+          borderRadius: 24,
+          backgroundColor: theme.buttonPrimary,
+          opacity: 0.85,
+          justifyContent: "center",
+          alignItems: "center",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.25,
+          shadowRadius: 4,
+          elevation: 5,
+          zIndex: 1000,
+        }}
+      >
+        <MaterialIcons name="support-agent" size={24} color="#fff" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
