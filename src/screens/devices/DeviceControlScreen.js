@@ -235,8 +235,8 @@ export default function DeviceControlScreen() {
     }
   }
 
-  const isHubOnline = diffInSeconds < 6;
-  const isUnstable = isHubOnline && diffInSeconds >= 3;
+  const isHubOnline = diffInSeconds < 25;
+  const isUnstable = isHubOnline && diffInSeconds >= 8;
 
   const displayWatts = isHubOnline && isPowered ? currentWatts : 0;
   const displayVolts = isHubOnline ? `${currentVoltage.toFixed(1)} V` : "0 V";

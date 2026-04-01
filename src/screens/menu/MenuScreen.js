@@ -198,7 +198,7 @@ export default function MenuScreen() {
             Device Management
           </Text>
 
-          {}
+          {/* Existing My Hubs Row */}
           <SettingsRow
             icon="router"
             title="My Hubs"
@@ -208,7 +208,7 @@ export default function MenuScreen() {
             scaledSize={scaledSize}
           />
 
-          {}
+          {/* Existing Family Access Row */}
           {isAdvancedMode && (
             <SettingsRow
               icon="people"
@@ -220,19 +220,19 @@ export default function MenuScreen() {
             />
           )}
 
-          {}
+          {/* Existing Invitations Row */}
           {isAdvancedMode && (
             <SettingsRow
               icon="mail-outline"
               title="Invitations"
-              subtitle="Review recieved invites"
+              subtitle="Review received invites"
               onPress={() => navigation.navigate("Invitations")}
               theme={theme}
               scaledSize={scaledSize}
             />
           )}
 
-          {}
+          {/* Existing Add New Device Row */}
           <SettingsRow
             icon="add-circle-outline"
             title="Add New Device"
@@ -249,6 +249,48 @@ export default function MenuScreen() {
             }
           />
 
+          {/* --- NEW ECO-GAMING SECTION --- */}
+          {/* --- NEW REWARDS & GAMING SECTION --- */}
+          <Text
+            className="font-bold uppercase tracking-widest mb-3 mt-6"
+            style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
+          >
+            Rewards & Gaming
+          </Text>
+
+          <SettingsRow
+            icon="storefront"
+            title="Eco-Store"
+            subtitle="Spend your Eco-Coins here"
+            onPress={() => navigation.navigate("EcoStore")}
+            theme={theme}
+            scaledSize={scaledSize}
+            customIcon={
+              <MaterialIcons
+                name="store"
+                size={scaledSize(22)}
+                color={theme.buttonPrimary}
+              />
+            }
+          />
+
+          <SettingsRow
+            icon="bolt"
+            title="Fault Scanner"
+            subtitle="Diagnostic mini-game"
+            onPress={() => navigation.navigate("FaultScanner")}
+            theme={theme}
+            scaledSize={scaledSize}
+            customIcon={
+              <MaterialIcons
+                name="offline-bolt"
+                size={scaledSize(22)}
+                color={isDarkMode ? "#ffaa00" : "#ff9900"}
+              />
+            }
+          />
+          {/* --- END REWARDS & GAMING SECTION --- */}
+
           <Text
             className="font-bold uppercase tracking-widest mb-3 mt-6"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
@@ -256,7 +298,7 @@ export default function MenuScreen() {
             App Settings
           </Text>
 
-          {}
+          {/* Existing Settings Rows */}
           <SettingsRow
             icon="settings"
             title="Account Settings"
@@ -266,7 +308,6 @@ export default function MenuScreen() {
             scaledSize={scaledSize}
           />
 
-          {}
           <SettingsRow
             icon="notifications-none"
             title="Notifications"
@@ -276,7 +317,7 @@ export default function MenuScreen() {
             scaledSize={scaledSize}
           />
 
-          {}
+          {/* Footer */}
           <View
             className="mt-8 border-t pt-6 items-center"
             style={{ borderTopColor: theme.cardBorder }}
@@ -285,7 +326,7 @@ export default function MenuScreen() {
               className=""
               style={{ color: theme.textSecondary, fontSize: scaledSize(11) }}
             >
-              GridWatch v1.0.4
+              GridWatch 2026 - All rights reserved
             </Text>
           </View>
         </View>

@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Platform,
   AppState,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -20,11 +21,33 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../context/ThemeContext";
 import { supabase } from "../../lib/supabase";
 
+// --- FIRMWARE UPDATE CONFIGURATION ---
+const LATEST_FIRMWARE_VERSION = "1.8.0";
+
+const checkUpdateAvailable = (current, latest) => {
+  if (!current || !latest) return false;
+  const currParts = current.split(".").map(Number);
+  const latestParts = latest.split(".").map(Number);
+  for (let i = 0; i < Math.max(currParts.length, latestParts.length); i++) {
+    const c = currParts[i] || 0;
+    const l = latestParts[i] || 0;
+    if (l > c) return true;
+    if (l < c) return false;
+  }
+  return false;
+};
+
 export default function DeviceConfigScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { theme, isDarkMode, fontScale } = useTheme();
   const appState = useRef(AppState.currentState);
+
+  // --- TIMERS & TRACKING ---
+  const otaTimeoutRef = useRef(null);
+  const successTimeoutRef = useRef(null);
+
+  const [preUpdateVersion, setPreUpdateVersion] = useState(null);
 
   const scaledSize = (size) => size * fontScale;
 
@@ -40,11 +63,13 @@ export default function DeviceConfigScreen() {
     last_seen: null,
     current_firmware: "1.0.0",
     current_voltage: 0,
+    update_command_url: "",
   });
 
   const [now, setNow] = useState(Date.now());
   const [loading, setLoading] = useState(true);
   const [isRestarting, setIsRestarting] = useState(false);
+  const [rebootStartTime, setRebootStartTime] = useState(null); // <-- ADDED
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [modalState, setModalState] = useState({
@@ -111,6 +136,10 @@ export default function DeviceConfigScreen() {
     setLoading(false);
   };
 
+  const onRefresh = () => {
+    fetchHubInfo(true);
+  };
+
   useEffect(() => {
     let mounted = true;
     fetchHubInfo();
@@ -134,7 +163,6 @@ export default function DeviceConfigScreen() {
       )
       .subscribe();
 
-    // UPDATED: Check 2x per second (500ms) for fast Traffic Light updates
     const timer = setInterval(() => {
       if (mounted) setNow(Date.now());
     }, 500);
@@ -157,10 +185,87 @@ export default function DeviceConfigScreen() {
     };
   }, [hubId]);
 
+  useEffect(() => {
+    return () => {
+      if (otaTimeoutRef.current) clearTimeout(otaTimeoutRef.current);
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+    };
+  }, []);
+
+  // ====================================================================
+  // DYNAMIC REBOOT SYNC: Clears UI the exact second the hub reconnects!
+  // ====================================================================
+  useEffect(() => {
+    if (isRestarting && rebootStartTime && hubData.last_seen) {
+      const elapsed = Date.now() - rebootStartTime;
+      // Wait 6 seconds to ensure the hardware has fully shut off first
+      if (elapsed > 6000) {
+        let timeStr = String(hubData.last_seen).replace(" ", "T");
+        if (!timeStr.endsWith("Z") && !timeStr.includes("+")) timeStr += "Z";
+        const lastSeenMs = new Date(timeStr).getTime();
+        const currentDiff = (Date.now() - lastSeenMs) / 1000;
+
+        // If diff is < 8 seconds, it means the Hub is sending fresh heartbeats again!
+        if (currentDiff < 8) {
+          setIsRestarting(false);
+          setRebootStartTime(null);
+        }
+      }
+    }
+  }, [now, isRestarting, rebootStartTime, hubData.last_seen]);
+
+  // ====================================================================
+  // DYNAMIC OTA SYNC: Watches for ANY change in the firmware version!
+  // ====================================================================
+  useEffect(() => {
+    if (modalState.type === "updating_locked") {
+      const currentUrl = hubData.update_command_url || "";
+      if (currentUrl === "") {
+        setModalState({
+          visible: true,
+          type: "updating_rebooting",
+          title: "Installing OS...",
+          msg: "Hardware received the file and is flashing the update. Waiting for reboot verification...",
+          loading: true,
+        });
+      }
+    }
+
+    if (
+      modalState.type === "updating_locked" ||
+      modalState.type === "updating_rebooting"
+    ) {
+      if (
+        preUpdateVersion &&
+        hubData.current_firmware !== preUpdateVersion &&
+        hubData.current_firmware !== "Loading..."
+      ) {
+        if (otaTimeoutRef.current) clearTimeout(otaTimeoutRef.current);
+
+        setModalState({
+          visible: true,
+          type: "success",
+          title: "Update Successful!",
+          msg: `Hub updated from v${preUpdateVersion} to v${hubData.current_firmware}!`,
+          loading: false,
+        });
+
+        setPreUpdateVersion(null);
+
+        successTimeoutRef.current = setTimeout(() => closeModal(), 3500);
+      }
+    }
+  }, [
+    hubData.update_command_url,
+    hubData.current_firmware,
+    modalState.type,
+    preUpdateVersion,
+  ]);
+
   // --- TRAFFIC LIGHT STATUS LOGIC START ---
   let diffInSeconds = 0;
   if (hubData.last_seen) {
-    let timeStr = hubData.last_seen.replace(" ", "T");
+    let timeStr = String(hubData.last_seen).replace(" ", "T");
     if (!timeStr.endsWith("Z") && !timeStr.includes("+")) timeStr += "Z";
     const lastSeenMs = new Date(timeStr).getTime();
     if (!isNaN(lastSeenMs)) {
@@ -170,7 +275,7 @@ export default function DeviceConfigScreen() {
 
   let statusDetailText = "Initializing...";
   let statusIcon = "wifi-off";
-  let statusColor = "#94a3b8"; // Grey default
+  let statusColor = "#94a3b8";
   let isDanger = false;
   let isOnline = false;
 
@@ -178,31 +283,23 @@ export default function DeviceConfigScreen() {
 
   if (loading) {
     statusDetailText = "Checking Status...";
-  }
-  // LOGIC 1: HARDWARE FAILURE (Voltage=0 check)
-  else if (hubData.current_voltage < 50 && diffInSeconds < 5) {
+  } else if (hubData.current_voltage < 50 && diffInSeconds < 35) {
     statusDetailText = "MAINS POWER FAILURE";
     statusIcon = "flash-off";
-    statusColor = "#ef4444"; // Red
+    statusColor = "#ef4444";
     isDanger = true;
     isOnline = false;
-  }
-  // LOGIC 2: ONLINE (Green) - < 3 seconds
-  else if (diffInSeconds < 3) {
+  } else if (diffInSeconds < 35) {
     statusDetailText = "Online • Stable";
-    statusIcon = "check-circle";
-    statusColor = "#22c55e"; // Green
+    statusIcon = "router";
+    statusColor = "#22c55e";
     isOnline = true;
-  }
-  // LOGIC 3: UNSTABLE WIFI (Yellow) - 3 to 6 seconds
-  else if (diffInSeconds < 6) {
+  } else if (diffInSeconds < 65) {
     statusDetailText = "Signal Unstable...";
     statusIcon = "wifi";
-    statusColor = "#eab308"; // Yellow/Orange
-    isOnline = true; // Still considered online
-  }
-  // LOGIC 4: OFFLINE (Red) - > 6 seconds
-  else {
+    statusColor = "#eab308";
+    isOnline = true;
+  } else {
     let timeAgo = "";
     if (displayDiff < 60) timeAgo = `${Math.floor(displayDiff)}s ago`;
     else if (displayDiff < 3600)
@@ -211,20 +308,29 @@ export default function DeviceConfigScreen() {
 
     statusDetailText = `OFFLINE (Power or WiFi) • ${timeAgo}`;
     statusIcon = "cloud-off";
-    statusColor = "#ef4444"; // Red
+    statusColor = "#ef4444";
     isDanger = true;
     isOnline = false;
   }
 
-  // Reboot Override
   if (isRestarting) {
     statusDetailText = "System Rebooting...";
     statusIcon = "hourglass-top";
-    statusColor = "#3b82f6"; // Blue
+    statusColor = "#3b82f6";
   }
 
   const gradientColors = [statusColor, theme.background];
   // --- TRAFFIC LIGHT STATUS LOGIC END ---
+
+  const rawUrl = hubData.update_command_url || "";
+  const isCurrentlyUpdating = rawUrl.endsWith("#trigger");
+
+  // Also disable the update button if the hub is currently processing a command
+  const isProcessingCommand =
+    rawUrl === "COMMAND_RESTART" || rawUrl === "COMMAND_UNPAIR";
+
+  const hasUpdateUrl =
+    rawUrl.length > 10 && !isCurrentlyUpdating && !isProcessingCommand;
 
   const openModal = (type) => {
     let config = { visible: true, type, loading: false };
@@ -245,6 +351,12 @@ export default function DeviceConfigScreen() {
         ...config,
         title: "Reset & Unpair?",
         msg: "This removes the Hub and all devices from your account.",
+      };
+    } else if (type === "update_firmware") {
+      config = {
+        ...config,
+        title: "Update Firmware?",
+        msg: "Start the OTA Update? ALL appliances will be securely locked OFF during the process.",
       };
     }
     setModalState(config);
@@ -290,47 +402,44 @@ export default function DeviceConfigScreen() {
       setModalState((prev) => ({
         ...prev,
         loading: true,
-        msg: "Contacting Hub...",
+        msg: "Sending restart command...",
       }));
-
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const { error } = await supabase
+          .from("hubs")
+          .update({ update_command_url: "COMMAND_RESTART" })
+          .eq("id", hubId);
 
-        const response = await fetch(`http://${hubData.ip_address}/reboot`, {
-          method: "POST",
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          throw new Error("Failed to reach hub");
-        }
+        if (error) throw error;
 
         setIsRestarting(true);
+        setRebootStartTime(Date.now()); // <-- ADDED
         closeModal();
-
-        setTimeout(() => setIsRestarting(false), 15000);
+        setTimeout(() => {
+          setIsRestarting(false);
+          setRebootStartTime(null); // <-- ADDED (Failsafe clear)
+        }, 15000);
       } catch (e) {
         closeModal();
-        navigation.navigate("Disconnected", {
-          hubName: hubName || "Hub",
-          lastSeen: "Just now",
+        setModalState({
+          visible: true,
+          type: "error",
+          title: "Command Failed",
+          msg: "Could not send restart command.",
+          loading: false,
         });
       }
     } else if (modalState.type === "unpair") {
       setModalState((prev) => ({ ...prev, loading: true }));
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
-        const response = await fetch(`http://${hubData.ip_address}/reset`, {
-          method: "POST",
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        if (!response.ok) throw new Error("Connection Refused");
-        await deleteDeviceFromDB();
+        await supabase
+          .from("hubs")
+          .update({ update_command_url: "COMMAND_UNPAIR" })
+          .eq("id", hubId);
+
+        setTimeout(async () => {
+          await deleteDeviceFromDB();
+        }, 2000);
       } catch (e) {
         setModalState({
           visible: true,
@@ -342,6 +451,64 @@ export default function DeviceConfigScreen() {
       }
     } else if (modalState.type === "force_unpair") {
       await deleteDeviceFromDB();
+    } else if (modalState.type === "update_firmware") {
+      setPreUpdateVersion(hubData.current_firmware);
+
+      if (otaTimeoutRef.current) clearTimeout(otaTimeoutRef.current);
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+
+      setModalState({
+        visible: true,
+        type: "updating_locked",
+        title: "Downloading OS...",
+        msg: "Please do not close the app. Appliances are safely locked. Hub is downloading...",
+        loading: true,
+      });
+
+      try {
+        let currentUrl = hubData.update_command_url || "";
+        let triggerUrl = currentUrl;
+        if (!triggerUrl.endsWith("#trigger")) {
+          triggerUrl += "#trigger";
+        }
+
+        setHubData((prev) => ({ ...prev, update_command_url: triggerUrl }));
+
+        const { error } = await supabase
+          .from("hubs")
+          .update({ update_command_url: triggerUrl, status: "online" })
+          .eq("id", hubId);
+
+        if (error) throw error;
+
+        otaTimeoutRef.current = setTimeout(() => {
+          setModalState((prev) => {
+            if (
+              prev.type === "updating_locked" ||
+              prev.type === "updating_rebooting"
+            ) {
+              setPreUpdateVersion(null);
+              return {
+                visible: true,
+                type: "error",
+                title: "Timeout",
+                msg: "Hub failed to report back online. It may have failed to update.",
+                loading: false,
+              };
+            }
+            return prev;
+          });
+        }, 45000);
+      } catch (err) {
+        setPreUpdateVersion(null);
+        setModalState({
+          visible: true,
+          type: "error",
+          title: "Failed",
+          msg: err.message,
+          loading: false,
+        });
+      }
     }
   };
 
@@ -365,11 +532,7 @@ export default function DeviceConfigScreen() {
       justifyContent: "space-between",
       alignItems: "center",
     },
-    heroContainer: {
-      paddingTop: 110,
-      paddingBottom: 25,
-      alignItems: "center",
-    },
+    heroContainer: { paddingTop: 110, paddingBottom: 25, alignItems: "center" },
     heroIconContainer: {
       width: 80,
       height: 80,
@@ -379,7 +542,6 @@ export default function DeviceConfigScreen() {
       justifyContent: "center",
       marginBottom: 10,
       borderWidth: 1,
-      // Dynamic border color handled inline
       position: "relative",
     },
     heroTitle: {
@@ -388,10 +550,7 @@ export default function DeviceConfigScreen() {
       color: "#fff",
       marginBottom: 2,
     },
-    heroSubtitle: {
-      fontSize: scaledSize(14),
-      color: "rgba(255,255,255,0.9)",
-    },
+    heroSubtitle: { fontSize: scaledSize(14), color: "rgba(255,255,255,0.9)" },
     sectionTitle: {
       fontSize: scaledSize(11),
       fontWeight: "bold",
@@ -419,7 +578,6 @@ export default function DeviceConfigScreen() {
       gap: 10,
       borderWidth: 1,
     },
-
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.8)",
@@ -449,11 +607,7 @@ export default function DeviceConfigScreen() {
       marginBottom: 24,
       lineHeight: 20,
     },
-    modalBtnRow: {
-      flexDirection: "row",
-      gap: 10,
-      width: "100%",
-    },
+    modalBtnRow: { flexDirection: "row", gap: 10, width: "100%" },
     modalBtn: {
       flex: 1,
       height: 40,
@@ -504,9 +658,16 @@ export default function DeviceConfigScreen() {
       <ScrollView
         contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.text}
+            colors={[theme.buttonPrimary]}
+          />
+        }
       >
         <LinearGradient colors={gradientColors} style={styles.heroContainer}>
-          {/* Updated Hero Icon to match Traffic Light Logic */}
           <View
             style={[styles.heroIconContainer, { borderColor: statusColor }]}
           >
@@ -531,7 +692,6 @@ export default function DeviceConfigScreen() {
         </LinearGradient>
 
         <View style={{ padding: 24 }}>
-          {/* System Info */}
           <Text style={styles.sectionTitle}>System Information</Text>
           <View style={styles.card}>
             <InfoItem
@@ -546,40 +706,108 @@ export default function DeviceConfigScreen() {
               theme={theme}
               scaledSize={scaledSize}
             />
+
             <View
               style={{
                 padding: 16,
                 flexDirection: "row",
                 justifyContent: "space-between",
+                alignItems: "center",
                 borderBottomWidth: 0,
               }}
             >
-              <Text
-                style={{
-                  color: theme.textSecondary,
-                  fontSize: scaledSize(14),
-                  fontWeight: "500",
-                }}
-              >
-                Firmware
-              </Text>
-              <View style={{ alignItems: "flex-end" }}>
-                <Text style={{ color: theme.text, fontSize: scaledSize(14) }}>
-                  v{hubData.current_firmware}
-                </Text>
+              <View>
                 <Text
                   style={{
                     color: theme.textSecondary,
-                    fontSize: scaledSize(10),
+                    fontSize: scaledSize(14),
+                    fontWeight: "500",
                   }}
                 >
-                  Auto updates
+                  Firmware
                 </Text>
+                <Text
+                  style={{
+                    color: theme.text,
+                    fontSize: scaledSize(14),
+                    marginTop: 2,
+                  }}
+                >
+                  v{hubData.current_firmware}
+                </Text>
+              </View>
+
+              <View style={{ alignItems: "flex-end" }}>
+                {isCurrentlyUpdating ||
+                modalState.type === "updating_locked" ||
+                modalState.type === "updating_rebooting" ? (
+                  <View
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      backgroundColor: theme.buttonPrimary,
+                      opacity: 0.8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontSize: scaledSize(11),
+                        fontWeight: "600",
+                      }}
+                    >
+                      Updating...
+                    </Text>
+                  </View>
+                ) : hasUpdateUrl ? (
+                  <TouchableOpacity
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      backgroundColor: theme.buttonPrimary,
+                      opacity: !isOnline || isRestarting ? 0.5 : 1,
+                    }}
+                    disabled={!isOnline || isRestarting}
+                    onPress={() => openModal("update_firmware")}
+                  >
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontSize: scaledSize(11),
+                        fontWeight: "600",
+                      }}
+                    >
+                      Update Available
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      backgroundColor: isDarkMode
+                        ? "rgba(255,255,255,0.05)"
+                        : "rgba(0,0,0,0.05)",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: theme.textSecondary,
+                        fontSize: scaledSize(11),
+                        fontWeight: "600",
+                      }}
+                    >
+                      Up to date
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
           </View>
 
-          {/* Network Connection */}
           <Text style={styles.sectionTitle}>Network Connection</Text>
           <View
             style={[
@@ -646,7 +874,6 @@ export default function DeviceConfigScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Outlet Configuration */}
           <Text style={styles.sectionTitle}>Outlet Configuration</Text>
           <TouchableOpacity
             style={[
@@ -716,18 +943,17 @@ export default function DeviceConfigScreen() {
             />
           </TouchableOpacity>
 
-          {/* Advanced Actions */}
           <Text style={styles.sectionTitle}>Advanced Actions</Text>
           <TouchableOpacity
             activeOpacity={0.7}
-            disabled={isRestarting}
+            disabled={isRestarting || isProcessingCommand}
             onPress={() => openModal("restart")}
             style={[
               styles.actionBtn,
               {
                 backgroundColor: theme.card,
                 borderColor: theme.cardBorder,
-                opacity: isRestarting ? 0.5 : 1,
+                opacity: isRestarting || isProcessingCommand ? 0.5 : 1,
               },
             ]}
           >
@@ -749,14 +975,14 @@ export default function DeviceConfigScreen() {
 
           <TouchableOpacity
             activeOpacity={0.7}
-            disabled={isRestarting}
+            disabled={isRestarting || isProcessingCommand}
             onPress={() => openModal("unpair")}
             style={[
               styles.actionBtn,
               {
                 backgroundColor: dangerBg,
                 borderColor: dangerBorder,
-                opacity: isRestarting ? 0.5 : 1,
+                opacity: isRestarting || isProcessingCommand ? 0.5 : 1,
               },
             ]}
           >
@@ -778,12 +1004,15 @@ export default function DeviceConfigScreen() {
         </View>
       </ScrollView>
 
-      {/* Modal Overlay */}
       <Modal
         transparent
         visible={modalState.visible}
         animationType="fade"
-        onRequestClose={closeModal}
+        onRequestClose={() => {
+          if (!modalState.loading) {
+            closeModal();
+          }
+        }}
       >
         <View style={styles.modalOverlay}>
           {modalState.loading ? (
@@ -796,6 +1025,8 @@ export default function DeviceConfigScreen() {
                   fontSize: 12,
                   fontWeight: "500",
                   textAlign: "center",
+                  paddingHorizontal: 10,
+                  lineHeight: 18,
                 }}
               >
                 {modalState.msg}
@@ -807,10 +1038,10 @@ export default function DeviceConfigScreen() {
               <Text style={styles.modalMsg}>{modalState.msg}</Text>
 
               <View style={styles.modalBtnRow}>
-                {/* Cancel Button */}
                 {(modalState.type === "restart" ||
                   modalState.type === "unpair" ||
                   modalState.type === "force_unpair" ||
+                  modalState.type === "update_firmware" ||
                   modalState.type === "error") && (
                   <TouchableOpacity
                     style={[styles.modalBtn, { borderColor: theme.cardBorder }]}
@@ -822,7 +1053,6 @@ export default function DeviceConfigScreen() {
                   </TouchableOpacity>
                 )}
 
-                {/* Confirm Button */}
                 <TouchableOpacity
                   style={[
                     styles.modalBtn,

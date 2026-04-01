@@ -52,6 +52,8 @@ import BudgetDetailScreen from "../screens/budgets/BudgetDetailScreen";
 import MonthlyBudgetScreen from "../screens/budgets/MonthlyBudgetScreen";
 import LimitDetailScreen from "../screens/budgets/LimitDetailScreen";
 import MenuScreen from "../screens/menu/MenuScreen";
+import FaultScannerScreen from "../screens/menu/FaultScannerScreen";
+import EcoStoreScreen from "../screens/menu/EcoStoreScreen"; // adjust path if needed
 import MyHubsScreen from "../screens/menu/MyHubsScreen";
 import SetupHubScreen from "../screens/menu/SetupHubScreen";
 import HubConfigScreen from "../screens/menu/HubConfigScreen";
@@ -191,7 +193,16 @@ function BottomTabNavigator() {
             deviceId: data.deviceId,
             deviceName: data.deviceName || "Device",
           });
-        } else navigation.navigate("Notifications");
+        } else if (data?.screen === "FaultDetail" && data?.deviceId) {
+          navigation.navigate("FaultDetail", {
+            deviceId: data.deviceId,
+            deviceName: data.deviceName || "Device",
+          });
+        } else if (data?.screen === "MyHubs") {
+          navigation.navigate("MyHubs");
+        } else {
+          navigation.navigate("Notifications");
+        }
       },
     );
     return () => subscription.remove();
@@ -281,12 +292,11 @@ export default function AppNavigator() {
   const notifiedIds = useRef(new Set());
   const isJustLoggedIn = useRef(true);
 
+  // Restored refs for the 5-second loop
   const alertedDevices = useRef(new Set());
   const alertedFaults = useRef(new Set());
 
   const [initialRoute, setInitialRoute] = useState(null);
-
-  // 🔥 NEW: State bridge to force the UI to react to background events
   const [immediateFault, setImmediateFault] = useState(null);
   const [immediateLimit, setImmediateLimit] = useState(null);
 
@@ -338,13 +348,11 @@ export default function AppNavigator() {
   }, [authUser]);
 
   // =================================================================
-  // ⚡ UI THREAD HIJACKER (Safely processes the background alerts)
+  // UI THREAD HIJACKER (Safely forces screen changes when app is open)
   // =================================================================
   useEffect(() => {
     if (immediateFault) {
-      console.log("🚨 FORCING UI REDIRECT TO FAULT SCREEN");
-      Vibration.vibrate([0, 500, 200, 500, 200, 1000]); // SOS Buzz
-
+      Vibration.vibrate([0, 500, 200, 500, 200, 1000]);
       try {
         if (navigationRef.isReady()) {
           navigationRef.navigate("FaultDetail", {
@@ -357,11 +365,8 @@ export default function AppNavigator() {
             deviceName: immediateFault.name,
           });
         }
-      } catch (e) {
-        console.log("Hijack Failed:", e);
-      }
+      } catch (e) {}
 
-      // Clear state so it can trigger again in the future
       setTimeout(() => setImmediateFault(null), 2000);
     }
   }, [immediateFault, rootNavigation]);
@@ -384,7 +389,6 @@ export default function AppNavigator() {
       setTimeout(() => setImmediateLimit(null), 2000);
     }
   }, [immediateLimit, rootNavigation]);
-  // =================================================================
 
   const sendUniqueNotification = async (
     id,
@@ -411,6 +415,7 @@ export default function AppNavigator() {
     return true;
   };
 
+  // Restored Local 5-Second Checker
   const checkDeviceBudgets = async () => {
     if (!authUser) return;
 
@@ -454,7 +459,7 @@ export default function AppNavigator() {
         if (device.status === "fault") {
           if (!alertedFaults.current.has(device.id)) {
             alertedFaults.current.add(device.id);
-            setImmediateFault({ id: device.id, name: device.name }); // Triggers the UI bridge
+            setImmediateFault({ id: device.id, name: device.name });
           }
           continue;
         } else {
@@ -496,16 +501,9 @@ export default function AppNavigator() {
               .eq("id", device.id);
 
             if (device.auto_popup === true) {
-              setImmediateLimit({ id: device.id, name: device.name }); // Triggers the UI bridge
+              setImmediateLimit({ id: device.id, name: device.name });
             } else if (device.is_monitored === true) {
-              await sendUniqueNotification(
-                `limit_hit_${device.id}_${now.getTime()}`,
-                "Budget Limit Reached ⚠️",
-                `${device.name} has exceeded its set limit.`,
-                "LimitDetail",
-                false,
-                { deviceId: device.id, deviceName: device.name },
-              );
+              // Notification is now handled by the database webhook/cron, so we only need the UI popup/hijack part locally if needed.
             }
           }
         } else {
@@ -521,31 +519,16 @@ export default function AppNavigator() {
     const myEmail = authUser.email.trim().toLowerCase();
     const myId = authUser.id;
 
-    const checkDatabase = async () => {
+    // Fetch existing unread notifications on boot
+    const fetchUnreadNotifications = async () => {
       try {
-        const { data: invites } = await supabase
-          .from("hub_invites")
-          .select("id, email, status")
-          .eq("status", "pending");
-        if (invites)
-          invites.forEach(async (invite) => {
-            if (invite.email.trim().toLowerCase() === myEmail) {
-              // FIX: Prepended "invite_" to prevent ID collisions
-              await sendUniqueNotification(
-                `invite_${invite.id}`,
-                "New Invitation",
-                "You have a pending GridWatch invitation!",
-                "Invitations",
-              );
-            }
-          });
-
         const { data: appNotifs } = await supabase
           .from("app_notifications")
           .select("*")
           .eq("user_id", myId)
           .eq("is_read", false);
-        if (appNotifs)
+
+        if (appNotifs) {
           appNotifs.forEach(async (notif) => {
             const { title, body } = getRefinedSecurityMessage(
               notif.title,
@@ -553,8 +536,6 @@ export default function AppNavigator() {
             );
             const isSelfLogin =
               title === "Security Alert" && isJustLoggedIn.current;
-
-            // FIX: Prepended "notif_" to prevent ID collisions
             await sendUniqueNotification(
               `notif_${notif.id}`,
               title,
@@ -563,33 +544,20 @@ export default function AppNavigator() {
               isSelfLogin,
             );
           });
+        }
       } catch (err) {}
     };
 
-    checkDatabase();
+    fetchUnreadNotifications();
     checkDeviceBudgets();
 
+    // Restored the 5-second interval loop
     const faultScannerInterval = setInterval(() => {
       checkDeviceBudgets();
     }, 5000);
 
     const channel = supabase
       .channel("global_alerts")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "hub_invites" },
-        async (payload) => {
-          if (payload.new?.email?.trim().toLowerCase() === myEmail) {
-            // FIX: Prepended "invite_"
-            await sendUniqueNotification(
-              `invite_${payload.new.id}`,
-              "New Invitation",
-              "You have been invited to join a Hub!",
-              "Invitations",
-            );
-          }
-        },
-      )
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "app_notifications" },
@@ -602,12 +570,16 @@ export default function AppNavigator() {
             const isSelfLogin =
               title === "Security Alert" && isJustLoggedIn.current;
 
-            // FIX: Prepended "notif_"
+            let targetScreen = "Notifications";
+            if (title.includes("Firmware Update")) targetScreen = "MyHubs";
+            if (title.includes("Invitation")) targetScreen = "Invitations";
+            if (title.includes("Budget")) targetScreen = "LimitDetail";
+
             await sendUniqueNotification(
               `notif_${payload.new.id}`,
               title,
               body,
-              "Notifications",
+              targetScreen,
               isSelfLogin,
             );
           }
@@ -615,19 +587,11 @@ export default function AppNavigator() {
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "usage_analytics" },
-        () => checkDeviceBudgets(),
-      )
-
-      // 🔥 REALTIME BYPASS: Instantly catch database updates
-      .on(
-        "postgres_changes",
         { event: "UPDATE", schema: "public", table: "devices" },
         (payload) => {
           if (payload.new && payload.new.status === "fault") {
             setImmediateFault({ id: payload.new.id, name: payload.new.name });
           }
-          checkDeviceBudgets();
         },
       )
       .subscribe();
@@ -725,7 +689,8 @@ export default function AppNavigator() {
           <Stack.Screen name="Disconnected" component={DisconnectedScreen} />
           <Stack.Screen name="FaultDetail" component={FaultDetailScreen} />
           <Stack.Screen name="DeviceControl" component={DeviceControlScreen} />
-
+          <Stack.Screen name="EcoStore" component={EcoStoreScreen} />
+          <Stack.Screen name="FaultScanner" component={FaultScannerScreen} />
           <Stack.Screen
             name="Menu"
             component={MenuScreen}
