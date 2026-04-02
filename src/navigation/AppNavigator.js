@@ -54,6 +54,7 @@ import LimitDetailScreen from "../screens/budgets/LimitDetailScreen";
 import MenuScreen from "../screens/menu/MenuScreen";
 import FaultScannerScreen from "../screens/menu/FaultScannerScreen";
 import EcoStoreScreen from "../screens/menu/EcoStoreScreen"; // adjust path if needed
+import EcoMissionsScreen from "../screens/menu/EcoMissionsScreen";
 import MyHubsScreen from "../screens/menu/MyHubsScreen";
 import SetupHubScreen from "../screens/menu/SetupHubScreen";
 import HubConfigScreen from "../screens/menu/HubConfigScreen";
@@ -653,7 +654,6 @@ export default function AppNavigator() {
               <Stack.Screen name="SetupHub" component={SetupHubScreen} />
             </>
           )}
-
           <Stack.Screen
             name="ProfileSettings"
             component={ProfileSettingsScreen}
@@ -690,6 +690,8 @@ export default function AppNavigator() {
           <Stack.Screen name="FaultDetail" component={FaultDetailScreen} />
           <Stack.Screen name="DeviceControl" component={DeviceControlScreen} />
           <Stack.Screen name="EcoStore" component={EcoStoreScreen} />
+          <Stack.Screen name="EcoMissions" component={EcoMissionsScreen} />
+          {/* ADDED THIS SCREEN */}
           <Stack.Screen name="FaultScanner" component={FaultScannerScreen} />
           <Stack.Screen
             name="Menu"

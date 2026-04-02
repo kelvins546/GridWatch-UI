@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StatusBar,
   Image,
   ActivityIndicator,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -28,6 +29,26 @@ export default function MenuScreen() {
     initial: "G",
     avatarUrl: null,
   });
+
+  // --- FLOATING ANIMATION LOGIC ---
+  const bounceAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounceAnim, {
+          toValue: -8, // Move up
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bounceAnim, {
+          toValue: 0, // Move down
+          duration: 600,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [bounceAnim]);
 
   const fetchMenuProfile = async () => {
     try {
@@ -130,7 +151,6 @@ export default function MenuScreen() {
         backgroundColor={theme.background}
       />
 
-      {}
       <View className="px-6 pt-5 pb-2.5 items-end">
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons
@@ -141,7 +161,6 @@ export default function MenuScreen() {
         </TouchableOpacity>
       </View>
 
-      {}
       <View
         className="flex-row items-center px-6 pb-8 border-b gap-4 mb-4"
         style={{ borderBottomColor: theme.cardBorder }}
@@ -198,7 +217,6 @@ export default function MenuScreen() {
             Device Management
           </Text>
 
-          {/* Existing My Hubs Row */}
           <SettingsRow
             icon="router"
             title="My Hubs"
@@ -208,7 +226,6 @@ export default function MenuScreen() {
             scaledSize={scaledSize}
           />
 
-          {/* Existing Family Access Row */}
           {isAdvancedMode && (
             <SettingsRow
               icon="people"
@@ -220,7 +237,6 @@ export default function MenuScreen() {
             />
           )}
 
-          {/* Existing Invitations Row */}
           {isAdvancedMode && (
             <SettingsRow
               icon="mail-outline"
@@ -232,7 +248,6 @@ export default function MenuScreen() {
             />
           )}
 
-          {/* Existing Add New Device Row */}
           <SettingsRow
             icon="add-circle-outline"
             title="Add New Device"
@@ -249,14 +264,63 @@ export default function MenuScreen() {
             }
           />
 
-          {/* --- NEW ECO-GAMING SECTION --- */}
-          {/* --- NEW REWARDS & GAMING SECTION --- */}
           <Text
             className="font-bold uppercase tracking-widest mb-3 mt-6"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
           >
             Rewards & Gaming
           </Text>
+
+          {/* --- WRAPPER FOR FLOATING BADGE AND ECO-MISSIONS --- */}
+          <View style={{ position: "relative" }}>
+            {/* THE ANIMATED FLOATING BADGE (Unified with theme.buttonPrimary) */}
+            <Animated.View
+              style={{
+                position: "absolute",
+                top: -12,
+                right: 10,
+                zIndex: 10,
+                transform: [{ translateY: bounceAnim }],
+                backgroundColor: theme.buttonPrimary,
+                paddingHorizontal: 12,
+                paddingVertical: 5,
+                borderRadius: 12,
+                shadowColor: theme.buttonPrimary,
+                shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: 0.5,
+                shadowRadius: 5,
+                elevation: 6,
+              }}
+            >
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: scaledSize(10),
+                  fontWeight: "900",
+                  letterSpacing: 0.5,
+                }}
+              >
+                ⭐ CHECK TODAY'S CHALLENGES
+              </Text>
+            </Animated.View>
+
+            <SettingsRow
+              icon="emoji-events"
+              title="Eco-Missions"
+              subtitle="Claim your daily Eco-Coins"
+              onPress={() => navigation.navigate("EcoMissions")}
+              theme={theme}
+              scaledSize={scaledSize}
+              customIcon={
+                <MaterialIcons
+                  name="emoji-events"
+                  size={scaledSize(22)}
+                  color={theme.buttonPrimary}
+                />
+              }
+            />
+          </View>
+          {/* --- END WRAPPER --- */}
 
           <SettingsRow
             icon="storefront"
@@ -285,11 +349,10 @@ export default function MenuScreen() {
               <MaterialIcons
                 name="offline-bolt"
                 size={scaledSize(22)}
-                color={isDarkMode ? "#ffaa00" : "#ff9900"}
+                color={theme.buttonPrimary}
               />
             }
           />
-          {/* --- END REWARDS & GAMING SECTION --- */}
 
           <Text
             className="font-bold uppercase tracking-widest mb-3 mt-6"
@@ -298,7 +361,6 @@ export default function MenuScreen() {
             App Settings
           </Text>
 
-          {/* Existing Settings Rows */}
           <SettingsRow
             icon="settings"
             title="Account Settings"
@@ -317,7 +379,6 @@ export default function MenuScreen() {
             scaledSize={scaledSize}
           />
 
-          {/* Footer */}
           <View
             className="mt-8 border-t pt-6 items-center"
             style={{ borderTopColor: theme.cardBorder }}
