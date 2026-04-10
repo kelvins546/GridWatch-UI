@@ -23,9 +23,10 @@ import {
   RefreshControl,
   StyleSheet,
   AppState,
+  Easing,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { useNavigation, useIsFocused } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../../context/ThemeContext";
@@ -577,6 +578,7 @@ export default function HomeScreen() {
   const scaledSize = (size) => size * (fontScale || 1);
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
 
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -640,6 +642,31 @@ export default function HomeScreen() {
   const primaryColor = isDarkMode ? theme.buttonPrimary : "#00995e";
   const dangerColor = isDarkMode ? theme.buttonDangerText : "#cc0000";
   const warningColor = isDarkMode ? "#ffaa00" : "#ff9900";
+
+  // --- ANIMATION LOOPS ---
+  useEffect(() => {
+    const floatAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: -6,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    floatAnimation.start();
+
+    return () => {
+      floatAnimation.stop();
+    };
+  }, [floatAnim]);
 
   const mergeHubData = (currentHubs, newHubsFromDB) => {
     return newHubsFromDB.map((newHub) => {
@@ -1489,7 +1516,7 @@ export default function HomeScreen() {
           collapsable={false}
           style={{
             marginHorizontal: 24,
-            marginBottom: 24,
+            marginBottom: 20,
             transform: [{ scale: scaleAnim }],
           }}
         >
@@ -1653,6 +1680,71 @@ export default function HomeScreen() {
                 />
               </View>
             </View>
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* --- FLOATING ECO-MISSIONS REMINDER BANNER --- */}
+        <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate("EcoMissions")}
+            style={{
+              marginHorizontal: 24,
+              marginBottom: 24,
+              padding: 16,
+              borderRadius: 16,
+              backgroundColor: isDarkMode ? "#14281d" : "#ffffff",
+              borderWidth: isDarkMode ? 1 : 0,
+              borderColor: "rgba(46, 204, 113, 0.3)",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              // Glowing Drop Shadow
+              shadowColor: "#2ecc71",
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: isDarkMode ? 0.3 : 0.25,
+              shadowRadius: 10,
+              elevation: 8,
+            }}
+          >
+            <View
+              style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: "#2ecc71",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginRight: 12,
+                }}
+              >
+                <FontAwesome5 name="leaf" size={18} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontWeight: "bold",
+                    fontSize: scaledSize(14),
+                    color: theme.text,
+                    marginBottom: 2,
+                  }}
+                >
+                  Daily Missions Available!
+                </Text>
+                <Text
+                  style={{
+                    fontSize: scaledSize(11),
+                    color: theme.textSecondary,
+                  }}
+                >
+                  Complete eco-tasks to earn Eco-Coins.
+                </Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color="#2ecc71" />
           </TouchableOpacity>
         </Animated.View>
 

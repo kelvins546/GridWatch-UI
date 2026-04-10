@@ -69,7 +69,7 @@ export default function DeviceConfigScreen() {
   const [now, setNow] = useState(Date.now());
   const [loading, setLoading] = useState(true);
   const [isRestarting, setIsRestarting] = useState(false);
-  const [rebootStartTime, setRebootStartTime] = useState(null); // <-- ADDED
+  const [rebootStartTime, setRebootStartTime] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [modalState, setModalState] = useState({
@@ -325,9 +325,10 @@ export default function DeviceConfigScreen() {
   const rawUrl = hubData.update_command_url || "";
   const isCurrentlyUpdating = rawUrl.endsWith("#trigger");
 
-  // Also disable the update button if the hub is currently processing a command
   const isProcessingCommand =
-    rawUrl === "COMMAND_RESTART" || rawUrl === "COMMAND_UNPAIR";
+    rawUrl === "COMMAND_RESTART" ||
+    rawUrl === "COMMAND_UNPAIR" ||
+    rawUrl === "COMMAND_CHANGE_WIFI";
 
   const hasUpdateUrl =
     rawUrl.length > 10 && !isCurrentlyUpdating && !isProcessingCommand;
@@ -337,8 +338,8 @@ export default function DeviceConfigScreen() {
     if (type === "wifi") {
       config = {
         ...config,
-        title: "Wi-Fi Setup",
-        msg: "Connect to 'GridWatch-Setup' hotspot first.",
+        title: "Change Wi-Fi?",
+        msg: "This safely disconnects the Hub from its current Wi-Fi and reboots it into Setup Mode. Your appliances and energy history will NOT be deleted.",
       };
     } else if (type === "restart") {
       config = {
@@ -413,11 +414,11 @@ export default function DeviceConfigScreen() {
         if (error) throw error;
 
         setIsRestarting(true);
-        setRebootStartTime(Date.now()); // <-- ADDED
+        setRebootStartTime(Date.now());
         closeModal();
         setTimeout(() => {
           setIsRestarting(false);
-          setRebootStartTime(null); // <-- ADDED (Failsafe clear)
+          setRebootStartTime(null);
         }, 15000);
       } catch (e) {
         closeModal();
@@ -426,6 +427,47 @@ export default function DeviceConfigScreen() {
           type: "error",
           title: "Command Failed",
           msg: "Could not send restart command.",
+          loading: false,
+        });
+      }
+    } else if (modalState.type === "wifi") {
+      setModalState((prev) => ({
+        ...prev,
+        loading: true,
+        msg: "Sending Wi-Fi reset command...",
+      }));
+      try {
+        // Send command to cloud
+        const { error } = await supabase
+          .from("hubs")
+          .update({ update_command_url: "COMMAND_CHANGE_WIFI" })
+          .eq("id", hubId);
+
+        if (error) throw error;
+
+        // Try local fallback just in case we are on the same network
+        try {
+          if (hubData?.ip_address && hubData.ip_address !== "---") {
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), 2000);
+            await fetch(`http://${hubData.ip_address}/reset`, {
+              method: "POST",
+              signal: controller.signal,
+            });
+          }
+        } catch (e) {
+          // Ignore local error
+        }
+
+        closeModal();
+        navigation.navigate("SetupHub"); // Redirect user to provisioning screen
+      } catch (e) {
+        closeModal();
+        setModalState({
+          visible: true,
+          type: "error",
+          title: "Command Failed",
+          msg: "Could not send Wi-Fi reset command.",
           loading: false,
         });
       }
@@ -1040,6 +1082,7 @@ export default function DeviceConfigScreen() {
               <View style={styles.modalBtnRow}>
                 {(modalState.type === "restart" ||
                   modalState.type === "unpair" ||
+                  modalState.type === "wifi" ||
                   modalState.type === "force_unpair" ||
                   modalState.type === "update_firmware" ||
                   modalState.type === "error") && (
@@ -1067,17 +1110,17 @@ export default function DeviceConfigScreen() {
                     },
                   ]}
                   onPress={
-                    modalState.type === "wifi" || modalState.type === "success"
-                      ? closeModal
-                      : handleConfirm
+                    modalState.type === "success" ? closeModal : handleConfirm
                   }
                 >
                   <Text style={{ color: "#fff", fontWeight: "bold" }}>
-                    {modalState.type === "wifi" || modalState.type === "success"
+                    {modalState.type === "success"
                       ? "Okay"
                       : modalState.type === "force_unpair"
                         ? "Force Remove"
-                        : "Confirm"}
+                        : modalState.type === "wifi"
+                          ? "Change Wi-Fi"
+                          : "Confirm"}
                   </Text>
                 </TouchableOpacity>
               </View>

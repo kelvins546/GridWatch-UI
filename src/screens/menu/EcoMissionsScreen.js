@@ -8,6 +8,7 @@ import {
   ScrollView,
   Dimensions,
   Animated,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -16,20 +17,33 @@ import {
   MaterialCommunityIcons,
 } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage"; // ADDED: For persistent timers
 import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
+import { supabase } from "../../lib/supabase";
 import * as Haptics from "expo-haptics";
 
 const { width } = Dimensions.get("window");
 
+// Helper to safely get local date string (YYYY-MM-DD)
+const getLocalYYYYMMDD = (d = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export default function EcoMissionsScreen() {
   const navigation = useNavigation();
   const { theme, isDarkMode } = useTheme();
+  const { user } = useAuth();
 
-  const [walletBalance, setWalletBalance] = useState(1250);
+  const [isLoading, setIsLoading] = useState(true);
+  const [walletBalance, setWalletBalance] = useState(0);
 
   // --- RPG LEVELING SYSTEM ---
-  const [userLevel, setUserLevel] = useState(12);
-  const [userExp, setUserExp] = useState(650);
+  const [userLevel, setUserLevel] = useState(1);
+  const [userExp, setUserExp] = useState(0);
   const expToNextLevel = 1000;
 
   const getRankName = (level) => {
@@ -39,7 +53,6 @@ export default function EcoMissionsScreen() {
     return "Carbon Slayer";
   };
 
-  // Dynamic Rank Icon
   const getRankIcon = (level) => {
     if (level < 5) return "seedling";
     if (level < 15) return "shield-alt";
@@ -48,11 +61,12 @@ export default function EcoMissionsScreen() {
   };
 
   // --- 7-DAY STREAK STATE ---
-  const [currentStreak, setCurrentStreak] = useState(4);
+  const [currentStreak, setCurrentStreak] = useState(1);
   const [streakClaimedToday, setStreakClaimedToday] = useState(false);
   const streakRewards = [50, 50, 50, 100, 100, 150, 500];
 
   // --- LIMITED TIME EVENT (GACHA STYLE) ---
+  const [flashTarget, setFlashTarget] = useState(null); // Now persistent!
   const [flashEvent, setFlashEvent] = useState({
     id: "evt1",
     title: "Earth Hour Challenge",
@@ -64,7 +78,7 @@ export default function EcoMissionsScreen() {
     progress: 0,
     target: 1,
     isClaimed: false,
-    timeLeft: "08h 14m",
+    timeLeft: "Calculating...",
   });
 
   // --- QUEST DATABASES ---
@@ -146,7 +160,7 @@ export default function EcoMissionsScreen() {
       color: "#3498db",
       progress: 3,
       target: 3,
-      isClaimed: true,
+      isClaimed: false,
     },
     {
       id: "ac2",
@@ -162,24 +176,222 @@ export default function EcoMissionsScreen() {
     },
   ]);
 
-  const [timeLeft, setTimeLeft] = useState("14h 22m");
+  const [timeLeft, setTimeLeft] = useState("Calculating...");
 
-  // --- EXP & CLAIM LOGIC ---
-  const handleGainExp = (expGained) => {
-    let newExp = userExp + expGained;
-    if (newExp >= expToNextLevel) {
-      setUserLevel((prev) => prev + 1);
-      setUserExp(newExp - expToNextLevel);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } else {
-      setUserExp(newExp);
+  // ==========================================
+  // PERSISTENT FLASH EVENT TARGET INITIALIZATION
+  // ==========================================
+  useEffect(() => {
+    const initFlashTarget = async () => {
+      try {
+        const savedTarget = await AsyncStorage.getItem("flash_event_target");
+        const now = new Date().getTime();
+
+        // If we have a saved target and it hasn't expired yet
+        if (savedTarget && parseInt(savedTarget, 10) > now) {
+          setFlashTarget(parseInt(savedTarget, 10));
+        } else {
+          // Timer expired or doesn't exist, create a fresh 8h 14m timer
+          const newTarget = now + 8 * 3600000 + 14 * 60000;
+          await AsyncStorage.setItem(
+            "flash_event_target",
+            newTarget.toString(),
+          );
+          setFlashTarget(newTarget);
+
+          // Reset claim status on new event cycle
+          setFlashEvent((prev) => ({ ...prev, isClaimed: false }));
+        }
+      } catch (e) {
+        console.log("Error loading timer", e);
+      }
+    };
+    initFlashTarget();
+  }, []);
+
+  // ==========================================
+  // LIVE COUNTDOWN TIMER LOGIC
+  // ==========================================
+  useEffect(() => {
+    if (!flashTarget) return; // Wait until target is loaded from storage
+
+    const timerInterval = setInterval(() => {
+      const now = new Date();
+
+      // 1. Daily Quests Countdown (to midnight)
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0); // Sets to 00:00:00 of the NEXT day
+      const diffDaily = midnight.getTime() - now.getTime();
+
+      if (diffDaily > 0) {
+        const h = Math.floor((diffDaily / (1000 * 60 * 60)) % 24);
+        const m = Math.floor((diffDaily / 1000 / 60) % 60);
+        const s = Math.floor((diffDaily / 1000) % 60);
+        setTimeLeft(
+          `${String(h).padStart(2, "0")}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`,
+        );
+      } else {
+        setTimeLeft("00h 00m 00s");
+      }
+
+      // 2. Flash Event Countdown (Persistent)
+      const diffFlash = flashTarget - now.getTime();
+      if (diffFlash > 0) {
+        const fh = Math.floor((diffFlash / (1000 * 60 * 60)) % 24);
+        const fm = Math.floor((diffFlash / 1000 / 60) % 60);
+        const fs = Math.floor((diffFlash / 1000) % 60);
+        setFlashEvent((prev) => ({
+          ...prev,
+          timeLeft: `${String(fh).padStart(2, "0")}h ${String(fm).padStart(2, "0")}m ${String(fs).padStart(2, "0")}s`,
+        }));
+      } else {
+        setFlashEvent((prev) => ({ ...prev, timeLeft: "00h 00m 00s" }));
+      }
+    }, 1000);
+
+    return () => clearInterval(timerInterval);
+  }, [flashTarget]);
+
+  // ==========================================
+  // SUPABASE: FETCH REAL DATA ON LOAD
+  // ==========================================
+  useEffect(() => {
+    if (!user) return;
+
+    const loadGameData = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("users")
+          .select(
+            "eco_coins, user_level, user_exp, claimed_missions, current_streak, last_streak_claim",
+          )
+          .eq("id", user.id)
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          setWalletBalance(data.eco_coins || 0);
+          setUserLevel(data.user_level || 1);
+          setUserExp(data.user_exp || 0);
+
+          // === SMART STREAK LOGIC ===
+          const todayStr = getLocalYYYYMMDD(new Date());
+
+          let yesterdayDate = new Date();
+          yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+          const yesterdayStr = getLocalYYYYMMDD(yesterdayDate);
+
+          let calculatedStreak = 1;
+          let claimedToday = false;
+
+          if (data.last_streak_claim) {
+            const lastClaimStr = getLocalYYYYMMDD(
+              new Date(data.last_streak_claim),
+            );
+            const dbStreak = data.current_streak || 1;
+
+            if (lastClaimStr === todayStr) {
+              // Already claimed today
+              calculatedStreak = dbStreak;
+              claimedToday = true;
+            } else if (lastClaimStr === yesterdayStr) {
+              // Consecutive day! Logged in yesterday but hasn't claimed today yet
+              calculatedStreak = dbStreak + 1;
+              if (calculatedStreak > 7) {
+                calculatedStreak = 1; // Loop back to Day 1 after completing a 7-day chest
+              }
+            } else {
+              // Missed a day (or more)
+              calculatedStreak = 1;
+            }
+          }
+
+          setCurrentStreak(calculatedStreak);
+          setStreakClaimedToday(claimedToday);
+          // ==========================
+
+          // Mark missions as claimed if they exist in the DB
+          if (data.claimed_missions && Array.isArray(data.claimed_missions)) {
+            const markClaimed = (arr) =>
+              arr.map((item) =>
+                data.claimed_missions.includes(item.id)
+                  ? { ...item, isClaimed: true }
+                  : item,
+              );
+
+            setDailyQuests(markClaimed(dailyQuests));
+            setWeeklyChallenges(markClaimed(weeklyChallenges));
+            setAchievements(markClaimed(achievements));
+
+            if (data.claimed_missions.includes(flashEvent.id)) {
+              setFlashEvent((prev) => ({ ...prev, isClaimed: true }));
+            }
+          }
+        }
+      } catch (err) {
+        console.log("Error loading game data:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadGameData();
+  }, [user]);
+
+  // ==========================================
+  // SUPABASE: SYNC EXP, COINS & MISSIONS
+  // ==========================================
+  const syncToDatabase = async (
+    newCoins,
+    newLevel,
+    newExp,
+    missionId = null,
+  ) => {
+    if (!user) return;
+    try {
+      const updates = {
+        eco_coins: newCoins,
+        user_level: newLevel,
+        user_exp: newExp,
+      };
+
+      if (missionId) {
+        const { data } = await supabase
+          .from("users")
+          .select("claimed_missions")
+          .eq("id", user.id)
+          .single();
+        const currentMissions = data?.claimed_missions || [];
+        if (!currentMissions.includes(missionId)) {
+          updates.claimed_missions = [...currentMissions, missionId];
+        }
+      }
+
+      await supabase.from("users").update(updates).eq("id", user.id);
+    } catch (e) {
+      console.log("DB Sync Error:", e);
     }
+  };
+
+  const handleGainExpAndSync = (expGained, rewardGained, missionId) => {
+    let newCoins = walletBalance + rewardGained;
+    let newExp = userExp + expGained;
+    let newLevel = userLevel;
+
+    if (newExp >= expToNextLevel) {
+      newLevel = userLevel + 1;
+      newExp = newExp - expToNextLevel;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+
+    setWalletBalance(newCoins);
+    setUserLevel(newLevel);
+    setUserExp(newExp);
+
+    syncToDatabase(newCoins, newLevel, newExp, missionId);
   };
 
   const handleClaim = (category, id, reward, exp) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setWalletBalance((prev) => prev + reward);
-    handleGainExp(exp);
 
     const updateState = (setter) => {
       setter((prev) =>
@@ -192,13 +404,42 @@ export default function EcoMissionsScreen() {
     else if (category === "achievement") updateState(setAchievements);
     else if (category === "event")
       setFlashEvent({ ...flashEvent, isClaimed: true });
+
+    handleGainExpAndSync(exp, reward, id);
   };
 
-  const handleClaimStreak = () => {
+  const handleClaimStreak = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setWalletBalance((prev) => prev + streakRewards[currentStreak - 1]);
-    handleGainExp(100);
     setStreakClaimedToday(true);
+
+    const reward = streakRewards[currentStreak - 1] || 50;
+
+    let newCoins = walletBalance + reward;
+    let newExp = userExp + 100; // 100 EXP for daily login
+    let newLevel = userLevel;
+
+    if (newExp >= expToNextLevel) {
+      newLevel = userLevel + 1;
+      newExp = newExp - expToNextLevel;
+    }
+
+    setWalletBalance(newCoins);
+    setUserLevel(newLevel);
+    setUserExp(newExp);
+
+    // Sync streak specifically to database
+    if (user) {
+      await supabase
+        .from("users")
+        .update({
+          eco_coins: newCoins,
+          user_level: newLevel,
+          user_exp: newExp,
+          current_streak: currentStreak,
+          last_streak_claim: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+    }
   };
 
   const isComplete = (item) => {
@@ -225,7 +466,6 @@ export default function EcoMissionsScreen() {
           { backgroundColor: theme.card, borderColor: theme.cardBorder },
         ]}
       >
-        {/* Top Row: Icon, Rank Name, and Level Tag */}
         <View
           style={{
             flexDirection: "row",
@@ -256,7 +496,6 @@ export default function EcoMissionsScreen() {
           </View>
         </View>
 
-        {/* Bottom Row: Inline EXP Bar */}
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <View
             style={[
@@ -1018,6 +1257,21 @@ export default function EcoMissionsScreen() {
       </View>
     );
   };
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: theme.background,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <ActivityIndicator size="large" color={theme.buttonPrimary} />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView

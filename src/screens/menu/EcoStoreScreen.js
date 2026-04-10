@@ -11,6 +11,7 @@ import {
   Modal,
   FlatList,
   ImageBackground,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -20,6 +21,8 @@ import {
 } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
+import { supabase } from "../../lib/supabase";
 
 const { width } = Dimensions.get("window");
 const BANNER_WIDTH = width - 40;
@@ -27,14 +30,16 @@ const BANNER_WIDTH = width - 40;
 export default function EcoStoreScreen() {
   const navigation = useNavigation();
   const { theme, isDarkMode } = useTheme();
+  const { user } = useAuth();
 
-  const [walletBalance, setWalletBalance] = useState(3500);
+  const [isLoading, setIsLoading] = useState(true);
+  const [walletBalance, setWalletBalance] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // PRE-OWNED ITEMS INJECTED HERE
-  const [ownedItems, setOwnedItems] = useState(["mode_simple", "mode_light"]);
+  // INJECT PRE-EQUIPPED DEMO ITEMS HERE
+  const defaultEquipped = ["saas_scheduler", "saas_pdf", "saas_ai_slots"];
+  const [ownedItems, setOwnedItems] = useState(defaultEquipped);
 
-  // Eco-Bank State
   const [bankBalance, setBankBalance] = useState(0);
 
   // Ledger State
@@ -48,6 +53,69 @@ export default function EcoStoreScreen() {
     message: "",
     selectedItem: null,
   });
+
+  // ==========================================
+  // SUPABASE: FETCH REAL DATA ON LOAD
+  // ==========================================
+  useEffect(() => {
+    if (!user) return;
+
+    const loadStoreData = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("users")
+          .select("eco_coins, purchased_items")
+          .eq("id", user.id)
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          setWalletBalance(data.eco_coins || 0);
+
+          // Merge Supabase items with our hardcoded demo items
+          if (data.purchased_items && Array.isArray(data.purchased_items)) {
+            const mergedItems = Array.from(
+              new Set([...data.purchased_items, ...defaultEquipped]),
+            );
+            setOwnedItems(mergedItems);
+          }
+        }
+      } catch (err) {
+        console.log("Error loading store data:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadStoreData();
+  }, [user]);
+
+  // ==========================================
+  // SUPABASE: SYNC PURCHASES TO DATABASE
+  // ==========================================
+  const syncPurchaseToDB = async (newBalance, itemId) => {
+    if (!user) return;
+    try {
+      const updates = { eco_coins: newBalance };
+
+      if (itemId) {
+        const { data } = await supabase
+          .from("users")
+          .select("purchased_items")
+          .eq("id", user.id)
+          .single();
+        const currentItems = data?.purchased_items || [];
+        if (!currentItems.includes(itemId)) {
+          updates.purchased_items = Array.from(
+            new Set([...currentItems, ...defaultEquipped, itemId]),
+          );
+        }
+      }
+
+      await supabase.from("users").update(updates).eq("id", user.id);
+    } catch (e) {
+      console.log("DB Sync Error:", e);
+    }
+  };
 
   // --- AUTO-SCROLLING CAROUSEL ---
   const featuredBanners = [
@@ -90,7 +158,7 @@ export default function EcoStoreScreen() {
     return () => clearInterval(interval);
   }, [currentBannerIndex, searchQuery]);
 
-  // --- STORE INVENTORY ---
+  // --- HYBRID ARCHITECTURE: STATIC CATALOG ---
   const storeInventory = [
     {
       category: "Premium Grid Features",
@@ -140,6 +208,7 @@ export default function EcoStoreScreen() {
           color: "#ff4757",
           repeatable: true,
           isGift: true,
+          isComingSoon: true, // MARKED AS COMING SOON
         },
         {
           id: "raffle",
@@ -271,6 +340,7 @@ export default function EcoStoreScreen() {
           type: "fa5",
           color: "#9b59b6",
           repeatable: false,
+          isComingSoon: true, // MARKED AS COMING SOON
         },
         {
           id: "hw_led",
@@ -281,6 +351,7 @@ export default function EcoStoreScreen() {
           type: "mci",
           color: "#f1c40f",
           repeatable: false,
+          isComingSoon: true, // MARKED AS COMING SOON
         },
       ],
     },
@@ -306,50 +377,6 @@ export default function EcoStoreScreen() {
       " " +
       now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     );
-  };
-
-  // --- ECO-BANK STAKING LOGIC ---
-  const handleBankStake = () => {
-    if (walletBalance >= 1000) {
-      setModalState({
-        visible: true,
-        type: "confirm_bank",
-        title: "Stake 1,000 Coins?",
-        message:
-          "Lock 1,000 Eco-Coins for 7 days to earn 15% interest (1,150 Coins total payout).",
-        selectedItem: null,
-      });
-    } else {
-      setModalState({
-        visible: true,
-        type: "error",
-        title: "Insufficient Funds",
-        message: `You need at least 1,000 Eco-Coins to invest in the bank.`,
-        selectedItem: null,
-      });
-    }
-  };
-
-  const executeBankStake = () => {
-    setWalletBalance((prev) => prev - 1000);
-    setBankBalance((prev) => prev + 1000);
-
-    const newTransaction = {
-      id: Date.now().toString(),
-      title: "Eco-Bank Deposit",
-      amount: -1000,
-      date: getCurrentTime(),
-    };
-    setPurchaseHistory((prev) => [newTransaction, ...prev]);
-
-    setModalState({
-      visible: true,
-      type: "success",
-      title: "Staked Successfully!",
-      message:
-        "1,000 Coins have been locked in the Eco-Bank. Check back in 7 days to claim your 15% interest!",
-      selectedItem: null,
-    });
   };
 
   // --- MODAL & PURCHASE LOGIC ---
@@ -384,7 +411,8 @@ export default function EcoStoreScreen() {
   const executePurchase = () => {
     const item = modalState.selectedItem;
     if (item) {
-      setWalletBalance((prev) => prev - item.cost);
+      const newBal = walletBalance - item.cost;
+      setWalletBalance(newBal);
 
       // Handle Tiered Golden Gacha
       if (item.isGoldGacha) {
@@ -403,7 +431,10 @@ export default function EcoStoreScreen() {
           wonAmount = 1500;
         }
 
-        setWalletBalance((prev) => prev + wonAmount);
+        const finalBal = newBal + wonAmount;
+        setWalletBalance(finalBal);
+
+        syncPurchaseToDB(finalBal, null); // Sync Gacha results
 
         const costTx = {
           id: Date.now().toString() + "cg",
@@ -437,6 +468,9 @@ export default function EcoStoreScreen() {
       // Normal Purchase Logic
       if (!item.repeatable) {
         setOwnedItems((prev) => [...prev, item.id]);
+        syncPurchaseToDB(newBal, item.id); // Permanently unlock item in DB!
+      } else {
+        syncPurchaseToDB(newBal, null); // Consumable (like tree or raffle)
       }
 
       const newTransaction = {
@@ -492,8 +526,7 @@ export default function EcoStoreScreen() {
   };
 
   const executeMysteryBox = () => {
-    setWalletBalance((prev) => prev - 300);
-
+    const newBal = walletBalance - 300;
     const roll = Math.random();
     let prize = "";
     let wonAmount = 0;
@@ -515,7 +548,9 @@ export default function EcoStoreScreen() {
       wonAmount = 0;
     }
 
-    setWalletBalance((prev) => prev + wonAmount);
+    const finalBal = newBal + wonAmount;
+    setWalletBalance(finalBal);
+    syncPurchaseToDB(finalBal, null); // Sync DB
 
     const costTx = {
       id: Date.now().toString() + "c",
@@ -551,7 +586,6 @@ export default function EcoStoreScreen() {
 
   const handleModalExecute = () => {
     if (modalState.type === "confirm_mystery") executeMysteryBox();
-    else if (modalState.type === "confirm_bank") executeBankStake();
     else executePurchase();
   };
 
@@ -562,6 +596,21 @@ export default function EcoStoreScreen() {
       <MaterialCommunityIcons name={item.icon} size={size} color={item.color} />
     );
   };
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: theme.background,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <ActivityIndicator size="large" color={theme.buttonPrimary} />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -827,12 +876,13 @@ export default function EcoStoreScreen() {
                 {section.items.map((item) => {
                   const isOwned =
                     !item.repeatable && ownedItems.includes(item.id);
+                  const isComingSoon = item.isComingSoon;
 
                   return (
                     <TouchableOpacity
                       key={item.id}
                       activeOpacity={0.9}
-                      disabled={isOwned}
+                      disabled={isOwned || isComingSoon}
                       style={[
                         styles.card,
                         {
@@ -854,7 +904,7 @@ export default function EcoStoreScreen() {
                               backgroundColor: isDarkMode
                                 ? "rgba(255,255,255,0.05)"
                                 : "rgba(0,0,0,0.03)",
-                              opacity: isOwned ? 0.5 : 1,
+                              opacity: isOwned || isComingSoon ? 0.5 : 1,
                             },
                           ]}
                         >
@@ -866,11 +916,12 @@ export default function EcoStoreScreen() {
                         style={[
                           styles.cardTitle,
                           {
-                            color: isOwned
-                              ? theme.textSecondary
-                              : item.isGoldGacha
-                                ? "#f1c40f"
-                                : theme.text,
+                            color:
+                              isOwned || isComingSoon
+                                ? theme.textSecondary
+                                : item.isGoldGacha
+                                  ? "#f1c40f"
+                                  : theme.text,
                           },
                         ]}
                         numberOfLines={1}
@@ -882,7 +933,7 @@ export default function EcoStoreScreen() {
                           styles.cardDesc,
                           {
                             color: theme.textSecondary,
-                            opacity: isOwned ? 0.6 : 1,
+                            opacity: isOwned || isComingSoon ? 0.6 : 1,
                           },
                         ]}
                         numberOfLines={2}
@@ -894,19 +945,22 @@ export default function EcoStoreScreen() {
                         style={[
                           styles.buyBtn,
                           {
-                            backgroundColor: isOwned
-                              ? theme.buttonNeutral
-                              : walletBalance >= item.cost
-                                ? item.isGoldGacha
-                                  ? "#f1c40f"
-                                  : theme.buttonPrimary
-                                : theme.buttonNeutral,
+                            backgroundColor:
+                              isOwned || isComingSoon
+                                ? theme.buttonNeutral
+                                : walletBalance >= item.cost
+                                  ? item.isGoldGacha
+                                    ? "#f1c40f"
+                                    : theme.buttonPrimary
+                                  : theme.buttonNeutral,
                           },
                         ]}
-                        onPress={() => !isOwned && handleItemPress(item)}
-                        disabled={isOwned}
+                        onPress={() =>
+                          !isOwned && !isComingSoon && handleItemPress(item)
+                        }
+                        disabled={isOwned || isComingSoon}
                       >
-                        {!isOwned && (
+                        {!isOwned && !isComingSoon && (
                           <FontAwesome5
                             name="leaf"
                             size={10}
@@ -924,19 +978,25 @@ export default function EcoStoreScreen() {
                           style={[
                             styles.buyBtnText,
                             {
-                              color: isOwned
-                                ? theme.textSecondary
-                                : walletBalance >= item.cost &&
-                                    !item.isGoldGacha
-                                  ? "#fff"
-                                  : item.isGoldGacha &&
-                                      walletBalance >= item.cost
-                                    ? "#000"
-                                    : theme.textSecondary,
+                              fontSize: isComingSoon ? 11 : 13,
+                              color:
+                                isOwned || isComingSoon
+                                  ? theme.textSecondary
+                                  : walletBalance >= item.cost &&
+                                      !item.isGoldGacha
+                                    ? "#fff"
+                                    : item.isGoldGacha &&
+                                        walletBalance >= item.cost
+                                      ? "#000"
+                                      : theme.textSecondary,
                             },
                           ]}
                         >
-                          {isOwned ? "EQUIPPED" : item.cost}
+                          {isComingSoon
+                            ? "COMING SOON"
+                            : isOwned
+                              ? "EQUIPPED"
+                              : item.cost}
                         </Text>
                       </TouchableOpacity>
                     </TouchableOpacity>
@@ -947,7 +1007,7 @@ export default function EcoStoreScreen() {
           ))
         )}
 
-        {/* --- MOVED DOWN: ECO-BANK STAKING CARD (PLACED RIGHT AFTER HARDWARE FLEX) --- */}
+        {/* --- MOVED DOWN: ECO-BANK STAKING CARD (SET TO COMING SOON) --- */}
         {searchQuery === "" && (
           <View style={styles.sectionContainer}>
             <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
@@ -960,6 +1020,7 @@ export default function EcoStoreScreen() {
                 {
                   backgroundColor: isDarkMode ? "#11224d" : "#eaf4ff",
                   borderColor: theme.buttonPrimary,
+                  opacity: 0.6, // Dimmed for coming soon
                 },
               ]}
             >
@@ -1015,22 +1076,21 @@ export default function EcoStoreScreen() {
                   style={[
                     styles.bankBtn,
                     {
-                      backgroundColor:
-                        walletBalance >= 1000 ? "#27ae60" : theme.buttonNeutral,
+                      backgroundColor: theme.buttonNeutral, // Disabled visually
                     },
                   ]}
-                  onPress={handleBankStake}
+                  disabled={true}
+                  onPress={() => {}}
                 >
                   <Text
                     style={[
                       styles.bankBtnText,
                       {
-                        color:
-                          walletBalance >= 1000 ? "#fff" : theme.textSecondary,
+                        color: theme.textSecondary,
                       },
                     ]}
                   >
-                    STAKE 1000
+                    COMING SOON
                   </Text>
                 </TouchableOpacity>
               </View>
