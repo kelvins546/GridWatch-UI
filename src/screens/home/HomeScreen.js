@@ -1033,20 +1033,42 @@ export default function HomeScreen() {
 
   useEffect(() => {
     let subscription;
-    const fetchUnreadCount = async () => {
+    let isMounted = true; // 1. Flag to track if screen is still open
+
+    const getUnreadCount = async (userId) => {
+      try {
+        const { count, error } = await supabase
+          .from("app_notifications")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("is_read", false);
+
+        // Only update state if screen is still active
+        if (!error && isMounted) setUnreadCount(count || 0);
+      } catch (e) {
+        console.log("Notif Fetch Error:", e);
+      }
+    };
+
+    const setupNotifications = async () => {
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        if (!user) return;
-        const { count, error } = await supabase
-          .from("app_notifications")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", user.id)
-          .eq("is_read", false);
-        if (!error) setUnreadCount(count || 0);
+
+        // Abort if screen closed while waiting for user data
+        if (!user || !isMounted) return;
+
+        await getUnreadCount(user.id);
+
+        // Abort if screen closed while waiting for the count
+        if (!isMounted) return;
+
+        // 2. Create a UNIQUE channel name using Date.now() to prevent collisions
+        const uniqueChannelName = `home_notifs_${user.id}_${Date.now()}`;
+
         subscription = supabase
-          .channel("home_notif_count")
+          .channel(uniqueChannelName)
           .on(
             "postgres_changes",
             {
@@ -1055,16 +1077,25 @@ export default function HomeScreen() {
               table: "app_notifications",
               filter: `user_id=eq.${user.id}`,
             },
-            () => fetchUnreadCount(),
+            () => {
+              if (isMounted) getUnreadCount(user.id);
+            },
           )
           .subscribe();
       } catch (e) {
-        console.log("Notif Count Error:", e);
+        console.log("Notif Setup Error:", e);
       }
     };
-    if (isFocused) fetchUnreadCount();
+
+    if (isFocused) {
+      setupNotifications();
+    }
+
     return () => {
-      if (subscription) supabase.removeChannel(subscription);
+      isMounted = false; // Immediately kill any pending async operations
+      if (subscription) {
+        supabase.removeChannel(subscription);
+      }
     };
   }, [isFocused]);
 
@@ -1295,14 +1326,20 @@ export default function HomeScreen() {
       );
       if (hub) {
         spending = Number(hub.totalSpending || 0);
-        limit = Number(hub.budgetLimit || 0);
+
+        // FIX: Use your global monthlyBudget for Personal hubs,
+        // matching the logic in BudgetManagerScreen!
+        limit =
+          activeTab === "personal"
+            ? Number(monthlyBudget || 0)
+            : Number(hub.budgetLimit || 0);
+
         title = hub.name;
         indicator = "Single Hub";
       }
     }
     return { spending, limit, title, indicator };
   }, [sourceData, monthlyBudget, activeHubFilter, activeTab]);
-
   const daysElapsed = useMemo(() => {
     const dateNow = new Date();
     let startDate = new Date(

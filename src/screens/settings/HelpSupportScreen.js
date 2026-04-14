@@ -241,7 +241,7 @@ export default function HelpSupportScreen() {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      quality: 0.5,
+      quality: 0.2,
       base64: true,
     });
     if (!result.canceled) {
@@ -285,7 +285,7 @@ export default function HelpSupportScreen() {
       });
 
       const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        Audio.RecordingOptionsPresets.LOW_QUALITY,
       );
 
       recordingRef.current = recording;
@@ -826,7 +826,7 @@ export default function HelpSupportScreen() {
                 Support Chat
               </Text>
               <Text style={{ fontSize: 12, color: theme.buttonPrimary }}>
-                ● Agent Online
+                ● AI Agent Online
               </Text>
             </View>
             <View style={{ width: 24 }} />

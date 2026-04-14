@@ -15,7 +15,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons, FontAwesome5 } from "@expo/vector-icons"; // ADDED FontAwesome5 for temp icon
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../context/ThemeContext";
@@ -63,6 +63,7 @@ export default function DeviceConfigScreen() {
     last_seen: null,
     current_firmware: "1.0.0",
     current_voltage: 0,
+    core_temperature: null, // NEW: Temperature State
     update_command_url: "",
   });
 
@@ -276,19 +277,12 @@ export default function DeviceConfigScreen() {
   let statusDetailText = "Initializing...";
   let statusIcon = "wifi-off";
   let statusColor = "#94a3b8";
-  let isDanger = false;
   let isOnline = false;
 
   let displayDiff = Math.max(0, diffInSeconds);
 
   if (loading) {
     statusDetailText = "Checking Status...";
-  } else if (hubData.current_voltage < 50 && diffInSeconds < 35) {
-    statusDetailText = "MAINS POWER FAILURE";
-    statusIcon = "flash-off";
-    statusColor = "#ef4444";
-    isDanger = true;
-    isOnline = false;
   } else if (diffInSeconds < 35) {
     statusDetailText = "Online • Stable";
     statusIcon = "router";
@@ -309,7 +303,6 @@ export default function DeviceConfigScreen() {
     statusDetailText = `OFFLINE (Power or WiFi) • ${timeAgo}`;
     statusIcon = "cloud-off";
     statusColor = "#ef4444";
-    isDanger = true;
     isOnline = false;
   }
 
@@ -562,6 +555,24 @@ export default function DeviceConfigScreen() {
     ? "rgba(255, 68, 68, 0.3)"
     : "rgba(198, 40, 40, 0.2)";
 
+  // Dynamic Temperature Styling
+  let tempColor = theme.text;
+  let tempIcon = "thermometer-empty";
+  const tempVal = hubData.core_temperature;
+
+  if (tempVal !== null && tempVal !== undefined) {
+    if (tempVal > 60) {
+      tempColor = dangerColor;
+      tempIcon = "thermometer-full";
+    } else if (tempVal > 45) {
+      tempColor = isDarkMode ? "#ffaa00" : "#ff9900";
+      tempIcon = "thermometer-half";
+    } else {
+      tempColor = "#22c55e"; // Healthy Green
+      tempIcon = "thermometer-quarter";
+    }
+  }
+
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
     headerOverlay: {
@@ -748,6 +759,50 @@ export default function DeviceConfigScreen() {
               theme={theme}
               scaledSize={scaledSize}
             />
+
+            {/* --- ADDED: ESP32 Core Temperature Row --- */}
+            <View
+              style={{
+                padding: 16,
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                borderBottomWidth: 1,
+                borderBottomColor: theme.cardBorder,
+              }}
+            >
+              <View>
+                <Text
+                  style={{
+                    color: theme.textSecondary,
+                    fontSize: scaledSize(14),
+                    fontWeight: "500",
+                  }}
+                >
+                  Core Temperature
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <FontAwesome5
+                  name={tempIcon}
+                  size={16}
+                  color={tempColor}
+                  style={{ marginRight: 8 }}
+                />
+                <Text
+                  style={{
+                    color: tempColor,
+                    fontSize: scaledSize(14),
+                    fontWeight: "bold",
+                    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+                  }}
+                >
+                  {tempVal !== null && tempVal !== undefined
+                    ? `${tempVal.toFixed(1)} °C`
+                    : "---"}
+                </Text>
+              </View>
+            </View>
 
             <View
               style={{

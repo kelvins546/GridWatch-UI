@@ -782,7 +782,7 @@ export default function EcoStoreScreen() {
               Community Impact
             </Text>
 
-            <View style={styles.treeCardWrapper}>
+            <View style={[styles.treeCardWrapper, { opacity: 0.6 }]}>
               <ImageBackground
                 source={{
                   uri: "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?q=80&w=1000&auto=format&fit=crop",
@@ -824,24 +824,21 @@ export default function EcoStoreScreen() {
                   </View>
 
                   <TouchableOpacity
-                    style={styles.treeBtn}
-                    onPress={() =>
-                      handleItemPress({
-                        id: "charity_tree",
-                        title: "Plant a Real Tree",
-                        cost: 2000,
-                        repeatable: true,
-                      })
-                    }
-                    activeOpacity={0.8}
+                    style={[
+                      styles.treeBtn,
+                      { backgroundColor: theme.buttonNeutral },
+                    ]}
+                    disabled={true}
+                    onPress={() => {}}
                   >
-                    <FontAwesome5
-                      name="leaf"
-                      size={14}
-                      color="#fff"
-                      style={{ marginRight: 8 }}
-                    />
-                    <Text style={styles.treeBtnText}>DONATE 2000 COINS</Text>
+                    <Text
+                      style={[
+                        styles.treeBtnText,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      COMING SOON
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </ImageBackground>

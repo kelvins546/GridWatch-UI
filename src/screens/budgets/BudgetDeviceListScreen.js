@@ -60,8 +60,11 @@ export default function BudgetDeviceListScreen() {
   useEffect(() => {
     if (!hubId) return;
 
+    // FIX: Append Date.now() to make the channel uniquely named per mount
+    const uniqueChannelName = `budget_hub_${hubId}_${Date.now()}`;
+
     const channel = supabase
-      .channel(`budget_hub_${hubId}`)
+      .channel(uniqueChannelName)
       .on(
         "postgres_changes",
         {

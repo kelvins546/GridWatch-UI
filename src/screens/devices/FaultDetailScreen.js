@@ -298,7 +298,7 @@ export default function FaultDetailScreen() {
             />
             <Text style={styles.detailLabel}>Fault Type</Text>
             <Text style={[styles.detailValue, { fontSize: scaledSize(13) }]}>
-              Overload
+              Shorted Circuit
             </Text>
           </View>
           <View

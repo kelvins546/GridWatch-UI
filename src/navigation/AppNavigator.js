@@ -8,6 +8,7 @@ import {
   Text,
   StatusBar,
   Vibration,
+  Alert,
 } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -53,7 +54,7 @@ import MonthlyBudgetScreen from "../screens/budgets/MonthlyBudgetScreen";
 import LimitDetailScreen from "../screens/budgets/LimitDetailScreen";
 import MenuScreen from "../screens/menu/MenuScreen";
 import FaultScannerScreen from "../screens/menu/FaultScannerScreen";
-import EcoStoreScreen from "../screens/menu/EcoStoreScreen"; // adjust path if needed
+import EcoStoreScreen from "../screens/menu/EcoStoreScreen";
 import EcoMissionsScreen from "../screens/menu/EcoMissionsScreen";
 import MyHubsScreen from "../screens/menu/MyHubsScreen";
 import SetupHubScreen from "../screens/menu/SetupHubScreen";
@@ -293,7 +294,6 @@ export default function AppNavigator() {
   const notifiedIds = useRef(new Set());
   const isJustLoggedIn = useRef(true);
 
-  // Restored refs for the 5-second loop
   const alertedDevices = useRef(new Set());
   const alertedFaults = useRef(new Set());
 
@@ -349,11 +349,13 @@ export default function AppNavigator() {
   }, [authUser]);
 
   // =================================================================
-  // UI THREAD HIJACKER (Safely forces screen changes when app is open)
+  // AUTO-NAVIGATE TO FAULT SCREEN
   // =================================================================
   useEffect(() => {
     if (immediateFault) {
       Vibration.vibrate([0, 500, 200, 500, 200, 1000]);
+
+      // Automatically route to the FaultDetailScreen without asking
       try {
         if (navigationRef.isReady()) {
           navigationRef.navigate("FaultDetail", {
@@ -396,7 +398,7 @@ export default function AppNavigator() {
     title,
     body,
     screen = "Notifications",
-    silent = false,
+    silent = true,
     extraData = {},
   ) => {
     if (notifiedIds.current.has(id)) return false;
@@ -416,7 +418,6 @@ export default function AppNavigator() {
     return true;
   };
 
-  // Restored Local 5-Second Checker
   const checkDeviceBudgets = async () => {
     if (!authUser) return;
 
@@ -503,8 +504,6 @@ export default function AppNavigator() {
 
             if (device.auto_popup === true) {
               setImmediateLimit({ id: device.id, name: device.name });
-            } else if (device.is_monitored === true) {
-              // Notification is now handled by the database webhook/cron, so we only need the UI popup/hijack part locally if needed.
             }
           }
         } else {
@@ -517,10 +516,9 @@ export default function AppNavigator() {
   useEffect(() => {
     if (!authUser || !authUser.email) return;
 
-    const myEmail = authUser.email.trim().toLowerCase();
     const myId = authUser.id;
 
-    // Fetch existing unread notifications on boot
+    // --- FIX 1: MARK AS READ SO THEY DON'T HAUNT YOU ---
     const fetchUnreadNotifications = async () => {
       try {
         const { data: appNotifs } = await supabase
@@ -529,7 +527,7 @@ export default function AppNavigator() {
           .eq("user_id", myId)
           .eq("is_read", false);
 
-        if (appNotifs) {
+        if (appNotifs && appNotifs.length > 0) {
           appNotifs.forEach(async (notif) => {
             const { title, body } = getRefinedSecurityMessage(
               notif.title,
@@ -545,6 +543,13 @@ export default function AppNavigator() {
               isSelfLogin,
             );
           });
+
+          // Tell the database we read them, so they never duplicate on reload!
+          const idsToMark = appNotifs.map((n) => n.id);
+          await supabase
+            .from("app_notifications")
+            .update({ is_read: true })
+            .in("id", idsToMark);
         }
       } catch (err) {}
     };
@@ -552,7 +557,6 @@ export default function AppNavigator() {
     fetchUnreadNotifications();
     checkDeviceBudgets();
 
-    // Restored the 5-second interval loop
     const faultScannerInterval = setInterval(() => {
       checkDeviceBudgets();
     }, 5000);
@@ -576,13 +580,23 @@ export default function AppNavigator() {
             if (title.includes("Invitation")) targetScreen = "Invitations";
             if (title.includes("Budget")) targetScreen = "LimitDetail";
 
-            await sendUniqueNotification(
-              `notif_${payload.new.id}`,
-              title,
-              body,
-              targetScreen,
-              isSelfLogin,
-            );
+            setTimeout(async () => {
+              // CHANGE IS HERE: We pass 'true' to force SILENT mode.
+              // This stops the frontend from generating a local popup,
+              // allowing your Supabase backend to handle the actual phone buzz.
+              await sendUniqueNotification(
+                `notif_${payload.new.id}`,
+                title,
+                body,
+                targetScreen,
+                true, // <--- THIS KILLS THE DUPLICATE
+              );
+
+              await supabase
+                .from("app_notifications")
+                .update({ is_read: true })
+                .eq("id", payload.new.id);
+            }, 500);
           }
         },
       )
@@ -691,7 +705,6 @@ export default function AppNavigator() {
           <Stack.Screen name="DeviceControl" component={DeviceControlScreen} />
           <Stack.Screen name="EcoStore" component={EcoStoreScreen} />
           <Stack.Screen name="EcoMissions" component={EcoMissionsScreen} />
-          {/* ADDED THIS SCREEN */}
           <Stack.Screen name="FaultScanner" component={FaultScannerScreen} />
           <Stack.Screen
             name="Menu"

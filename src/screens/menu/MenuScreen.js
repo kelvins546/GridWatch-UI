@@ -268,7 +268,7 @@ export default function MenuScreen() {
             className="font-bold uppercase tracking-widest mb-3 mt-6"
             style={{ color: theme.textSecondary, fontSize: scaledSize(12) }}
           >
-            Rewards & Gaming
+            Rewards & Missions
           </Text>
 
           {/* --- WRAPPER FOR FLOATING BADGE AND ECO-MISSIONS --- */}
@@ -332,22 +332,6 @@ export default function MenuScreen() {
             customIcon={
               <MaterialIcons
                 name="store"
-                size={scaledSize(22)}
-                color={theme.buttonPrimary}
-              />
-            }
-          />
-
-          <SettingsRow
-            icon="bolt"
-            title="Fault Scanner"
-            subtitle="Diagnostic mini-game"
-            onPress={() => navigation.navigate("FaultScanner")}
-            theme={theme}
-            scaledSize={scaledSize}
-            customIcon={
-              <MaterialIcons
-                name="offline-bolt"
                 size={scaledSize(22)}
                 color={theme.buttonPrimary}
               />
